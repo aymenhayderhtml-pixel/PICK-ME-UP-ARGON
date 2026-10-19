@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pick Me Up - Weapon & Shield Art Test Viewer</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+      }
+      body {
+        overflow: hidden;
+        background-color: #0d131a;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+        color: #e2e8f0;
+      }
+      #canvas-container {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+      #error-box {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        max-height: 40vh;
+        overflow-y: auto;
+        background: rgba(180, 20, 30, 0.95);
+        color: #fff;
+        font-family: monospace;
+        font-size: 13px;
+        padding: 12px 16px;
+        z-index: 999999;
+        white-space: pre-wrap;
+        border-bottom: 2px solid #ff6b6b;
+      }
+      #stats-overlay {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        padding: 8px 12px;
+        background: rgba(13, 20, 28, 0.88);
+        border: 1px solid #1e3a5f;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #38bdf8;
+        font-family: monospace;
+        pointer-events: none;
+        z-index: 100;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      }
+      #ui-panel {
+        position: fixed;
+        right: 12px;
+        top: 12px;
+        bottom: 12px;
+        width: 330px;
+        overflow-y: auto;
+        background: rgba(11, 17, 24, 0.92);
+        border: 1px solid #1e3a5f;
+        border-radius: 6px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        z-index: 100;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+      }
+      .panel-section {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .section-title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #38bdf8;
+        border-bottom: 1px solid #1e3a5f;
+        padding-bottom: 4px;
+      }
+      .btn-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+        gap: 5px;
+      }
+      button {
+        background: #132235;
+        color: #e2e8f0;
+        border: 1px solid #254b77;
+        border-radius: 3px;
+        padding: 6px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+        text-align: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      button:hover {
+        background: #1a365d;
+        border-color: #38bdf8;
+      }
+      button.active {
+        background: #0284c7;
+        border-color: #38bdf8;
+        color: #ffffff;
+        font-weight: 700;
+      }
+      .slider-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        color: #94a3b8;
+      }
+      .slider-row input[type="range"] {
+        flex: 1;
+        accent-color: #38bdf8;
+      }
+    </style>
+    <script>
+      window.addEventListener('error', (event) => {
+        const box = document.getElementById('error-box');
+        if (box) {
+          box.style.display = 'block';
+          box.textContent += `[ERROR] ${event.message} (${event.filename}:${event.lineno})\n`;
+        }
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        const box = document.getElementById('error-box');
+        if (box) {
+          box.style.display = 'block';
+          box.textContent += `[UNHANDLED REJECTION] ${event.reason?.stack || event.reason}\n\n`;
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div id="error-box"></div>
+
+    <div id="stats-overlay">
+      <div id="stats-fps">FPS: -- | Calls: -- | Triangles: --</div>
+      <div id="stats-info" style="margin-top: 5px; color: #facc15; font-weight: bold; font-size: 13px;">Item: sword [E] | Mode: Single</div>
+    </div>
+
+    <div id="ui-panel">
+      <!-- Weapon Kinds -->
+      <div class="panel-section">
+        <div class="section-title">Weapons</div>
+        <div class="btn-grid" id="weapon-buttons"></div>
+      </div>
+
+      <!-- Shield Kinds -->
+      <div class="panel-section">
+        <div class="section-title">Shields</div>
+        <div class="btn-grid" id="shield-buttons"></div>
+      </div>
+
+      <!-- Grades -->
+      <div class="panel-section">
+        <div class="section-title">Grade</div>
+        <div class="btn-grid" id="grade-buttons">
+          <button class="active" data-grade="E">E</button>
+          <button data-grade="D">D</button>
+          <button data-grade="C">C</button>
+          <button data-grade="B">B</button>
+          <button data-grade="A">A</button>
+          <button data-grade="S">S</button>
+          <button data-grade="S+">S+</button>
+        </div>
+      </div>
+
+      <!-- Display Modes -->
+      <div class="panel-section">
+        <div class="section-title">Display Mode</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+          <button id="btn-mode-single" class="active">Single Item</button>
+          <button id="btn-mode-pickup">Pickup Mode</button>
+          <button id="btn-mode-lineup">Kind Lineup</button>
+          <button id="btn-mode-grade-lineup">Grade Lineup</button>
+        </div>
+        <button id="btn-mode-hero" style="margin-top: 2px;">👤 Show on Hero (Han): OFF</button>
+      </div>
+
+      <!-- Hero Poses (visible when Show on Hero is on) -->
+      <div class="panel-section" id="hero-pose-section" style="display: none;">
+        <div class="section-title">Hero Poses</div>
+        <div class="btn-grid" id="pose-buttons">
+          <button class="active" data-pose="idle">idle</button>
+          <button data-pose="attack1">attack1</button>
+          <button data-pose="attack2">attack2</button>
+          <button data-pose="attack3">attack3</button>
+          <button data-pose="block">block</button>
+          <button data-pose="trainSword">trainSword</button>
+          <button data-pose="trainSpear">trainSpear</button>
+          <button data-pose="trainBow">trainBow</button>
+          <button data-pose="mine">mine</button>
+        </div>
+        <button id="btn-hero-replay" style="margin-top: 4px; background: #0369a1; font-weight: bold;">↺ Replay Pose</button>
+      </div>
+
+      <!-- Material & Properties -->
+      <div class="panel-section">
+        <div class="section-title">Properties & Controls</div>
+        <div class="slider-row">
+          <span style="width: 65px;">Enhance</span>
+          <input type="range" id="slider-enhance" min="0" max="5" step="1" value="0" />
+          <span id="enhance-val" style="width: 35px; text-align: right;">+0</span>
+        </div>
+        <div class="slider-row">
+          <span style="width: 65px;">Wear</span>
+          <input type="range" id="slider-wear" min="0" max="1" step="0.05" value="0.0" />
+          <span id="wear-val" style="width: 35px; text-align: right;">0.00</span>
+        </div>
+        <div class="slider-row">
+          <span style="width: 65px;">Glow</span>
+          <input type="range" id="slider-glow" min="0" max="2" step="0.05" value="0.0" />
+          <span id="glow-val" style="width: 35px; text-align: right;">0.00</span>
+        </div>
+        <div class="slider-row">
+          <span style="width: 65px;">Bow Draw</span>
+          <input type="range" id="slider-draw" min="0" max="1" step="0.05" value="0.0" />
+          <span id="draw-val" style="width: 35px; text-align: right;">0.00</span>
+        </div>
+        <div class="slider-row">
+          <span style="width: 65px;">Opacity</span>
+          <input type="range" id="slider-opacity" min="0" max="1" step="0.02" value="1.0" />
+          <span id="opacity-val" style="width: 35px; text-align: right;">1.00</span>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button id="btn-tint" style="flex: 1;">Tint Red: OFF</button>
+          <button id="btn-anchors" style="flex: 1;">Show Anchors: OFF</button>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button id="btn-turntable" class="active" style="flex: 1;">Turntable: ON</button>
+          <button id="btn-screenshot" style="flex: 1; background: #166534;">📷 Screenshot</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./node_modules/three/build/three.module.js",
+          "three/examples/jsm/utils/BufferGeometryUtils.js": "./node_modules/three/examples/jsm/utils/BufferGeometryUtils.js"
+        }
+      }
+    </script>
+    <script type="module" src="./src/art/artWeaponTest.js"></script>
+  </body>
+</html>

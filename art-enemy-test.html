@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pick Me Up - Enemy Art Test Viewer</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+      }
+      body {
+        overflow: hidden;
+        background-color: #120e14;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+        color: #f0e6f2;
+      }
+      #canvas-container {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+      #error-box {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        max-height: 40vh;
+        overflow-y: auto;
+        background: rgba(180, 20, 30, 0.95);
+        color: #fff;
+        font-family: monospace;
+        font-size: 13px;
+        padding: 12px 16px;
+        z-index: 999999;
+        white-space: pre-wrap;
+        border-bottom: 2px solid #ff6b6b;
+      }
+      #stats-overlay {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        padding: 8px 12px;
+        background: rgba(18, 14, 22, 0.88);
+        border: 1px solid #482c3c;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #ff80ab;
+        font-family: monospace;
+        pointer-events: none;
+        z-index: 100;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      }
+      #ui-panel {
+        position: fixed;
+        right: 12px;
+        top: 12px;
+        bottom: 12px;
+        width: 330px;
+        overflow-y: auto;
+        background: rgba(14, 10, 18, 0.92);
+        border: 1px solid #4a293b;
+        border-radius: 6px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        z-index: 100;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+      }
+      .panel-section {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .section-title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #f48fb1;
+        border-bottom: 1px solid #3d1f30;
+        padding-bottom: 4px;
+      }
+      .btn-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+        gap: 5px;
+      }
+      button {
+        background: #231622;
+        color: #f0e6f2;
+        border: 1px solid #542b42;
+        border-radius: 3px;
+        padding: 6px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+        text-align: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      button:hover {
+        background: #381f33;
+        border-color: #ff4081;
+      }
+      button.active {
+        background: #ad1457;
+        border-color: #ff4081;
+        color: #ffffff;
+        font-weight: 700;
+      }
+      .slider-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        color: #c4b5c7;
+      }
+      .slider-row input[type="range"] {
+        flex: 1;
+        accent-color: #ff4081;
+      }
+    </style>
+    <script>
+      window.addEventListener('error', (event) => {
+        const box = document.getElementById('error-box');
+        if (box) {
+          box.style.display = 'block';
+          box.textContent += `[ERROR] ${event.message} (${event.filename}:${event.lineno})\n`;
+        }
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        const box = document.getElementById('error-box');
+        if (box) {
+          box.style.display = 'block';
+          box.textContent += `[UNHANDLED REJECTION] ${event.reason?.stack || event.reason}\n\n`;
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div id="error-box"></div>
+
+    <div id="stats-overlay">
+      <div id="stats-fps">FPS: -- | Calls: -- | Triangles: --</div>
+      <div id="stats-pose" style="margin-top: 5px; color: #ffd54f; font-weight: bold; font-size: 13px;">Pose: idle | t: 0.00s</div>
+    </div>
+
+    <div id="ui-panel">
+      <!-- Enemy Types -->
+      <div class="panel-section">
+        <div class="section-title">Enemy Type</div>
+        <div class="btn-grid" id="type-buttons"></div>
+      </div>
+
+      <!-- Presets -->
+      <div class="panel-section">
+        <div class="section-title">Presets</div>
+        <div class="btn-grid" id="preset-buttons"></div>
+      </div>
+
+      <!-- Spawn Mode -->
+      <div class="panel-section">
+        <div class="section-title">Spawn Mode</div>
+        <div style="display: flex; gap: 6px;">
+          <button id="btn-single" class="active" style="flex: 1;">Single</button>
+          <button id="btn-spawn25" style="flex: 1;">Spawn 25</button>
+        </div>
+      </div>
+
+      <!-- Poses -->
+      <div class="panel-section">
+        <div class="section-title">Poses</div>
+        <div class="btn-grid" id="pose-buttons"></div>
+        <div style="display: flex; gap: 6px; margin-top: 4px;">
+          <button id="btn-replay" style="flex: 1; background: #880e4f; font-weight: bold;">↺ Replay</button>
+          <button id="btn-freeze-toggle" style="flex: 1;">Freeze: OFF</button>
+        </div>
+        <div class="slider-row">
+          <span style="width: 58px;">Speed</span>
+          <input type="range" id="slider-speed" min="0.25" max="2.0" step="0.05" value="1.0" />
+          <span id="speed-val" style="width: 45px; text-align: right;">1.00x</span>
+        </div>
+        <div class="slider-row">
+          <span style="width: 58px;">Freeze t</span>
+          <input type="range" id="slider-freeze" min="0" max="1.6" step="0.01" value="0.0" />
+          <span id="freeze-val" style="width: 45px; text-align: right;">0.00s</span>
+        </div>
+      </div>
+
+      <!-- Expressions -->
+      <div class="panel-section">
+        <div class="section-title">Expressions</div>
+        <div class="btn-grid" id="expression-buttons">
+          <button class="active" data-expr="neutral">neutral</button>
+          <button data-expr="snarl">snarl</button>
+          <button data-expr="pain">pain</button>
+          <button data-expr="afraid">afraid</button>
+          <button data-expr="dead">dead</button>
+        </div>
+      </div>
+
+      <!-- Controls & Overrides -->
+      <div class="panel-section">
+        <div class="section-title">Controls & Overrides</div>
+        <div class="slider-row">
+          <span style="width: 65px;">Eye Glow</span>
+          <input type="range" id="slider-eyeglow" min="0" max="2" step="0.05" value="1.0" />
+          <span id="eyeglow-val" style="width: 40px; text-align: right;">1.0</span>
+        </div>
+        <div class="slider-row">
+          <span style="width: 65px;">Enrage</span>
+          <input type="range" id="slider-enrage" min="0" max="1" step="0.05" value="0.0" />
+          <span id="enrage-val" style="width: 40px; text-align: right;">0.0</span>
+        </div>
+        <div class="slider-row">
+          <span style="width: 65px;">Opacity</span>
+          <input type="range" id="slider-opacity" min="0" max="1" step="0.02" value="1.0" />
+          <span id="opacity-val" style="width: 40px; text-align: right;">1.0</span>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button id="btn-tint" style="flex: 1;">Tint Red: OFF</button>
+          <button id="btn-outline" class="active" style="flex: 1;">Outline: ON</button>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button id="btn-scale-ref" style="flex: 1;">Scale Ref (1.75m): OFF</button>
+          <button id="btn-turntable" class="active" style="flex: 1;">Turntable: ON</button>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button id="btn-closeup" style="flex: 1;">🔍 Close-up face</button>
+          <button id="btn-screenshot" style="flex: 1; background: #2e7d32;">📷 Screenshot</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./node_modules/three/build/three.module.js"
+        }
+      }
+    </script>
+    <script type="module" src="./src/art/artEnemyTest.js"></script>
+  </body>
+</html>

@@ -1,0 +1,145 @@
+:root {
+  --panel-bg-1: #0b0810;
+  --panel-bg-2: #1a1326;
+  --frame: #d9ccff;
+  --frame-inner: #5b4a8a;
+  --glow: rgba(170, 130, 255, 0.65);
+  --text: #ffffff;
+  --accent: #b48cff;
+  --gold: #ffd36b;
+  --danger: #ff5a6e;
+  --ok: #7dffb0;
+}
+
+/* Manhua System Panel */
+.mm-panel {
+  position: relative;
+  background:
+    repeating-linear-gradient(45deg, transparent, transparent 27px, rgba(255, 255, 255, 0.04) 27px, rgba(255, 255, 255, 0.04) 28px),
+    repeating-linear-gradient(-45deg, transparent, transparent 27px, rgba(255, 255, 255, 0.04) 27px, rgba(255, 255, 255, 0.04) 28px),
+    linear-gradient(160deg, var(--panel-bg-1), var(--panel-bg-2));
+  border: 2px solid var(--frame);
+  border-radius: 6px;
+  box-shadow: 0 0 18px var(--glow), 0 0 4px var(--frame);
+  color: var(--text);
+  font-family: 'Oswald', 'Bebas Neue', 'Arial Narrow', 'Roboto Condensed', Impact, sans-serif;
+  font-stretch: condensed;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  line-height: 1.25;
+  text-transform: uppercase;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.mm-panel::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  right: 5px;
+  bottom: 5px;
+  border: 1px solid var(--frame-inner);
+  border-radius: 4px;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+/* Common Manhua Buttons */
+.mm-btn {
+  background: rgba(15, 10, 25, 0.85);
+  border: 1px solid var(--frame-inner);
+  color: var(--text);
+  font-family: 'Oswald', 'Bebas Neue', 'Arial Narrow', 'Roboto Condensed', Impact, sans-serif;
+  font-stretch: condensed;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.mm-btn:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  color: #ffffff;
+}
+
+.mm-btn-accent {
+  background: rgba(180, 140, 255, 0.2);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+.mm-btn-accent:hover {
+  background: rgba(180, 140, 255, 0.35);
+  box-shadow: 0 0 14px var(--glow);
+  color: #ffffff;
+}
+
+.mm-btn-gold {
+  background: rgba(255, 211, 107, 0.15);
+  border: 1px solid var(--gold);
+  color: var(--gold);
+}
+
+.mm-btn-gold:hover {
+  background: rgba(255, 211, 107, 0.3);
+  box-shadow: 0 0 14px var(--gold);
+  color: #ffffff;
+}
+
+.mm-btn-danger {
+  background: rgba(255, 90, 110, 0.15);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+
+.mm-btn-danger:hover {
+  background: rgba(255, 90, 110, 0.3);
+  box-shadow: 0 0 14px var(--danger);
+  color: #ffffff;
+}
+
+.mm-btn-ok {
+  background: rgba(125, 255, 176, 0.15);
+  border: 1px solid var(--ok);
+  color: var(--ok);
+}
+
+.mm-btn-ok:hover {
+  background: rgba(125, 255, 176, 0.3);
+  box-shadow: 0 0 14px var(--ok);
+  color: #ffffff;
+}
+
+/* Ornate corner styles */
+.ornate-corner {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  pointer-events: none;
+  z-index: 10;
+}
+.ornate-corner-tl {
+  top: -10px;
+  left: -10px;
+}
+.ornate-corner-tr {
+  top: -10px;
+  right: -10px;
+  transform: scaleX(-1);
+}
+.ornate-corner-bl {
+  bottom: -10px;
+  left: -10px;
+  transform: scaleY(-1);
+}
+.ornate-corner-br {
+  bottom: -10px;
+  right: -10px;
+  transform: scale(-1, -1);
+}

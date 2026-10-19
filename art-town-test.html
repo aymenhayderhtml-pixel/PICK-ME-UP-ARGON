@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pick Me Up - Niflheimr Town Art Viewer (Task A05)</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+      }
+      body {
+        overflow: hidden;
+        background-color: #0f2a33;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+        color: #e2e8f0;
+      }
+      #canvas-container {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+      #error-box {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        max-height: 40vh;
+        overflow-y: auto;
+        background: rgba(180, 20, 30, 0.95);
+        color: #fff;
+        font-family: monospace;
+        font-size: 13px;
+        padding: 12px 16px;
+        z-index: 999999;
+        white-space: pre-wrap;
+        border-bottom: 2px solid #ff6b6b;
+      }
+      #stats-overlay {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        padding: 10px 14px;
+        background: rgba(13, 20, 28, 0.9);
+        border: 1px solid #1e3a5f;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #38bdf8;
+        font-family: monospace;
+        pointer-events: none;
+        z-index: 100;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        min-width: 240px;
+        line-height: 1.45;
+      }
+      .stat-over {
+        color: #ff4d5e !important;
+        font-weight: bold;
+      }
+      .stat-ok {
+        color: #4ade80;
+      }
+      #ui-panel {
+        position: fixed;
+        right: 12px;
+        top: 12px;
+        width: 320px;
+        max-height: calc(100vh - 24px);
+        overflow-y: auto;
+        background: rgba(15, 23, 42, 0.94);
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 100;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      }
+      .panel-section {
+        border-top: 1px solid #1e293b;
+        padding-top: 8px;
+      }
+      .panel-section:first-child {
+        border-top: none;
+        padding-top: 0;
+      }
+      .section-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #94a3b8;
+        margin-bottom: 6px;
+        font-weight: bold;
+      }
+      .btn-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+      }
+      .btn-grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+      button {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #e2e8f0;
+        padding: 6px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      button:hover {
+        background: #334155;
+        border-color: #475569;
+      }
+      button.active {
+        background: #0284c7;
+        border-color: #38bdf8;
+        color: #fff;
+        font-weight: bold;
+      }
+      .help-text {
+        font-size: 11px;
+        color: #94a3b8;
+        line-height: 1.4;
+      }
+      .light-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        margin-top: 3px;
+      }
+      .light-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        border: 1px solid #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="error-box"></div>
+
+    <div id="stats-overlay">
+      <div style="font-weight: bold; color: #f1f5f9; margin-bottom: 4px;">TOWN BUDGET MONITOR</div>
+      <div>FPS: <span id="fps-val">60</span></div>
+      <div>Time of Day: <span id="stat-time-val">0.780 (Night)</span></div>
+      <div>Exposure: <span id="stat-exposure-val">0.95</span></div>
+      <div>Active Lights: <span id="stat-active-lights-val">0</span> / 8</div>
+      <div>Total Triangles: <span id="total-tris-val">0</span> / 340k</div>
+      <div>Draw Calls: <span id="draw-calls-val">0</span> / 130</div>
+      <div style="margin-top: 6px; border-top: 1px solid #334155; padding-top: 4px;">
+        <div>Shell: <span id="shell-stats">0 tris, 0 calls</span></div>
+        <div>Landmarks Main: <span id="landmarks-main-stats">0 tris, 0 calls</span></div>
+        <div>Landmarks Work: <span id="landmarks-work-stats">0 tris, 0 calls</span></div>
+        <div>Village: <span id="village-stats">0 tris, 0 calls</span></div>
+      </div>
+      <div style="margin-top: 4px; font-size: 10px; color: #94a3b8;">
+        Camera Speed: <span id="cam-speed-val">25</span> m/s
+      </div>
+    </div>
+
+    <div id="ui-panel">
+      <!-- Camera controls info -->
+      <div class="panel-section">
+        <div class="section-title">Free-Fly Camera (WASD / Mouse)</div>
+        <div class="help-text">
+          <b>Right Click + Drag</b>: Look around<br />
+          <b>W / S</b>: Move forward / back<br />
+          <b>A / D</b>: Strafe left / right<br />
+          <b>Q / E</b>: Move down / up<br />
+          <b>Mouse Wheel</b>: Adjust fly speed
+        </div>
+      </div>
+
+      <!-- Presets -->
+      <div class="panel-section">
+        <div class="section-title">Camera Presets</div>
+        <div class="btn-grid">
+          <button id="btn-cam-bird">🦅 Bird's Eye</button>
+          <button id="btn-cam-walk">🚶 Walk Level (Landing)</button>
+        </div>
+      </div>
+
+      <!-- Building Camera Presets -->
+      <div class="panel-section">
+        <div class="section-title">Building Camera Focus</div>
+        <select id="building-select" style="width: 100%; background: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 5px; border-radius: 4px; font-size: 11px; margin-bottom: 6px;">
+          <option value="landing_area">Landing Area</option>
+          <option value="summoning_room">Summoning Room</option>
+          <option value="town_square">Town Square</option>
+          <option value="space_time_rift">Space-Time Rift</option>
+          <option value="synthesis_chamber">Synthesis Chamber</option>
+          <option value="armory">Armory</option>
+          <option value="training_grounds">Training Grounds</option>
+          <option value="residences">Residences</option>
+          <option value="mess_hall_row">Mess Hall</option>
+          <option value="dungeon_board">Dungeon Board</option>
+        </select>
+        <div class="btn-grid" style="margin-bottom: 8px;">
+          <button id="btn-cam-closeup">🔍 Close-up</button>
+          <button id="btn-cam-overview">🌐 Overview of this zone</button>
+        </div>
+
+        <div class="section-title" style="margin-top: 6px;">Building Views List</div>
+        <div style="display: flex; flex-direction: column; gap: 4px; max-height: 170px; overflow-y: auto; padding-right: 2px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; background: #131d2a; padding: 4px 6px; border-radius: 4px;">
+            <span>Landing Area</span>
+            <div style="display: flex; gap: 4px;">
+              <button data-cam="closeup" data-zone="landing_area" style="padding: 2px 5px; font-size: 10px;">Close-up</button>
+              <button data-cam="overview" data-zone="landing_area" style="padding: 2px 5px; font-size: 10px;">Overview</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; background: #131d2a; padding: 4px 6px; border-radius: 4px;">
+            <span>Summoning Room</span>
+            <div style="display: flex; gap: 4px;">
+              <button data-cam="closeup" data-zone="summoning_room" style="padding: 2px 5px; font-size: 10px;">Close-up</button>
+              <button data-cam="overview" data-zone="summoning_room" style="padding: 2px 5px; font-size: 10px;">Overview</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; background: #131d2a; padding: 4px 6px; border-radius: 4px;">
+            <span>Town Square</span>
+            <div style="display: flex; gap: 4px;">
+              <button data-cam="closeup" data-zone="town_square" style="padding: 2px 5px; font-size: 10px;">Close-up</button>
+              <button data-cam="overview" data-zone="town_square" style="padding: 2px 5px; font-size: 10px;">Overview</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; background: #131d2a; padding: 4px 6px; border-radius: 4px;">
+            <span>Space-Time Rift</span>
+            <div style="display: flex; gap: 4px;">
+              <button data-cam="closeup" data-zone="space_time_rift" style="padding: 2px 5px; font-size: 10px;">Close-up</button>
+              <button data-cam="overview" data-zone="space_time_rift" style="padding: 2px 5px; font-size: 10px;">Overview</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; background: #131d2a; padding: 4px 6px; border-radius: 4px;">
+            <span>Synthesis Chamber</span>
+            <div style="display: flex; gap: 4px;">
+              <button data-cam="closeup" data-zone="synthesis_chamber" style="padding: 2px 5px; font-size: 10px;">Close-up</button>
+              <button data-cam="overview" data-zone="synthesis_chamber" style="padding: 2px 5px; font-size: 10px;">Overview</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; background: #131d2a; padding: 4px 6px; border-radius: 4px;">
+            <span>Armory</span>
+            <div style="display: flex; gap: 4px;">
+              <button data-cam="closeup" data-zone="armory" style="padding: 2px 5px; font-size: 10px;">Close-up</button>
+              <button data-cam="overview" data-zone="armory" style="padding: 2px 5px; font-size: 10px;">Overview</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; background: #131d2a; padding: 4px 6px; border-radius: 4px;">
+            <span>Training Grounds</span>
+            <div style="display: flex; gap: 4px;">
+              <button data-cam="closeup" data-zone="training_grounds" style="padding: 2px 5px; font-size: 10px;">Close-up</button>
+              <button data-cam="overview" data-zone="training_grounds" style="padding: 2px 5px; font-size: 10px;">Overview</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; background: #131d2a; padding: 4px 6px; border-radius: 4px;">
+            <span>Residences</span>
+            <div style="display: flex; gap: 4px;">
+              <button data-cam="closeup" data-zone="residences" style="padding: 2px 5px; font-size: 10px;">Close-up</button>
+              <button data-cam="overview" data-zone="residences" style="padding: 2px 5px; font-size: 10px;">Overview</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; background: #131d2a; padding: 4px 6px; border-radius: 4px;">
+            <span>Mess Hall</span>
+            <div style="display: flex; gap: 4px;">
+              <button data-cam="closeup" data-zone="mess_hall_row" style="padding: 2px 5px; font-size: 10px;">Close-up</button>
+              <button data-cam="overview" data-zone="mess_hall_row" style="padding: 2px 5px; font-size: 10px;">Overview</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; background: #131d2a; padding: 4px 6px; border-radius: 4px;">
+            <span>Dungeon Board</span>
+            <div style="display: flex; gap: 4px;">
+              <button data-cam="closeup" data-zone="dungeon_board" style="padding: 2px 5px; font-size: 10px;">Close-up</button>
+              <button data-cam="overview" data-zone="dungeon_board" style="padding: 2px 5px; font-size: 10px;">Overview</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quality and Time -->
+      <div class="panel-section">
+        <div class="section-title">Quality Preset</div>
+        <div class="btn-grid-3" style="margin-bottom: 8px;">
+          <button id="q-low">Low</button>
+          <button id="q-medium">Medium</button>
+          <button id="q-high" class="active">High</button>
+        </div>
+
+        <div class="section-title" style="margin-top: 6px;">Time of Day & Atmosphere</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; margin-bottom: 3px;">
+          <span style="color: #94a3b8;">Cycle Time (0..1):</span>
+          <span id="time-label" style="font-weight: bold; color: #38bdf8;">0.780 - Night</span>
+        </div>
+        <input type="range" id="time-slider" min="0" max="1" step="0.005" value="0.78" style="width: 100%; accent-color: #0284c7; cursor: pointer;" />
+
+        <div class="btn-grid" style="margin-top: 6px;">
+          <button id="btn-time-morning">🌅 Morning</button>
+          <button id="btn-time-noon">☀️ Noon</button>
+          <button id="btn-time-dusk">🌇 Dusk</button>
+          <button id="btn-time-night" class="active">🌙 Night</button>
+        </div>
+
+        <button id="btn-play-cycle" style="margin-top: 6px; width: 100%;">▶ Play Day Cycle (60s): OFF</button>
+
+        <div style="margin-top: 8px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; margin-bottom: 3px;">
+            <span>Exposure Multiplier:</span>
+            <span id="exposure-val" style="color: #38bdf8; font-weight: bold;">1.00x</span>
+          </div>
+          <input type="range" id="exposure-slider" min="0.5" max="2.0" step="0.05" value="1.0" style="width: 100%; accent-color: #0284c7; cursor: pointer;" />
+        </div>
+
+        <button id="btn-flat-light" style="margin-top: 6px; width: 100%;">💡 Flat Debug Light: OFF</button>
+      </div>
+
+      <!-- Module Toggles -->
+      <div class="panel-section">
+        <div class="section-title">Art Modules</div>
+        <div class="btn-grid" style="margin-bottom: 6px;">
+          <button id="toggle-shell" class="active">Shell</button>
+          <button id="toggle-village" class="active">Village</button>
+        </div>
+        <div class="btn-grid">
+          <button id="toggle-landmarks-main" class="active">Landmarks Main</button>
+          <button id="toggle-landmarks-work" class="active">Landmarks Work</button>
+        </div>
+      </div>
+
+      <!-- Debug Overlays -->
+      <div class="panel-section">
+        <div class="section-title">Debug & Scale Overlays</div>
+        <div class="btn-grid">
+          <button id="toggle-colliders">Colliders: OFF</button>
+          <button id="toggle-corridors">Corridors: OFF</button>
+        </div>
+        <div class="btn-grid" style="margin-top: 6px;">
+          <button id="toggle-labels" class="active">Zone Labels: ON</button>
+          <button id="toggle-fog" class="active">Fog: ON</button>
+        </div>
+        <div style="margin-top: 6px;">
+          <button id="toggle-heroes" class="active" style="width: 100%;">🧍 Han Scale Ref (At Doors): ON</button>
+        </div>
+      </div>
+
+      <!-- Dynamic Light Manager (Emulating Engine 8-light budget) -->
+      <div class="panel-section">
+        <div class="section-title">Active Point Lights (Max 8 Closest)</div>
+        <div id="lights-list" style="font-family: monospace; font-size: 11px; max-height: 120px; overflow-y: auto;">
+          Loading lights...
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <button id="btn-screenshot" style="width: 100%; background: #15803d; font-weight: bold;">📷 Take Screenshot</button>
+      </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./node_modules/three/build/three.module.js",
+          "three/examples/jsm/utils/BufferGeometryUtils.js": "./node_modules/three/examples/jsm/utils/BufferGeometryUtils.js"
+        }
+      }
+    </script>
+    <script type="module" src="./src/art/artTownTest.js"></script>
+  </body>
+</html>

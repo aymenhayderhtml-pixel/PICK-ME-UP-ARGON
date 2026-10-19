@@ -1,0 +1,71 @@
+# Project Tasks
+
+- [x] T001 scene+loop
+- [x] T002 third-person player + WASD + camera
+- [x] T003 procedural dungeon rooms
+- [x] T004 enemy + melee combat
+- [x] T004a visual and feel upgrade
+- [x] T004b combat system, enemies, drops & HUD
+- [x] T005 architecture & core game state
+- [x] T006 hub scene
+- [x] T006b lore data pass
+- [x] T007 gacha summon
+- [x] T007b fix HUD overlap between scenes
+- [x] T008 hero status window and party select
+- [x] T009 training grounds
+- [x] T010 synthesis and promotion
+- [x] T011a forest floors level building
+- [x] T011b goblin enemies with morale and tactics
+- [x] T011 forest floors 1 to 5 and Hobgoblin boss (T011c boss fight)
+- [x] T011d shield, parry, scavenging, durability
+- [x] T011e and T012 squad AI, commands, permadeath, tutorial, rewards
+- [x] T013 polish and audit
+- [x] T014 blacksmith
+- [x] T014c user feedback fixes
+- [x] T016 story-accurate start of the game
+- [x] T017 city hub, floor rules, floor 1 farmland, equipment gacha, rewards
+- [x] T018 stress, stat display, and repeatable sub-dungeons
+- [x] T019 hub visual fixes
+- [x] T020 restyle all system UI to match the manhua
+- [x] T021 floor 1 visual match with the manhua
+- [x] T022 fix the start of the game
+- [x] T023 fix 5 user issues
+- [x] T024 rebuild hub as walled island town from the manhua
+- [x] T025 manhua systems pass (day cycle, meals & discontent, hero reports, intimacy & bonds, hidden talents, stat potential, three groups, tarot cards)
+
+## ART PLAN
+- [x] A01 contract and test viewer
+- [x] A01 hero models (Argon)
+- [x] A01b replace old humanoid models with HeroModel via HeroRig adapter
+- [x] A02 enemy contract and viewer
+- [x] A02 enemy models batch 1 (Argon)
+- [x] A02b wire enemies into the game
+- [ ] A02 enemy batch 2 orcs, crystal slime, rock crawler (Argon, later)
+- [x] A03 weapon contract and viewer
+- [x] A03 weapon models (Argon)
+- [x] A03b wire weapons into the game
+- [x] A04 Iselle contract and viewer
+- [x] A04 Iselle model (Argon)
+- [x] A04b wire Iselle into the game
+- [x] A05 town contract, assembler and viewer
+- [x] A05a town shell (Argon)
+- [x] A05a-fix1 shell continuous time of day and viewer dynamic lighting
+- [x] A05b prep
+- [x] A05b1 landmarks main (Argon)
+- [x] A05b2 landmarks work (Argon)
+- [x] A05c town village (Argon)
+- [x] A05d wire the assembled town into HubScene, NavGrid and minimap
+- [x] A05e town iteration passes (Argon patches)
+- [x] A05f ground contact, locomotion and spawn height fixes + live diagnostic overlay
+- [x] A06 floor layout, contract, assembler and viewer
+- [x] A06a farm floor art (Argon)
+- [ ] A06b forest floor art (Argon)
+- [x] A06c wire floor art into TowerScene (ground, colliders, gates, lights, enemy spawn data, destructible pillars)
+- [ ] A06d floor iteration passes (Argon patches)
+- [x] A06e floor 2 content and art plan from new manhwa panels
+- [x] A06f prairie floor art (Argon prompt docs/ARGON_PROMPT_06c_prairie.md)
+- [x] A02b Prairie Wolf enemy model (Argon prompt docs/ARGON_PROMPT_02b_wolf.md)
+- [x] A06g wire floor 2 art and wolf into the game
+- [x] G01 initialize and push repository to GitHub (PICK-ME-UP-ARGON)
+
+

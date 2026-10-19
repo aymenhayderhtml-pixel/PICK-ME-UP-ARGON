@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pick Me Up - Iselle Guide Fairy Art Test Viewer</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+      }
+      body {
+        overflow: hidden;
+        background-color: #0d131a;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+        color: #e2e8f0;
+      }
+      #canvas-container {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+      #error-box {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        max-height: 40vh;
+        overflow-y: auto;
+        background: rgba(180, 20, 30, 0.95);
+        color: #fff;
+        font-family: monospace;
+        font-size: 13px;
+        padding: 12px 16px;
+        z-index: 999999;
+        white-space: pre-wrap;
+        border-bottom: 2px solid #ff6b6b;
+      }
+      #stats-overlay {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        padding: 8px 12px;
+        background: rgba(13, 20, 28, 0.88);
+        border: 1px solid #1e3a5f;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #38bdf8;
+        font-family: monospace;
+        pointer-events: none;
+        z-index: 100;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      }
+      #ui-panel {
+        position: fixed;
+        right: 12px;
+        top: 12px;
+        width: 320px;
+        max-height: calc(100vh - 24px);
+        overflow-y: auto;
+        background: rgba(15, 23, 42, 0.94);
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 100;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      }
+      .panel-section {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border-bottom: 1px solid #1e293b;
+        padding-bottom: 8px;
+      }
+      .section-title {
+        font-size: 11px;
+        font-weight: bold;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+      }
+      .btn-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 5px;
+      }
+      .btn-grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+      }
+      button {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #e2e8f0;
+        padding: 5px 8px;
+        font-size: 11px;
+        font-family: monospace;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      button:hover {
+        background: #334155;
+        border-color: #64748b;
+      }
+      button.active {
+        background: #9333ea;
+        border-color: #c084fc;
+        color: #ffffff;
+        font-weight: bold;
+      }
+      .slider-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        color: #cbd5e1;
+      }
+      .slider-row input[type="range"] {
+        flex: 1;
+        accent-color: #a855f7;
+      }
+      #portraits-container {
+        position: fixed;
+        bottom: 12px;
+        left: 12px;
+        background: rgba(15, 23, 42, 0.94);
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 8px 12px;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      }
+      #portraits-canvas {
+        background: #080c14;
+        border: 1px solid #1e293b;
+        border-radius: 4px;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="error-box"></div>
+    <div id="stats-overlay">Loading Iselle...</div>
+
+    <div id="ui-panel">
+      <div style="font-size: 14px; font-weight: bold; color: #c084fc; letter-spacing: 1px; display: flex; align-items: center; gap: 6px;">
+        <span>🧚‍♀️</span> ISELLE GUIDE FAIRY TEST
+      </div>
+
+      <!-- Poses Section -->
+      <div class="panel-section">
+        <div class="section-title">Poses</div>
+        <div id="poses-grid" class="btn-grid"></div>
+        <button id="btn-replay" style="margin-top: 4px; background: #6b21a8; font-weight: bold;">↺ Replay Pose</button>
+      </div>
+
+      <!-- Expressions Section -->
+      <div class="panel-section">
+        <div class="section-title">Expressions</div>
+        <div id="expressions-grid" class="btn-grid"></div>
+      </div>
+
+      <!-- Sliders & Properties -->
+      <div class="panel-section">
+        <div class="section-title">Properties & Sliders</div>
+        <div class="slider-row">
+          <span style="width: 55px;">Glow</span>
+          <input type="range" id="slider-glow" min="0" max="2" step="0.05" value="1.0" />
+          <span id="glow-val" style="width: 32px; text-align: right;">1.00</span>
+        </div>
+        <div class="slider-row">
+          <span style="width: 55px;">Opacity</span>
+          <input type="range" id="slider-opacity" min="0" max="1" step="0.02" value="1.0" />
+          <span id="opacity-val" style="width: 32px; text-align: right;">1.00</span>
+        </div>
+        <div class="slider-row">
+          <span style="width: 55px;">Scale</span>
+          <input type="range" id="slider-scale" min="0.5" max="3" step="0.1" value="1.0" />
+          <span id="scale-val" style="width: 32px; text-align: right;">1.00</span>
+        </div>
+      </div>
+
+      <!-- Features & Toggles -->
+      <div class="panel-section">
+        <div class="section-title">View & Features</div>
+        <div class="btn-grid">
+          <button id="btn-tint">Tint Red: OFF</button>
+          <button id="btn-closeup">🔍 Close-up Face</button>
+        </div>
+        <div class="btn-grid">
+          <button id="btn-reference">Scale Ref: OFF</button>
+          <button id="btn-flight">Flight Demo: OFF</button>
+        </div>
+        <div class="btn-grid">
+          <button id="btn-anchors">Anchors: OFF</button>
+          <button id="btn-turntable" class="active">Turntable: ON</button>
+        </div>
+        <button id="btn-screenshot" style="background: #15803d; font-weight: bold; margin-top: 2px;">📷 Screenshot</button>
+      </div>
+    </div>
+
+    <!-- 2D Canvas Portrait Lineup Panel -->
+    <div id="portraits-container">
+      <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>2D Dialogue Bust Portraits (128px each)</span>
+        <button id="btn-refresh-portraits" style="padding: 2px 6px; font-size: 10px;">Refresh</button>
+      </div>
+      <canvas id="portraits-canvas" width="896" height="152"></canvas>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./node_modules/three/build/three.module.js",
+          "three/examples/jsm/utils/BufferGeometryUtils.js": "./node_modules/three/examples/jsm/utils/BufferGeometryUtils.js"
+        }
+      }
+    </script>
+    <script type="module" src="./src/art/artIselleTest.js"></script>
+  </body>
+</html>
