@@ -2,18 +2,34 @@ import * as THREE from 'three';
 
 // 1. WebAudio Synthesizer for Parry Ping
 let audioCtx = null;
+let hasUserGesture = false;
+
+if (typeof window !== 'undefined') {
+  const markGesture = () => {
+    hasUserGesture = true;
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+  };
+  window.addEventListener('pointerdown', markGesture, { once: true, passive: true });
+  window.addEventListener('keydown', markGesture, { once: true, passive: true });
+}
 
 export function playParrySound() {
   try {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !hasUserGesture) return;
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
 
     if (!audioCtx) {
-      audioCtx = new AudioContextClass();
+      try {
+        audioCtx = new AudioContextClass();
+      } catch (e) {
+        return;
+      }
     }
     if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
+      audioCtx.resume().catch(() => {});
     }
 
     const t = audioCtx.currentTime;

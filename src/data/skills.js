@@ -108,10 +108,10 @@ export const SKILLS = {
   pain_tolerance: {
     id: 'pain_tolerance',
     name: 'Pain Tolerance',
-    type: 'talent',
-    maxLevel: 1,
-    description: 'Enables continuous fighting and posture retention even when critical wounds are sustained.',
-    effects: { hpThresholdKeepFighting: 1 },
+    type: 'skill',
+    maxLevel: 10,
+    description: 'Endures punishment at the training ground. Each level shaves incoming damage by 1.5% and lets the hero keep fighting through critical wounds.',
+    effects: { hpThresholdKeepFighting: 1, incomingDamageReduction: 0.015 },
   },
   evasion: {
     id: 'evasion',
@@ -193,6 +193,74 @@ export const SKILLS = {
     description: 'Robust digestive resilience providing high tolerance to poor ration conditions.',
     effects: { foodTolerance: 25 },
   },
+
+  // --- Training system skills ---------------------------------------------
+  quiver_handling: {
+    id: 'quiver_handling',
+    name: 'Quiver Handling',
+    type: 'skill',
+    maxLevel: 10,
+    description: 'Efficient arrow management speeding up the draw and improving volley rhythm.',
+    effects: { reloadSpeedMult: 0.04 },
+  },
+  mana_control: {
+    id: 'mana_control',
+    name: 'Mana Control',
+    type: 'skill',
+    maxLevel: 10,
+    description: 'Disciplined channeling reducing the mana cost of every spell.',
+    effects: { manaCostReduction: 0.03 },
+  },
+  basic_fire_magic: {
+    id: 'basic_fire_magic',
+    name: 'Basic Fire Magic',
+    type: 'skill',
+    maxLevel: 10,
+    description: 'Elemental fire fundamentals taught at the brazier target.',
+    effects: { spellDamage: 6 },
+  },
+
+  // --- Combined skills (produced by SKILL_RECIPES) ------------------------
+  basic_sword_shield: {
+    id: 'basic_sword_shield',
+    name: 'Basic Sword-Shield',
+    type: 'skill',
+    maxLevel: 20,
+    description: 'Sword and shield drilled as one discipline.',
+    effects: { damageMult: 0.06, blockStaminaMult: -0.04, blockWindow: 0.015 },
+  },
+  rapid_volley_archery: {
+    id: 'rapid_volley_archery',
+    name: 'Rapid Volley Archery',
+    type: 'skill',
+    maxLevel: 20,
+    description: 'Bow and quiver fused into a relentless volley.',
+    effects: { damageMult: 0.06, critChanceBonus: 0.02, reloadSpeedMult: 0.08 },
+  },
+  controlled_flamecraft: {
+    id: 'controlled_flamecraft',
+    name: 'Controlled Flamecraft',
+    type: 'skill',
+    maxLevel: 20,
+    description: 'Fire and mana woven into a single disciplined art.',
+    effects: { spellDamageMult: 0.07, manaCostReduction: 0.04 },
+  },
+  phantom_lancer_style: {
+    id: 'phantom_lancer_style',
+    name: 'Phantom Lancer Style',
+    type: 'skill',
+    maxLevel: 20,
+    description: 'Spear and evasion fused into a ghost-like lunge.',
+    effects: { damageMult: 0.06, dodgeWindowBonus: 0.02 },
+  },
+  shadow_assassination: {
+    id: 'shadow_assassination',
+    name: 'Shadow Assassination',
+    type: 'skill',
+    maxLevel: 20,
+    description: 'Dagger and stealth fused into a shadow strike.',
+    effects: { damageMult: 0.05, critDamageMult: 0.08 },
+  },
 };
 
 export function getSkill(id) {
@@ -206,9 +274,19 @@ export function getSkillEffects(hero) {
 
   if (!hero) return totalEffects;
 
-  // 1. Process active/passive skills
+  const normalize = (v) => String(v || '').toLowerCase().replace(/\s+/g, '_');
   const skills = hero.skills || [];
+
+  // A skill that also exists as a talent must not apply its effects twice.
+  const skillIds = new Set();
   for (const s of skills) {
+    skillIds.add(normalize(typeof s === 'string' ? s : (s.id || s.name)));
+  }
+
+  // 1. Process active/passive skills. Skills that were merged into a combined
+  //    skill keep their entry (and their level) but no longer grant effects.
+  for (const s of skills) {
+    if (typeof s === 'object' && s.merged === true) continue;
     const sId = typeof s === 'string' ? s : s.id || s.name;
     const sLevel = typeof s === 'object' ? s.level || 1 : 1;
     const def = getSkill(sId);
@@ -223,6 +301,7 @@ export function getSkillEffects(hero) {
   const talents = hero.talents || [];
   for (const t of talents) {
     const tId = typeof t === 'string' ? t : t.id || t.name;
+    if (skillIds.has(normalize(tId))) continue;
     const def = getSkill(tId);
     if (def && def.effects) {
       for (const [key, val] of Object.entries(def.effects)) {

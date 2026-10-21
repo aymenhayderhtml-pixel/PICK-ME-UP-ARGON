@@ -3,10 +3,14 @@ import { showSystemMessage } from '../ui/Hud.js';
 import { createInitialMaterials } from '../data/materials.js';
 import { createItemInstance, FORGE_RECIPES, ITEM_TEMPLATES } from '../data/items.js';
 import { getBestSmith, MAX_INVENTORY_CAPACITY } from './Inventory.js';
-import { generateNoviceHero, rollMotivation } from '../data/heroes.js';
+import { generateNoviceHero, rollMotivation, normalizeHeroEmotionFields, getWeightedStatsForClass } from '../data/heroes.js';
+import { EMOTION_CONFIG } from '../data/emotions.config.js';
 import { getSkill, getSkillEffects } from '../data/skills.js';
+import { simulateGameDay } from './DailyDecisionEngine.js';
 import { showHeroReport } from '../ui/HeroReport.js';
 import { generateLook } from '../art/looks.js';
+import { getHeroClassProfile, reconcileHeroLoadout } from './loadout.js';
+import { emitEquipmentChanged } from './equipmentEvents.js';
 
 const SAVE_KEY = 'pickmeup_save_v1';
 
@@ -52,23 +56,6 @@ export function rollHiddenTalents(hero) {
   };
 }
 
-function getWeightedStatsForClass(heroClass) {
-  const c = (heroClass || '').toLowerCase();
-  if (c.includes('tank') || c.includes('vanguard')) {
-    return ['str', 'str', 'vit', 'vit', 'vit', 'wil', 'agi'];
-  }
-  if (c.includes('scout') || c.includes('ranger') || c.includes('archer') || c.includes('rogue')) {
-    return ['agi', 'agi', 'agi', 'str', 'wil', 'vit'];
-  }
-  if (c.includes('mage') || c.includes('wizard')) {
-    return ['int', 'int', 'int', 'wil', 'wil', 'vit'];
-  }
-  if (c.includes('cleric') || c.includes('priest') || c.includes('healer')) {
-    return ['wil', 'wil', 'int', 'int', 'vit', 'str'];
-  }
-  return ['str', 'agi', 'vit', 'int', 'wil'];
-}
-
 export class GameState {
   constructor() {
     this.masterName = '';
@@ -87,12 +74,23 @@ export class GameState {
     this.materials = createInitialMaterials();
     this.forgeQueue = [];
     this.flags = { tutorialDone: false, tutorialStep: 0, heroDiedReactionPlayed: false };
+    this.playerClass = 'Vanguard'; // 'Vanguard' | 'Mage' | 'Archer'
+    this.controlledHeroId = 'hero_han';
+    this.manaPotions = 3;
+    this.arrows = 20;
+    this.spellMastery = {};
 
     // Manhua systems: Day cycle, food quality, relations
     this.dayCount = 1;
     this.dayTimer = 0.08 * 480;
     this.dayPaused = false;
-    this.settings = { quality: 'medium', resolutionScale: 1, showFps: true };
+    this.settings = {
+      quality: 'medium',
+      resolutionScale: 1,
+      showFps: true,
+      controls: { attackButton: 'left', blockButton: 'right' },
+      camera: { followSpeed: 'tight', autoTurn: true, distance: 'normal' },
+    };
     this.foodQuality = 'basic';
     this.relations = {
       'hero_han|hero_jenna': 25,
@@ -101,13 +99,19 @@ export class GameState {
     };
     this.bondsAnnounced = {};
 
+    // --- Emotion / training system ---------------------------------------
+    this.lastLoginTimestamp = Date.now();
+    this.tensions = {};              // Record<'idA|idB', number> 0..100
+    this.loginReportHistory = [];    // Array<IselleReportModel>, capped at REPORT_HISTORY_MAX
+    this.overflowLoot = [];          // ItemInstance[] when the inventory is full on death
+
     this.facilities = {
       altar: { level: 1, unlocked: true },
       synthesis: { level: 1, unlocked: true },
       dormitory: { level: 1, unlocked: true },
-      training: { level: 1, unlocked: false, unlockCost: 200 },
+      training: { level: 1, unlocked: true, unlockCost: 200 },
       blacksmith: { level: 1, unlocked: false, unlockedByFloor: 5 },
-      cafeteria: { level: 1, unlocked: false, unlockedByFloor: 10 },
+      cafeteria: { level: 1, unlocked: true, unlockedByFloor: 10 },
       infirmary: { level: 1, unlocked: false, unlockedByFloor: 10 },
     };
 
@@ -147,9 +151,9 @@ export class GameState {
       altar: { level: 1, unlocked: true },
       synthesis: { level: 1, unlocked: true },
       dormitory: { level: 1, unlocked: true },
-      training: { level: 1, unlocked: false, unlockCost: 200 },
+      training: { level: 1, unlocked: true, unlockCost: 200 },
       blacksmith: { level: 1, unlocked: false, unlockedByFloor: 5 },
-      cafeteria: { level: 1, unlocked: false, unlockedByFloor: 10 },
+      cafeteria: { level: 1, unlocked: true, unlockedByFloor: 10 },
       infirmary: { level: 1, unlocked: false, unlockedByFloor: 10 },
     };
 
@@ -163,6 +167,10 @@ export class GameState {
       'hero_aaron|hero_jenna': 25,
     };
     this.bondsAnnounced = {};
+    this.lastLoginTimestamp = Date.now();
+    this.tensions = {};
+    this.loginReportHistory = [];
+    this.overflowLoot = [];
 
     const han = {
       id: 'hero_han',
@@ -198,6 +206,7 @@ export class GameState {
       alive: true,
     };
     han.look = generateLook(han);
+    this.normalizeHeroEmotionFields(han);
 
     // In the tutorial at least ONE novice is forced uncooperative
     const heroes = [han];
@@ -208,8 +217,8 @@ export class GameState {
     const ht1 = rollHiddenTalents(nov1);
     nov1.hiddenTalents = ht1.hiddenTalents;
     nov1.talentsRevealed = ht1.talentsRevealed;
-    nov1.satisfaction = 50;
-    nov1.traits = Math.random() < 0.20 ? ['picky'] : [];
+    nov1.traits = [...(nov1.traits || []), ...(Math.random() < 0.20 ? ['picky'] : [])];
+    this.normalizeHeroEmotionFields(nov1);
     heroes.push(nov1);
 
     const nov2 = generateNoviceHero({ existingHeroes: heroes });
@@ -219,8 +228,8 @@ export class GameState {
     const ht2 = rollHiddenTalents(nov2);
     nov2.hiddenTalents = ht2.hiddenTalents;
     nov2.talentsRevealed = ht2.talentsRevealed;
-    nov2.satisfaction = 50;
-    nov2.traits = Math.random() < 0.20 ? ['picky'] : [];
+    nov2.traits = [...(nov2.traits || []), ...(Math.random() < 0.20 ? ['picky'] : [])];
+    this.normalizeHeroEmotionFields(nov2);
     heroes.push(nov2);
 
     const nov3 = generateNoviceHero({ existingHeroes: heroes });
@@ -230,8 +239,8 @@ export class GameState {
     const ht3 = rollHiddenTalents(nov3);
     nov3.hiddenTalents = ht3.hiddenTalents;
     nov3.talentsRevealed = ht3.talentsRevealed;
-    nov3.satisfaction = 50;
-    nov3.traits = Math.random() < 0.20 ? ['picky'] : [];
+    nov3.traits = [...(nov3.traits || []), ...(Math.random() < 0.20 ? ['picky'] : [])];
+    this.normalizeHeroEmotionFields(nov3);
     heroes.push(nov3);
 
     const nov4 = generateNoviceHero({ existingHeroes: heroes });
@@ -241,8 +250,8 @@ export class GameState {
     const ht4 = rollHiddenTalents(nov4);
     nov4.hiddenTalents = ht4.hiddenTalents;
     nov4.talentsRevealed = ht4.talentsRevealed;
-    nov4.satisfaction = 50;
-    nov4.traits = Math.random() < 0.20 ? ['picky'] : [];
+    nov4.traits = [...(nov4.traits || []), ...(Math.random() < 0.20 ? ['picky'] : [])];
+    this.normalizeHeroEmotionFields(nov4);
     heroes.push(nov4);
 
     this.heroes = heroes;
@@ -254,13 +263,167 @@ export class GameState {
       { id: nov3.id, formation: 'back' },
       { id: nov4.id, formation: 'back' },
     ];
+    this.playerClass = 'Vanguard';
+    this.controlledHeroId = 'hero_han';
+    this.manaPotions = 3;
+    this.arrows = 20;
+    this.spellMastery = {};
     this.saveToLocalStorage();
+  }
+
+  /**
+   * The hero the player currently controls in the world.
+   */
+  getControlledHero() {
+    const byId = this.heroes?.find((h) => h.id === this.controlledHeroId);
+    if (byId) return byId;
+    const han = this.heroes?.find((h) => h.id === 'hero_han');
+    return han || this.heroes?.[0] || null;
+  }
+
+  /**
+   * Switches the hero the player controls in the world.
+   */
+  setControlledHero(heroId) {
+    const hero = this.heroes?.find((h) => h.id === heroId);
+    if (!hero) return false;
+    this.controlledHeroId = hero.id;
+    this.saveToLocalStorage();
+    return true;
+  }
+
+  setPlayerClass(className) {
+    const valid = ['Vanguard', 'Mage', 'Archer'];
+    const matched = valid.find((c) => c.toLowerCase() === (className || '').toLowerCase()) || 'Vanguard';
+    this.playerClass = matched;
+
+    const han = this.heroes?.find((h) => h.id === 'hero_han');
+    if (han) {
+      const profileKey = matched === 'Mage' ? 'mage' : matched === 'Archer' ? 'archer' : 'vanguard';
+      const profile = getHeroClassProfile({ class: profileKey });
+
+      han.class = matched;
+      han.weapon = profile
+        ? (profile.defaultOffhandType === 'shield'
+            ? `${profile.defaultWeaponType}+shield`
+            : profile.defaultWeaponType)
+        : 'sword+shield';
+      if (matched === 'Mage') {
+        han.stats.int = Math.max(han.stats.int || 5, 16);
+      } else if (matched === 'Archer') {
+        han.stats.agi = Math.max(han.stats.agi || 7, 14);
+      }
+
+      han.equipment = han.equipment || { weapon: null, offhand: null, armor: null };
+      if (profile) {
+        han.equipment.weapon = createItemInstance(profile.defaultWeapon, { source: 'starter', grade: 'D' });
+        han.equipment.offhand = profile.defaultOffhand
+          ? createItemInstance(profile.defaultOffhand, { source: 'starter', grade: 'D' })
+          : null;
+      }
+    }
+
+    // Starting consumables follow the chosen class.
+    if (matched === 'Mage') {
+      this.manaPotions = 3;
+    } else if (matched === 'Archer') {
+      this.arrows = 20;
+    }
+
+    // The world models, controls and HUD follow the class change immediately.
+    if (han) emitEquipmentChanged(han, 'weapon');
+
+    this.saveToLocalStorage();
+    return matched;
+  }
+
+  /**
+   * One-time migration: repairs heroes whose equipped weapon does not match
+   * their class (e.g. a Mage holding a sword and shield).
+   */
+  runLoadoutMigration() {
+    let changed = 0;
+    for (const hero of this.heroes || []) {
+      if (reconcileHeroLoadout(hero, this.inventory)) changed++;
+    }
+    return changed;
   }
 
   assignHouses() {
     this.heroes.forEach((h, idx) => {
       h.houseIndex = Math.min(10, Math.floor(idx / 2) + 1);
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Emotion / training system
+  // -------------------------------------------------------------------------
+
+  /**
+   * Ensures a hero carries every emotion / training field with a sane default.
+   * `rawHero` is the pre-migration object, used to seed hunger from the legacy
+   * satisfaction value before the legacy default is applied.
+   */
+  normalizeHeroEmotionFields(hero, rawHero = hero) {
+    return normalizeHeroEmotionFields(hero, rawHero);
+  }
+
+  /**
+   * Ensures exactly one alive hero is the Squad Leader. Han Islat wins by
+   * default; otherwise the first alive hero takes the role. Safe on an empty
+   * roster.
+   */
+  ensureSquadLeader() {
+    const alive = (this.heroes || []).filter((h) => h.alive);
+    if (alive.length === 0) {
+      for (const h of this.heroes || []) h.isSquadLeader = false;
+      return null;
+    }
+    const current = alive.find((h) => h.isSquadLeader === true);
+    if (current) {
+      for (const h of this.heroes || []) {
+        if (h !== current) h.isSquadLeader = false;
+      }
+      return current;
+    }
+    const han = alive.find((h) => h.id === 'hero_han');
+    const leader = han || alive[0];
+    for (const h of this.heroes || []) {
+      h.isSquadLeader = h === leader;
+    }
+    return leader;
+  }
+
+  /** Current tension (0..100) between two heroes. */
+  getTension(idA, idB) {
+    if (!idA || !idB || idA === idB) return 0;
+    const key = [idA, idB].sort().join('|');
+    return this.tensions[key] || 0;
+  }
+
+  /** Adds to the tension between two heroes and returns the new value. */
+  addTension(idA, idB, amount) {
+    if (!idA || !idB || idA === idB || !amount) return 0;
+    const key = [idA, idB].sort().join('|');
+    const prev = this.tensions[key] || 0;
+    const next = Math.min(100, Math.max(0, prev + amount));
+    this.tensions[key] = next;
+    this.saveToLocalStorage();
+    return next;
+  }
+
+  /**
+   * The full relationship picture between two heroes: how close they are
+   * (intimacy) and how much friction they have (tension).
+   */
+  getPairRelationship(idA, idB) {
+    const intimacy = this.getRelation(idA, idB);
+    const tension = this.getTension(idA, idB);
+    return {
+      intimacy,
+      tension,
+      isRival: tension >= EMOTION_CONFIG.FIGHT_TENSION_THRESHOLD || intimacy < EMOTION_CONFIG.FIGHT_LOW_RELATION_THRESHOLD,
+    };
   }
 
   checkTalentReveal(hero) {
@@ -350,24 +513,20 @@ export class GameState {
       this.gold -= totalCost;
     }
 
-    const targetMap = { basic: 40, good: 65, feast: 85 };
-    const baseTarget = targetMap[this.foodQuality] || 40;
+    // The daily emotion tick and the daily decision.
+    // THIS IS THE SAME CODE PATH the offline login simulation uses, so a hero
+    // behaves identically whether the player is watching or away.
+    const dayReport = simulateGameDay(this, {
+      mode: 'live',
+      rng: Math.random,
+      isellePresent: true,
+    });
 
+    // Heroes who are still hungry after today's decisions complain about it.
     for (const hero of this.heroes) {
       if (!hero.alive) continue;
-      let target = baseTarget;
-      if (hero.traits?.includes('picky')) target -= 20;
-      const fx = getSkillEffects(hero);
-      if (fx.foodTolerance) target += fx.foodTolerance;
-      target = Math.min(100, Math.max(0, target));
-      hero.satisfaction = target;
-
-      if (hero.satisfaction < 35) {
-        this.addStress(hero, 5);
+      if ((hero.satisfaction ?? 100) < 35) {
         showHeroReport(`${hero.name} (${hero.star}★) is discontent about the food.`, 'severe');
-      } else if (hero.satisfaction > 85 && Math.random() < 0.10) {
-        this.addStress(hero, -5);
-        showHeroReport(`${hero.name} (${hero.star}★) is satisfied with the meals.`, 'low');
       }
     }
 
@@ -381,6 +540,7 @@ export class GameState {
 
     showSystemMessage('DAILY NECESSITIES AND FOOD HAVE BEEN REFILLED.');
     this.saveToLocalStorage();
+    return dayReport;
   }
 
   unlockFacility(id, cost = 0) {
@@ -430,6 +590,7 @@ export class GameState {
     }
     if (!hero.motivation) hero.motivation = rollMotivation(hero.name, hero.cooperation);
     if (!hero.look) hero.look = generateLook(hero);
+    this.normalizeHeroEmotionFields(hero);
 
     this.heroes.push(hero);
     this.assignHouses();
@@ -454,8 +615,10 @@ export class GameState {
       effectiveAmount = Math.round(amount * 0.5);
     }
 
-    const prevStress = hero.stress || 0;
-    hero.stress = Math.min(100, Math.max(0, prevStress + effectiveAmount));
+    // Anger is the source of truth; the legacy `stress` field mirrors it.
+    const prevStress = hero.anger ?? hero.stress ?? 0;
+    hero.anger = Math.min(100, Math.max(0, prevStress + effectiveAmount));
+    hero.stress = hero.anger;
 
     // Severe stress warning at 80
     if (hero.stress >= 80 && !hero.severeStressWarned) {
@@ -854,7 +1017,16 @@ export class GameState {
         foodQuality: this.foodQuality,
         relations: this.relations,
         bondsAnnounced: this.bondsAnnounced,
+        lastLoginTimestamp: this.lastLoginTimestamp,
+        tensions: this.tensions,
+        loginReportHistory: this.loginReportHistory,
+        overflowLoot: this.overflowLoot,
         settings: this.settings,
+        playerClass: this.playerClass || 'Vanguard',
+        controlledHeroId: this.controlledHeroId || 'hero_han',
+        manaPotions: this.manaPotions ?? 3,
+        arrows: this.arrows ?? 20,
+        spellMastery: this.spellMastery || {},
       };
       if (typeof localStorage === 'undefined') return;
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -898,8 +1070,30 @@ export class GameState {
         'hero_aaron|hero_jenna': 25,
         ...(data.relations || {}),
       };
-      this.bondsAnnounced = data.bondsAnnounced || {};
-      this.settings = { quality: 'medium', resolutionScale: 1, showFps: true, ...(data.settings || {}) };
+      this.tensions = { ...(data.tensions || {}) };
+      this.lastLoginTimestamp = data.lastLoginTimestamp ?? Date.now();
+      this.loginReportHistory = Array.isArray(data.loginReportHistory) ? data.loginReportHistory : [];
+      this.overflowLoot = Array.isArray(data.overflowLoot) ? data.overflowLoot : [];
+      this.settings = {
+        quality: 'medium',
+        resolutionScale: 1,
+        showFps: true,
+        controls: { attackButton: 'right', blockButton: 'left' },
+        camera: { followSpeed: 'tight', autoTurn: true, distance: 'normal' },
+        ...(data.settings || {})
+      };
+      if (!this.settings.controls) {
+        this.settings.controls = { attackButton: 'right', blockButton: 'left' };
+      }
+      if (!this.settings.camera) {
+        this.settings.camera = { followSpeed: 'tight', autoTurn: true, distance: 'normal' };
+      }
+
+      this.playerClass = data.playerClass || 'Vanguard';
+      this.controlledHeroId = data.controlledHeroId || 'hero_han';
+      this.manaPotions = data.manaPotions !== undefined ? data.manaPotions : 3;
+      this.arrows = data.arrows !== undefined ? data.arrows : 20;
+      this.spellMastery = data.spellMastery || {};
 
       // Safe migration for facilities
       if (data.facilities) {
@@ -918,11 +1112,10 @@ export class GameState {
           hiddenTalents = ht.hiddenTalents;
           talentsRevealed = ht.talentsRevealed;
         }
-        return {
+        return this.normalizeHeroEmotionFields({
           ...h,
           stress: h.stress ?? 0,
           fatigue: h.fatigue ?? 0,
-          satisfaction: h.satisfaction ?? 50,
           traits: h.traits || (Math.random() < 0.20 ? ['picky'] : []),
           potentials,
           hiddenTalents,
@@ -938,14 +1131,20 @@ export class GameState {
           talents: h.talents || [],
           equipment: h.equipment || { weapon: null, offhand: null, armor: null },
           look: h.look || generateLook(h),
-        };
+        }, h);
       });
       this.assignHouses();
 
       // Safe migration for Han Islat
       const han = this.heroes.find((h) => h.id === 'hero_han');
       if (han) {
-        han.class = 'Vanguard';
+        // The class is never overwritten: older saves lost the player's class
+        // choice, so restore it from the saved player class when possible.
+        han.class = han.class || 'Vanguard';
+        if ((this.playerClass === 'Mage' || this.playerClass === 'Archer') && han.class === 'Vanguard') {
+          han.class = this.playerClass;
+          han.weapon = this.playerClass === 'Mage' ? 'staff' : 'bow';
+        }
         if (han.star === 1) {
           han.talents = (han.talents || []).filter(
             (t) =>
@@ -958,9 +1157,12 @@ export class GameState {
           }
         }
         if (!han.equipment || !han.equipment.weapon) {
+          const profile = getHeroClassProfile(han);
+          const weaponTemplate = profile ? profile.defaultWeapon : 'rusty_sword';
+          const offhandTemplate = profile ? profile.defaultOffhand : 'wooden_shield';
           han.equipment = {
-            weapon: createItemInstance('rusty_sword', { source: 'starter' }),
-            offhand: createItemInstance('wooden_shield', { source: 'starter' }),
+            weapon: createItemInstance(weaponTemplate, { source: 'starter' }),
+            offhand: offhandTemplate ? createItemInstance(offhandTemplate, { source: 'starter' }) : null,
             armor: null,
             ...(han.equipment || {}),
           };
@@ -986,6 +1188,37 @@ export class GameState {
           armor: createItemInstance('chain_armor', { source: 'starter' }),
           ...(aaron.equipment || {}),
         };
+      }
+
+      // One-time migration: repair heroes whose class and equipped weapon do not
+      // match (a Mage holding a sword and shield, a shield held with a staff...).
+      if (!this.flags.loadoutMigrationV1) {
+        const fixed = this.runLoadoutMigration();
+        this.flags.loadoutMigrationV1 = true;
+        if (fixed > 0) {
+          console.log(`[GameState] Loadout migration repaired ${fixed} hero(s).`);
+        }
+      }
+
+      // One-time migration: the emotion / training system (Phase 1).
+      // Old saves have no mentality, hunger, fear, anger, tensions or squad
+      // leader flag; they are seeded from the legacy fields above.
+      if (!this.flags.emotionTrainingMigrationV1) {
+        this.ensureSquadLeader();
+        // The Cafeteria and the Training Grounds are part of the vertical
+        // slice from day one.
+        if (this.facilities.cafeteria) {
+          this.facilities.cafeteria.unlocked = true;
+        }
+        if (this.facilities.training) {
+          this.facilities.training.unlocked = true;
+        }
+        this.flags.emotionTrainingMigrationV1 = true;
+      }
+
+      // The controlled hero must still exist in the roster.
+      if (!this.heroes.some((h) => h.id === this.controlledHeroId)) {
+        this.controlledHeroId = 'hero_han';
       }
 
       // Safe migration for party

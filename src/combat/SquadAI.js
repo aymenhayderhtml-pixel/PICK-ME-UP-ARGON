@@ -86,7 +86,52 @@ export class SquadAI {
       }
     }
 
-    // 3. Update composure & formation targets
+    // 3. Check if player or ally mage is currently channeling ultimate (Solar Cataclysm)
+    let ultimateMage = null;
+    if (player && (player.isCastingUltimate || player.combatant?.isCastingUltimate)) {
+      ultimateMage = player;
+    } else {
+      for (let i = 0; i < this.allies.length; i++) {
+        const a = this.allies[i];
+        if (!a.dead && (a.isCastingUltimate || a.combatant?.isCastingUltimate)) {
+          ultimateMage = a;
+          break;
+        }
+      }
+    }
+
+    let threatDirX = forwardX;
+    let threatDirZ = forwardZ;
+    const mPos = ultimateMage ? (ultimateMage.mesh ? ultimateMage.mesh.position : (ultimateMage.position || pPos)) : pPos;
+    if (ultimateMage && enemies && enemies.length > 0) {
+      let nearestDistSq = Infinity;
+      let nearestE = null;
+      for (let j = 0; j < enemies.length; j++) {
+        const e = enemies[j];
+        if (e.dead || e.isDead) continue;
+        const ePos = e.mesh ? e.mesh.position : e.position;
+        if (!ePos) continue;
+        const dSq = (ePos.x - mPos.x) ** 2 + (ePos.z - mPos.z) ** 2;
+        if (dSq < nearestDistSq) {
+          nearestDistSq = dSq;
+          nearestE = e;
+        }
+      }
+      if (nearestE) {
+        const nePos = nearestE.mesh ? nearestE.mesh.position : nearestE.position;
+        const edx = nePos.x - mPos.x;
+        const edz = nePos.z - mPos.z;
+        const elen = Math.hypot(edx, edz);
+        if (elen > 0.05) {
+          threatDirX = edx / elen;
+          threatDirZ = edz / elen;
+        }
+      }
+    }
+    const threatSideX = -threatDirZ;
+    const threatSideZ = threatDirX;
+
+    // 4. Update composure & formation targets
     let frontIdx = 0;
     let backIdx = 0;
 
@@ -106,7 +151,28 @@ export class SquadAI {
       let targetX = pPos.x;
       let targetZ = pPos.z;
 
-      if (this.currentCommand === COMMANDS.FOLLOW) {
+      if (ultimateMage && ally !== ultimateMage) {
+        // Protect the Mage: stand in front of the mage facing enemies and taunt hostiles
+        const sideOffset = (i % 2 === 0 ? 1 : -1) * (1.2 + Math.floor(i / 2) * 1.1);
+        targetX = mPos.x + threatDirX * 2.6 + threatSideX * sideOffset;
+        targetZ = mPos.z + threatDirZ * 2.6 + threatSideZ * sideOffset;
+
+        if (enemies) {
+          for (let j = 0; j < enemies.length; j++) {
+            const e = enemies[j];
+            if (e.dead || e.isDead) continue;
+            const ePos = e.mesh ? e.mesh.position : e.position;
+            if (!ePos) continue;
+            const dToAlly = Math.hypot(ePos.x - ally.mesh.position.x, ePos.z - ally.mesh.position.z);
+            if (dToAlly <= 10.0) {
+              if (e.currentTarget !== undefined) e.currentTarget = ally;
+              if (e.target !== undefined) e.target = ally;
+              if (e.isAggroed !== undefined) e.isAggroed = true;
+            }
+          }
+        }
+        ally.targetPos.set(targetX, 0, targetZ);
+      } else if (this.currentCommand === COMMANDS.FOLLOW) {
         if (!isBackLine) {
           // Front: 2.5m forward, spread sideways by 1.8m
           const sideOffset = (frontIdx % 2 === 0 ? 1 : -1) * (1.8 * (Math.floor(frontIdx / 2) + 0.5));
@@ -144,6 +210,19 @@ export class SquadAI {
           } else {
             targetX = pPos.x;
             targetZ = pPos.z;
+          }
+        }
+
+        // Avoid standing inside active Flame Walls
+        if (player?.spellSystem?.activeFlameWalls) {
+          for (let f = 0; f < player.spellSystem.activeFlameWalls.length; f++) {
+            const fw = player.spellSystem.activeFlameWalls[f];
+            if (!fw.active) continue;
+            const dfw = Math.hypot(targetX - fw.position.x, targetZ - fw.position.z);
+            if (dfw < 3.0) {
+              const push = dfw > 0.1 ? (targetX - fw.position.x) / dfw : 1;
+              targetX += push * 3.5;
+            }
           }
         }
 

@@ -12,6 +12,7 @@ export class DeployWindow extends SystemWindow {
     super('DEPLOY - TOWER EXPEDITION');
     this.onEnterFloor = onEnterFloor;
     this.onOpenEquipmentSummon = onOpenEquipmentSummon;
+    this.equipNoticeDismissed = false;
 
     this.container.style.width = '780px';
     this.container.style.maxWidth = '95vw';
@@ -29,13 +30,15 @@ export class DeployWindow extends SystemWindow {
   open() {
     this.render();
     super.open();
-    if (this.hasUnarmedHeroes()) {
+    if (this.hasUnarmedHeroes() && !this.equipNoticeDismissed) {
       showEquipmentNotice({
         onSummon: () => {
           this.close();
           if (this.onOpenEquipmentSummon) this.onOpenEquipmentSummon();
         },
-        onEnterAnyway: () => {},
+        onLater: () => {
+          this.equipNoticeDismissed = true;
+        },
       });
     }
   }
@@ -160,7 +163,7 @@ export class DeployWindow extends SystemWindow {
     warningBox.style.color = '#ff4444';
     warningBox.style.fontWeight = 'bold';
     warningBox.style.fontSize = '12px';
-    warningBox.textContent = '⚠️ Permadeath active inside the Tower.';
+    warningBox.innerHTML = '⚠️ Permadeath active inside the Tower.<br><span style="color:#6fe0f0;font-size:11px;font-weight:normal;">CONTROLS &mdash; RIGHT CLICK: ATTACK | LEFT CLICK (HOLD): BLOCK | F: BASH | Q: ROLL</span>';
     this.contentElement.appendChild(warningBox);
 
     // 4. Floor Selector Bar
@@ -194,17 +197,14 @@ export class DeployWindow extends SystemWindow {
     this.enterBtn.style.fontSize = '14px';
     this.enterBtn.style.letterSpacing = '1.5px';
     this.enterBtn.addEventListener('click', () => {
-      if (this.hasUnarmedHeroes()) {
+      if (this.hasUnarmedHeroes() && !this.equipNoticeDismissed) {
         showEquipmentNotice({
           onSummon: () => {
             this.close();
             if (this.onOpenEquipmentSummon) this.onOpenEquipmentSummon();
           },
-          onEnterAnyway: () => {
-            this.close();
-            if (this.onEnterFloor) {
-              this.onEnterFloor(gameState.currentFloor || 1);
-            }
+          onLater: () => {
+            this.equipNoticeDismissed = true;
           },
         });
         return;
@@ -256,6 +256,10 @@ export class DeployWindow extends SystemWindow {
       const hero = gameState.heroes.find((h) => h.id === heroId);
       return hero && (!hero.equipment || !hero.equipment.weapon);
     }).length;
+
+    if (unequippedCount === 0) {
+      this.equipNoticeDismissed = false;
+    }
 
     if (unequippedCount > 0 && this.noEquipBanner) {
       this.noEquipBanner.style.display = 'flex';

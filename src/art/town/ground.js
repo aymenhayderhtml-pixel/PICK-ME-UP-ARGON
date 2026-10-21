@@ -8,7 +8,7 @@ export const BUILDING_PADS = [
   { x: 0, z: -32, radius: 10.0, height: 1.2 },   // Synthesis Chamber terrace (+1.2)
   { x: 20, z: 26, radius: 14.0, height: 0.0 },   // Landing Area
   { x: 14, z: -8, radius: 12.0, height: 0.0 },   // Town Square
-  { x: 27, z: -27, radius: 8.0, height: 0.0 },   // Space-Time Rift gate area
+  { x: 31, z: -31, radius: 8.0, height: 0.0 },   // Space-Time Rift gate area
   { x: -6, z: -20, radius: 8.0, height: 0.0 },   // Armory
   { x: -26, z: -4, radius: 15.0, height: 0.0 },  // Residences
   { x: -24, z: 20, radius: 13.0, height: 0.0 },  // Training Grounds

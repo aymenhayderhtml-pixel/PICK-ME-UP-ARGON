@@ -85,7 +85,7 @@ function createStoneTexture(seed = 101) {
   return tex;
 }
 
-function createPortalSwirlTexture() {
+export function createPortalSwirlTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 512;
@@ -977,167 +977,10 @@ export function buildLandmarksMain(ctx = {}) {
 
     // =========================================================================
     // 4. SPACE-TIME RIFT
+    // Note: Relocated directly flush into the perimeter wall archway (k === riftSideIndex)
+    // in src/art/town/shell.js to eliminate the freestanding courtyard obstruction and
+    // seal the perimeter wall opening.
     // =========================================================================
-    const strCfg = layout.space_time_rift || {
-      center: { x: 27.0, z: -27.0 },
-      footprint: { type: 'box', width: 6.5, height: 10.0, depth: 2.5 },
-      door: { id: 'door_space_time_rift', position: { x: 27.0, y: 0.0, z: -25.5 }, outward: { x: 0.0, y: 0.0, z: 1.0 } },
-      signOffset: { x: 0, y: 12.0, z: 0 }
-    };
-    const rfX = strCfg.center.x;
-    const rfZ = strCfg.center.z;
-    const rfY = getGroundY(rfX, rfZ);
-    const rfW = (strCfg.footprint && strCfg.footprint.width) || 6.5;
-    const rfH = (strCfg.footprint && strCfg.footprint.height) || 10.0;
-    const rfD = (strCfg.footprint && strCfg.footprint.depth) || 2.5;
-
-    // Stepped stone dais in front of the Space-Time Rift arch
-    for (let st = 0; st < 4; st++) {
-      const sw = rfW + 2.4 - st * 0.45;
-      const sd = rfD + 2.6 - st * 0.45;
-      const sh = 0.22;
-      const sy = rfY + st * sh + sh * 0.5;
-      const sz = rfZ + (3 - st) * 0.32;
-      addBox(stoneGeos, sw, sh, sd, rfX, sy, sz, st % 2 === 0 ? (P.groundDark || 0x68767c) : (P.slate || 0x4a5560), 0, 0, 0, 0.72, 1.04, rng);
-    }
-    const daisTopY = rfY + 4 * 0.22;
-
-    // Massive Dark-Stone Side Pillars with Fluted Pilasters, Capitals, and Bases
-    const openHalfW = 1.95;
-    const pierW = (rfW - openHalfW * 2) * 0.5 + 0.35;
-    const pierH = 6.6;
-    for (const side of [-1, 1]) {
-      const px = rfX + side * (openHalfW + pierW * 0.5 - 0.1);
-      // Plinth base
-      addBox(stoneGeos, pierW + 0.45, 0.85, rfD + 0.5, px, daisTopY + 0.425, rfZ, P.groundDark || 0x68767c, 0, 0, 0, 0.68, 0.98, rng);
-      // Dark slate shaft
-      addBox(stoneGeos, pierW, pierH, rfD, px, daisTopY + 0.85 + pierH * 0.5, rfZ, P.slate || 0x4a5560, 0, 0, 0, 0.72, 1.04, rng);
-      // Engaged front & back pilasters
-      addBox(stoneGeos, pierW * 0.55, pierH - 0.4, rfD + 0.38, px, daisTopY + 0.85 + pierH * 0.5, rfZ, P.wallShade || 0x8e9da3, 0, 0, 0, 0.76, 1.06, rng);
-      // Glowing vertical rune strip in pier face
-      addBox(glyphGeos, 0.14, pierH - 1.4, rfD + 0.44, px, daisTopY + 0.85 + pierH * 0.5, rfZ, P.portalBlue || 0x5ab4ff, 0, 0, 0, 0.95, 1.05, rng);
-      // Molded impost capital
-      addBox(stoneGeos, pierW + 0.55, 0.65, rfD + 0.55, px, daisTopY + 0.85 + pierH + 0.325, rfZ, P.wallLit || 0xc4cbcf, 0, 0, 0, 0.82, 1.08, rng);
-    }
-
-    // Semicircular Dark-Stone Arch Voussoirs spanning the opening
-    const archCenterY = daisTopY + 1.5 + pierH - 0.6;
-    const archVos = q === 'low' ? 9 : 15;
-    for (let v = 0; v < archVos; v++) {
-      const a = Math.PI * (v + 0.5) / archVos;
-      const vx = rfX + Math.cos(a) * (openHalfW + 0.68);
-      const vy = archCenterY + Math.sin(a) * (openHalfW + 0.68);
-      const vCol = v % 2 === 0 ? (P.slate || 0x4a5560) : (P.groundDark || 0x68767c);
-      addBox(stoneGeos, 1.25, 0.68, rfD + 0.28, vx, vy, rfZ, vCol, 0, 0, a - Math.PI / 2, 0.76, 1.06, rng);
-    }
-
-    // Heavy Upper Entablature & Pediment Crown
-    const entabY = archCenterY + openHalfW + 1.35;
-    addBox(stoneGeos, rfW + 0.9, 1.35, rfD + 0.35, rfX, entabY, rfZ, P.slate || 0x4a5560, 0, 0, 0, 0.75, 1.05, rng);
-    addBox(stoneGeos, rfW + 1.4, 0.48, rfD + 0.75, rfX, entabY + 0.85, rfZ, P.wallLit || 0xc4cbcf, 0, 0, 0, 0.84, 1.08, rng);
-
-    // Recessed lighter stone back-wall inside arch so there is no black void behind the portal
-    addBox(stoneGeos, openHalfW * 2.1, pierH + 2.4, 0.38, rfX, daisTopY + (pierH + 2.4) * 0.5, rfZ - 0.55, P.wallShade || 0x8e9da3, 0, 0, 0, 0.78, 1.02, rng);
-
-    // Carved Keystone Eye at top center of the arch
-    const eyeY = archCenterY + openHalfW + 0.85;
-    const eyeZ = rfZ + rfD * 0.5 + 0.22;
-    addBox(stoneGeos, 1.15, 1.35, 0.55, rfX, eyeY, eyeZ - 0.1, P.wallLit || 0xc4cbcf, 0, 0, 0, 0.82, 1.08, rng);
-    // Upper & lower carved eyelids
-    addBox(stoneGeos, 0.95, 0.22, 0.45, rfX, eyeY + 0.22, eyeZ + 0.08, P.slate || 0x4a5560, 0, 0, -0.18, 0.8, 1.05, rng);
-    addBox(stoneGeos, 0.95, 0.22, 0.45, rfX, eyeY - 0.22, eyeZ + 0.08, P.slate || 0x4a5560, 0, 0, 0.18, 0.8, 1.05, rng);
-    // Glowing Keystone Pupil & Iris
-    addCyl(glyphGeos, 0.28, 0.28, 0.32, 12, rfX, eyeY, eyeZ + 0.12, P.portalBlue || 0x5ab4ff, 0, Math.PI / 2, 0, 0.95, 1.05, rng);
-
-    // Carved Relief of Two Winged Figures facing each other with raised wings and bowed heads
-    const featherCount = q === 'low' ? 6 : q === 'medium' ? 9 : 12;
-    for (const side of [-1, 1]) {
-      const figX = rfX + side * (openHalfW + 0.55);
-      const figY = archCenterY + 0.35;
-      const figZ = rfZ + rfD * 0.5 + 0.18;
-
-      // Draped torso & robed lower body leaning inward
-      addBox(stoneGeos, 0.52, 1.55, 0.36, figX, figY - 0.35, figZ, P.wallLit || 0xc4cbcf, 0, 0, -side * 0.22, 0.8, 1.08, rng);
-      addBox(stoneGeos, 0.44, 1.15, 0.28, figX + side * 0.12, figY - 1.35, figZ - 0.04, P.wallShade || 0x8e9da3, 0, 0, -side * 0.12, 0.76, 1.04, rng);
-
-      // Bowed head with hooded halo crest facing the center keystone
-      const headX = figX - side * 0.24;
-      const headY = figY + 0.58;
-      addCyl(stoneGeos, 0.24, 0.2, 0.42, 8, headX, headY, figZ + 0.04, P.plaster || 0xdfe3df, 0, 0, -side * 0.58, 0.85, 1.1, rng);
-      // Raised praying arms
-      addBox(stoneGeos, 0.18, 0.68, 0.24, headX - side * 0.18, figY + 0.18, figZ + 0.06, P.wallLit || 0xc4cbcf, 0, 0, -side * 0.75, 0.82, 1.08, rng);
-
-      // Layered Extruded Wing Arch and Tapered Wing Feathers sweeping up over the arch
-      for (let f = 0; f < featherCount; f++) {
-        const ft = f / (featherCount - 1);
-        const fLen = 1.95 - ft * 0.85;
-        const fW = 0.21 - ft * 0.05;
-        const spreadAng = -side * (0.18 + ft * 1.18);
-        const rootX = figX + side * 0.15 - side * ft * 0.45;
-        const rootY = figY + 0.35 + ft * 1.15;
-        const fx = rootX + Math.sin(-spreadAng) * (fLen * 0.45);
-        const fy = rootY + Math.cos(spreadAng) * (fLen * 0.45);
-        const fCol = f % 2 === 0 ? (P.plaster || 0xdfe3df) : (P.wallLit || 0xc4cbcf);
-        addBox(stoneGeos, fW, fLen, 0.24 - ft * 0.06, fx, fy, figZ + 0.05, fCol, 0, 0, spreadAng, 0.82, 1.1, rng);
-      }
-    }
-
-    // Moss patches on Space-Time Rift steps and arch shoulders
-    addBox(mossGeos, 1.8, 0.22, 0.8, rfX - 2.3, entabY + 1.08, rfZ, P.moss || 0x5f8a4a, 0, 0, 0.05, 0.78, 1.05, rng);
-    addBox(mossGeos, 1.6, 0.22, 0.8, rfX + 2.2, entabY + 1.08, rfZ, P.moss || 0x5f8a4a, 0, 0, -0.05, 0.78, 1.05, rng);
-
-    // Glowing Blue Portal in the Opening + 3 Slowly Rotating Thin Ring Meshes
-    const portalCenter = new THREE.Vector3(rfX, daisTopY + 3.85, rfZ + 0.05);
-    const portalGeo = new THREE.PlaneGeometry(3.9, 6.2);
-    activeDisposables.push(portalGeo);
-    const portalDisc = new THREE.Mesh(portalGeo, matPortal);
-    portalDisc.position.copy(portalCenter);
-    rootGroup.add(portalDisc);
-    animRefs.portalDisc = portalDisc;
-
-    const pRingRadii = [1.45, 1.85, 2.22];
-    const pRingSegs = q === 'low' ? 28 : 48;
-    for (let r = 0; r < 3; r++) {
-      const prGeo = new THREE.TorusGeometry(pRingRadii[r], 0.045, 8, pRingSegs);
-      activeDisposables.push(prGeo);
-      const prMesh = new THREE.Mesh(prGeo, matSphereRing);
-      prMesh.position.copy(portalCenter);
-      prMesh.scale.set(1.0, 1.38, 1.0);
-      prMesh.rotation.set((r - 1) * 0.18, (r % 2 === 0 ? 1 : -1) * 0.15, r * 0.8);
-      rootGroup.add(prMesh);
-      animRefs.portalRings.push(prMesh);
-    }
-
-    // Colliders for Space-Time Rift arch piers
-    colliders.push({ type: 'box', x: rfX - (openHalfW + pierW * 0.5), z: rfZ, w: pierW + 0.4, d: rfD + 0.5, rotY: 0 });
-    colliders.push({ type: 'box', x: rfX + (openHalfW + pierW * 0.5), z: rfZ, w: pierW + 0.4, d: rfD + 0.5, rotY: 0 });
-    colliders.push({ type: 'box', x: rfX, z: rfZ - 0.6, w: rfW, d: 0.8, rotY: 0 });
-
-    // Space-Time Rift Anchors, Door, and Required Light Entry
-    registerAnchor('portal_center', portalCenter);
-    anchors.portal = portalCenter.clone();
-
-    if (strCfg.door) {
-      const dp = new THREE.Vector3(strCfg.door.position.x, rfY, strCfg.door.position.z);
-      const dw = new THREE.Vector3(strCfg.door.outward.x, 0, strCfg.door.outward.z).normalize();
-      doors.push({ id: strCfg.door.id, position: dp, outward: dw });
-      registerAnchor('door_space_time_rift', dp);
-    }
-    const strSignPos = new THREE.Vector3(
-      rfX + ((strCfg.signOffset && strCfg.signOffset.x) || 0),
-      rfY + ((strCfg.signOffset && strCfg.signOffset.y) || 12.0),
-      rfZ + ((strCfg.signOffset && strCfg.signOffset.z) || 0)
-    );
-    registerAnchor('sign_space_time_rift', strSignPos);
-    buildSignPlate(stoneGeos, glyphGeos, strSignPos, 0, rng);
-
-    lights.push({
-      position: portalCenter.clone(),
-      color: 0x5ab4ff,
-      intensity: 6.0,
-      distance: 12,
-      baseIntensity: 6.0
-    });
 
     // =========================================================================
     // MERGE STATIC GEOMETRIES & BUILD INSTANCED MESHES

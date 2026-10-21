@@ -1,0 +1,322 @@
+// src/core/EmotionEngine.js
+// Pure, headless emotion mutation functions.
+//
+// Nothing in this file touches Three.js, the DOM or localStorage directly, so
+// the exact same code runs during live play and during the offline login
+// simulation.
+
+import { EMOTION_CONFIG } from '../data/emotions.config.js';
+import { addHeroAnger, addHeroHunger } from '../data/heroes.js';
+
+function clamp100(value) {
+  return Math.max(0, Math.min(100, Math.round(value || 0)));
+}
+
+/**
+ * Collects the personality trait modifiers of a hero.
+ * Multipliers multiply, bonuses add.
+ */
+export function getTraitModifiers(hero) {
+  const mult = {
+    fearGainMult: 1,
+    angerGainMult: 1,
+    trainWeight: 1,
+    idleWeight: 1,
+    sparWeight: 1,
+    restWeight: 1,
+  };
+  let refuseOrderBonus = 0;
+  for (const t of (hero && hero.traits) || []) {
+    const m = EMOTION_CONFIG.TRAIT_MODIFIERS[t];
+    if (!m) continue;
+    if (m.fearGainMult) mult.fearGainMult *= m.fearGainMult;
+    if (m.angerGainMult) mult.angerGainMult *= m.angerGainMult;
+    if (m.trainWeight) mult.trainWeight *= m.trainWeight;
+    if (m.idleWeight) mult.idleWeight *= m.idleWeight;
+    if (m.sparWeight) mult.sparWeight *= m.sparWeight;
+    if (m.restWeight) mult.restWeight *= m.restWeight;
+    if (m.refuseOrderBonus) refuseOrderBonus += m.refuseOrderBonus;
+  }
+  mult.refuseOrderBonus = refuseOrderBonus;
+  return mult;
+}
+
+/**
+ * A hero panics when their Mentality collapses while Fear is high.
+ * While panicking the hero refuses risky training and refuses to spar.
+ */
+export function isHeroPanicking(hero) {
+  if (!hero) return false;
+  const mentality = hero.mentality ?? 0;
+  const fear = hero.fear ?? 0;
+  return (
+    mentality < EMOTION_CONFIG.PANIC_MENTALITY_THRESHOLD &&
+    fear > EMOTION_CONFIG.PANIC_FEAR_THRESHOLD
+  );
+}
+
+/**
+ * Applies raw fear gain, scaled by (1 - Mentality/100) and the hero's traits.
+ * Returns the actual delta applied.
+ */
+export function applyFearGain(hero, rawFearAmount) {
+  if (!hero || !rawFearAmount) return 0;
+  const mentality = hero.mentality ?? 50;
+  const mods = getTraitModifiers(hero);
+  const effective = rawFearAmount * (1 - mentality / 100) * mods.fearGainMult;
+  const prev = hero.fear ?? 0;
+  hero.fear = clamp100(prev + effective);
+  return hero.fear - prev;
+}
+
+/**
+ * The daily passive emotion tick: hunger rises, a hungry hero loses motivation
+ * and gains anger, and injuries tick down.
+ */
+export function applyDailyEmotionTick(hero, foodQuality = 'basic') {
+  if (!hero) return null;
+  const mods = getTraitModifiers(hero);
+  const result = { hungerGain: 0, motivationDelta: 0, angerGain: 0, injuryTicked: false };
+
+  result.hungerGain = addHeroHunger(hero, EMOTION_CONFIG.DAILY_HUNGER_GAIN);
+
+  if ((hero.hunger ?? 0) >= EMOTION_CONFIG.HIGH_HUNGER_THRESHOLD) {
+    const before = hero.motivationScore ?? 0;
+    hero.motivationScore = clamp100(before - EMOTION_CONFIG.HIGH_HUNGER_MOTIVATION_PENALTY);
+    result.motivationDelta = hero.motivationScore - before;
+    result.angerGain = addHeroAnger(
+      hero,
+      EMOTION_CONFIG.HIGH_HUNGER_ANGER_GAIN * mods.angerGainMult
+    );
+  }
+
+  if (hero.injury && hero.injury.daysRemaining > 0) {
+    hero.injury.daysRemaining -= 1;
+    result.injuryTicked = true;
+    if (hero.injury.daysRemaining <= 0) {
+      hero.injury = null;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * A hero eats at the Cafeteria: hunger drops, fear drops, motivation rises.
+ */
+export function applyEatOutcome(hero, foodQuality = 'basic') {
+  if (!hero) return null;
+  const reduction =
+    EMOTION_CONFIG.EAT_HUNGER_REDUCTION[foodQuality] ?? EMOTION_CONFIG.EAT_HUNGER_REDUCTION.basic;
+
+  const hungerBefore = hero.hunger ?? 0;
+  addHeroHunger(hero, -reduction);
+  const hungerReduced = hungerBefore - (hero.hunger ?? 0);
+
+  const fearBefore = hero.fear ?? 0;
+  hero.fear = clamp100(fearBefore - EMOTION_CONFIG.EAT_FEAR_REDUCTION);
+  const fearReduced = fearBefore - (hero.fear ?? 0);
+
+  const motivationBefore = hero.motivationScore ?? 0;
+  hero.motivationScore = clamp100(motivationBefore + EMOTION_CONFIG.EAT_MOTIVATION_GAIN);
+  const motivationGained = (hero.motivationScore ?? 0) - motivationBefore;
+
+  return { hungerReduced, fearReduced, motivationGained, foodQuality };
+}
+
+/**
+ * A hero rests in the Dormitory: fatigue drops, fear drops, anger drops.
+ */
+export function applyRestOutcome(hero, facilityLevel = 1) {
+  if (!hero) return null;
+  const level = facilityLevel || 1;
+  const fatigueReduction =
+    EMOTION_CONFIG.REST_FATIGUE_REDUCTION *
+    (1 + (level - 1) * EMOTION_CONFIG.REST_FACILITY_LEVEL_BONUS);
+
+  const fatigueBefore = hero.fatigue ?? 0;
+  hero.fatigue = Math.max(0, fatigueBefore - fatigueReduction);
+
+  const fearBefore = hero.fear ?? 0;
+  hero.fear = clamp100(fearBefore - EMOTION_CONFIG.REST_FEAR_REDUCTION);
+
+  const angerBefore = hero.anger ?? 0;
+  addHeroAnger(hero, -EMOTION_CONFIG.REST_ANGER_REDUCTION);
+
+  return {
+    fatigueReduced: fatigueBefore - (hero.fatigue ?? 0),
+    fearReduced: fearBefore - (hero.fear ?? 0),
+    angerReduced: angerBefore - (hero.anger ?? 0),
+  };
+}
+
+/**
+ * The Squad Leader may order ONE idle hero to train.
+ * Success depends on the relationship value, the target's anger and traits.
+ */
+export function evaluateSquadLeaderOrder(gameState, leader, idleHeroes, rng = Math.random) {
+  const empty = {
+    ordered: false,
+    targetId: null,
+    accepted: false,
+    trainingType: null,
+    reportEvent: null,
+  };
+  if (!gameState || !leader || !Array.isArray(idleHeroes) || idleHeroes.length === 0) {
+    return empty;
+  }
+
+  const candidates = idleHeroes.filter((h) => h && h.id !== leader.id && h.alive !== false);
+  if (candidates.length === 0) return empty;
+
+  const target = candidates[Math.floor(rng() * candidates.length)];
+  if (!target) return empty;
+
+  const mods = getTraitModifiers(target);
+  const relation = gameState.getRelation(leader.id, target.id);
+  const targetAnger = target.anger ?? 0;
+
+  let success =
+    EMOTION_CONFIG.LEADER_ORDER_BASE_SUCCESS +
+    relation * EMOTION_CONFIG.LEADER_ORDER_RELATION_SCALE -
+    targetAnger * EMOTION_CONFIG.LEADER_ORDER_ANGER_PENALTY;
+
+  // A hot-headed hero with high anger is likely to refuse.
+  if (mods.refuseOrderBonus > 0 && targetAnger >= 50) {
+    success -= mods.refuseOrderBonus;
+  }
+  success = Math.max(0, Math.min(1, success));
+
+  const accepted = rng() < success;
+  const trainingType = pickTrainingTypeForHero(target, rng);
+
+  const reportEvent = {
+    day: gameState.dayCount,
+    heroId: target.id,
+    heroName: target.name,
+    type: 'leader_ordered',
+    importance: EMOTION_CONFIG.REPORT_IMPORTANCE.leader_ordered,
+    text: accepted
+      ? `${leader.name} ordered ${target.name} to train. He accepted.`
+      : `${target.name} refused ${leader.name}'s order to train.`,
+    details: {
+      leaderId: leader.id,
+      leaderName: leader.name,
+      accepted,
+      trainingType,
+      relation,
+    },
+  };
+
+  if (!accepted) {
+    gameState.addTension(leader.id, target.id, EMOTION_CONFIG.LEADER_ORDER_REFUSE_TENSION_GAIN);
+    addHeroAnger(target, EMOTION_CONFIG.LEADER_ORDER_REFUSE_ANGER_GAIN);
+  }
+
+  return { ordered: true, targetId: target.id, accepted, trainingType, reportEvent };
+}
+
+/**
+ * Picks which training a hero would perform, weighted by class affinity.
+ */
+export function pickTrainingTypeForHero(hero, rng = Math.random) {
+  const affinity =
+    EMOTION_CONFIG.CLASS_TRAIN_AFFINITY[hero.class] || EMOTION_CONFIG.CLASS_TRAIN_AFFINITY.Novice;
+  const options = [
+    ['train_dummy', affinity.train_dummy],
+    ['train_archery', affinity.train_archery],
+    ['train_magic', affinity.train_magic],
+  ];
+  const total = options.reduce((sum, [, w]) => sum + w, 0);
+  if (total <= 0) return 'train_dummy';
+  let roll = rng() * total;
+  for (const [type, weight] of options) {
+    roll -= weight;
+    if (roll <= 0) return type;
+  }
+  return options[0][0];
+}
+
+/**
+ * A hero with enough anger and enough tension with another hero may start a
+ * real, unsanctioned fight. Iselle always steps in.
+ */
+export function evaluateTensionFight(gameState, hero, rng = Math.random) {
+  const none = {
+    occurred: false,
+    opponentId: null,
+    stoppedBy: null,
+    lawBroken: null,
+    reportEvents: [],
+  };
+  if (!gameState || !hero || hero.alive === false) return none;
+  if ((hero.anger ?? 0) < EMOTION_CONFIG.FIGHT_ANGER_THRESHOLD) return none;
+
+  const others = (gameState.heroes || []).filter((h) => h.alive && h.id !== hero.id);
+  const rival = others.find((o) => {
+    const tension = gameState.getTension(hero.id, o.id);
+    const relation = gameState.getRelation(hero.id, o.id);
+    return (
+      tension >= EMOTION_CONFIG.FIGHT_TENSION_THRESHOLD ||
+      relation < EMOTION_CONFIG.FIGHT_LOW_RELATION_THRESHOLD
+    );
+  });
+  if (!rival) return none;
+
+  const reportEvents = [];
+  const day = gameState.dayCount;
+
+  // Both fighters are scared and angry.
+  applyFearGain(hero, EMOTION_CONFIG.FEAR_GAIN_LOSS);
+  applyFearGain(rival, EMOTION_CONFIG.FEAR_GAIN_LOSS);
+  addHeroAnger(hero, EMOTION_CONFIG.ANGER_GAIN_RIVALRY);
+  addHeroAnger(rival, EMOTION_CONFIG.ANGER_GAIN_RIVALRY);
+
+  reportEvents.push({
+    day,
+    heroId: hero.id,
+    heroName: hero.name,
+    type: 'fought_hero',
+    importance: EMOTION_CONFIG.REPORT_IMPORTANCE.fought_hero,
+    text: `${hero.name} and ${rival.name} came to blows in the town.`,
+    details: { opponentId: rival.id, opponentName: rival.name },
+  });
+
+  // Iselle breaks it up. A fight in town is always outside the sparring ring.
+  const lawBroken = EMOTION_CONFIG.LOBBY_LAWS.NO_OUTSIDE_FIGHTING;
+
+  const motivationBefore = hero.motivationScore ?? 0;
+  hero.motivationScore = clamp100(motivationBefore - EMOTION_CONFIG.LAW_BREAK_MOTIVATION_PENALTY);
+  addHeroAnger(hero, -EMOTION_CONFIG.ISELLE_ANGER_REDUCTION);
+  addHeroAnger(rival, -EMOTION_CONFIG.ISELLE_ANGER_REDUCTION);
+  applyFearGain(hero, EMOTION_CONFIG.ISELLE_FEAR_GAIN);
+  applyFearGain(rival, EMOTION_CONFIG.ISELLE_FEAR_GAIN);
+
+  reportEvents.push({
+    day,
+    heroId: hero.id,
+    heroName: hero.name,
+    type: 'law_broken',
+    importance: EMOTION_CONFIG.REPORT_IMPORTANCE.law_broken,
+    text: `${hero.name} broke a lobby law: ${lawBroken}.`,
+    details: { law: lawBroken, motivationPenalty: EMOTION_CONFIG.LAW_BREAK_MOTIVATION_PENALTY },
+  });
+
+  reportEvents.push({
+    day,
+    heroId: hero.id,
+    heroName: hero.name,
+    type: 'iselle_intervened',
+    importance: EMOTION_CONFIG.REPORT_IMPORTANCE.iselle_intervened,
+    text: `Iselle separated ${hero.name} and ${rival.name}.`,
+    details: { opponentId: rival.id, opponentName: rival.name, reason: 'unsanctioned_fight' },
+  });
+
+  return {
+    occurred: true,
+    opponentId: rival.id,
+    stoppedBy: 'iselle',
+    lawBroken,
+    reportEvents,
+  };
+}

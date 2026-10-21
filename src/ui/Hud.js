@@ -3,6 +3,9 @@ import { attachOrnateCorners } from './ornaments.js';
 import { EnemyTagsOverlay } from './EnemyTags.js';
 import { getActiveTrailsCount } from '../fx/SlashTrail.js';
 import { drawIsellePortrait } from '../art/iselle.js';
+import { FIRE_SPELLS } from '../combat/spells.config.js';
+
+const _castScreenPos = new THREE.Vector3();
 
 export class Hud {
   constructor() {
@@ -97,6 +100,47 @@ export class Hud {
     barsBox.appendChild(this.hpBarBg);
     barsBox.appendChild(this.staBarBg);
 
+    // Mana Bar (Blue, under stamina)
+    this.manaBarBg = document.createElement('div');
+    this.manaBarBg.style.width = '200px';
+    this.manaBarBg.style.height = '14px';
+    this.manaBarBg.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    this.manaBarBg.style.border = '2px solid #1d4ed8';
+    this.manaBarBg.style.borderRadius = '4px';
+    this.manaBarBg.style.overflow = 'hidden';
+    this.manaBarBg.style.position = 'relative';
+    this.manaBarBg.style.display = 'none';
+
+    this.manaBarFill = document.createElement('div');
+    this.manaBarFill.style.width = '100%';
+    this.manaBarFill.style.height = '100%';
+    this.manaBarFill.style.backgroundColor = '#2563eb';
+    this.manaBarFill.style.transition = 'width 0.08s ease-out, background-color 0.15s ease';
+    this.manaBarBg.appendChild(this.manaBarFill);
+
+    this.manaLabel = document.createElement('div');
+    this.manaLabel.style.position = 'absolute';
+    this.manaLabel.style.top = '0';
+    this.manaLabel.style.left = '0';
+    this.manaLabel.style.width = '100%';
+    this.manaLabel.style.height = '100%';
+    this.manaLabel.style.display = 'flex';
+    this.manaLabel.style.alignItems = 'center';
+    this.manaLabel.style.justifyContent = 'center';
+    this.manaLabel.style.fontSize = '10px';
+    this.manaLabel.style.fontWeight = 'bold';
+    this.manaLabel.style.color = '#ffffff';
+    this.manaLabel.style.textShadow = '0 1px 2px #000';
+    this.manaLabel.textContent = 'MP 100/100';
+    this.manaBarBg.appendChild(this.manaLabel);
+    barsBox.appendChild(this.manaBarBg);
+
+    // Badges Row
+    const badgesRow = document.createElement('div');
+    badgesRow.style.display = 'flex';
+    badgesRow.style.flexWrap = 'wrap';
+    badgesRow.style.gap = '4px';
+
     // Shield State Badge
     this.shieldBadge = document.createElement('div');
     this.shieldBadge.style.display = 'inline-flex';
@@ -110,7 +154,54 @@ export class Hud {
     this.shieldBadge.style.backgroundColor = 'rgba(0, 0, 0, 0.65)';
     this.shieldBadge.style.color = '#43a047';
     this.shieldBadge.textContent = '🛡️ READY';
-    barsBox.appendChild(this.shieldBadge);
+    badgesRow.appendChild(this.shieldBadge);
+
+    // Mana Potion Badge
+    this.potionBadge = document.createElement('div');
+    this.potionBadge.style.display = 'none';
+    this.potionBadge.style.alignItems = 'center';
+    this.potionBadge.style.width = 'fit-content';
+    this.potionBadge.style.padding = '2px 8px';
+    this.potionBadge.style.borderRadius = '4px';
+    this.potionBadge.style.fontSize = '11px';
+    this.potionBadge.style.fontWeight = 'bold';
+    this.potionBadge.style.border = '1px solid #0284c7';
+    this.potionBadge.style.backgroundColor = 'rgba(0, 0, 0, 0.65)';
+    this.potionBadge.style.color = '#38bdf8';
+    this.potionBadge.textContent = '🧪 3/3 [Q]';
+    badgesRow.appendChild(this.potionBadge);
+
+    // Quiver Badge
+    this.quiverBadge = document.createElement('div');
+    this.quiverBadge.style.display = 'none';
+    this.quiverBadge.style.alignItems = 'center';
+    this.quiverBadge.style.width = 'fit-content';
+    this.quiverBadge.style.padding = '2px 8px';
+    this.quiverBadge.style.borderRadius = '4px';
+    this.quiverBadge.style.fontSize = '11px';
+    this.quiverBadge.style.fontWeight = 'bold';
+    this.quiverBadge.style.border = '1px solid #d97706';
+    this.quiverBadge.style.backgroundColor = 'rgba(0, 0, 0, 0.65)';
+    this.quiverBadge.style.color = '#fbbf24';
+    this.quiverBadge.textContent = '🏹 20/20';
+    badgesRow.appendChild(this.quiverBadge);
+
+    // Overheat Badge
+    this.overheatBadge = document.createElement('div');
+    this.overheatBadge.style.display = 'none';
+    this.overheatBadge.style.alignItems = 'center';
+    this.overheatBadge.style.width = 'fit-content';
+    this.overheatBadge.style.padding = '2px 8px';
+    this.overheatBadge.style.borderRadius = '4px';
+    this.overheatBadge.style.fontSize = '11px';
+    this.overheatBadge.style.fontWeight = 'bold';
+    this.overheatBadge.style.border = '1px solid #ef4444';
+    this.overheatBadge.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+    this.overheatBadge.style.color = '#f87171';
+    this.overheatBadge.textContent = '🔥 OVERHEATED!';
+    badgesRow.appendChild(this.overheatBadge);
+
+    barsBox.appendChild(badgesRow);
 
     this.container.appendChild(barsBox);
 
@@ -210,7 +301,7 @@ export class Hud {
     this.hints.style.color = '#cccccc';
     this.hints.style.fontSize = '12px';
     this.hints.textContent =
-      'WASD Move | Arrow Keys Rotate/Pitch | Wheel Zoom | L-Click Attack | Hold RMB Block | Q Roll | X Auto | C Command | M Mute | ? Toggle Hints';
+      'WASD Move | Arrow Keys Rotate/Pitch | Wheel Zoom | RIGHT CLICK: ATTACK | LEFT CLICK (HOLD): BLOCK | Q Roll | F Bash | X Auto | C Wheel | ? Toggle Hints';
     this.container.appendChild(this.hints);
 
     this.hintsVisible = true;
@@ -377,6 +468,8 @@ export class Hud {
     this._lastPlayer = null;
     window.addEventListener('keydown', (e) => {
       if (e.code === 'F3') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('debug') !== '1') return;
         this.showDebug = !this.showDebug;
         this.debugBox.style.display = this.showDebug ? 'block' : 'none';
       } else if (e.code === 'F4') {
@@ -405,6 +498,287 @@ export class Hud {
     this.fpsCounter = 60;
     this.fpsTimer = 0;
     this.frames = 0;
+
+    // Dynamic Archery Reticle
+    this.reticle = document.createElement('div');
+    this.reticle.id = 'hud-archery-reticle';
+    this.reticle.style.position = 'absolute';
+    this.reticle.style.top = '50%';
+    this.reticle.style.left = '50%';
+    this.reticle.style.transform = 'translate(-50%, -50%)';
+    this.reticle.style.pointerEvents = 'none';
+    this.reticle.style.display = 'none';
+    this.reticle.style.alignItems = 'center';
+    this.reticle.style.justifyContent = 'center';
+    this.reticle.style.zIndex = '10000';
+
+    this.reticleCircle = document.createElement('div');
+    this.reticleCircle.style.width = '48px';
+    this.reticleCircle.style.height = '48px';
+    this.reticleCircle.style.border = '2px solid rgba(255, 255, 255, 0.75)';
+    this.reticleCircle.style.borderRadius = '50%';
+    this.reticleCircle.style.position = 'relative';
+    this.reticleCircle.style.transition = 'border-color 0.1s, box-shadow 0.1s';
+
+    this.reticleDot = document.createElement('div');
+    this.reticleDot.style.position = 'absolute';
+    this.reticleDot.style.top = '50%';
+    this.reticleDot.style.left = '50%';
+    this.reticleDot.style.width = '4px';
+    this.reticleDot.style.height = '4px';
+    this.reticleDot.style.backgroundColor = '#ffffff';
+    this.reticleDot.style.borderRadius = '50%';
+    this.reticleDot.style.transform = 'translate(-50%, -50%)';
+
+    this.reticle.appendChild(this.reticleCircle);
+    this.reticle.appendChild(this.reticleDot);
+    this.container.appendChild(this.reticle);
+
+    // 6. Fire Mage Spell Bar (Bottom-Center)
+    this.spellBar = document.createElement('div');
+    this.spellBar.id = 'hud-spell-bar';
+    this.spellBar.style.position = 'fixed';
+    this.spellBar.style.bottom = '12px';
+    this.spellBar.style.left = '50%';
+    this.spellBar.style.transform = 'translateX(-50%)';
+    this.spellBar.style.display = 'none';
+    this.spellBar.style.gap = '6px';
+    this.spellBar.style.zIndex = '9999';
+    this.spellBar.style.background = 'rgba(12, 18, 25, 0.94)';
+    this.spellBar.style.border = '1px solid #1e3a5f';
+    this.spellBar.style.padding = '6px 8px';
+    this.spellBar.style.borderRadius = '8px';
+    this.spellBar.style.boxShadow = '0 4px 18px rgba(0, 0, 0, 0.75)';
+    this.spellBar.style.pointerEvents = 'auto';
+
+    this.spellSlots = new Map();
+    const spellList = [
+      FIRE_SPELLS.emberBolt,
+      FIRE_SPELLS.fireDartVolley,
+      FIRE_SPELLS.fireball,
+      FIRE_SPELLS.flameWall,
+      FIRE_SPELLS.infernoBeam,
+      FIRE_SPELLS.fireNova,
+      FIRE_SPELLS.solarCataclysm,
+    ];
+
+    for (const sp of spellList) {
+      if (!sp) continue;
+      const slot = document.createElement('div');
+      slot.className = 'hud-spell-slot';
+      slot.style.width = '54px';
+      slot.style.height = '60px';
+      slot.style.position = 'relative';
+      slot.style.background = sp.isUltimate ? '#1e1b18' : '#132235';
+      slot.style.border = `1px solid ${sp.isUltimate ? '#d97706' : '#334155'}`;
+      slot.style.borderRadius = '6px';
+      slot.style.cursor = 'pointer';
+      slot.style.display = 'flex';
+      slot.style.flexDirection = 'column';
+      slot.style.alignItems = 'center';
+      slot.style.justifyContent = 'center';
+      slot.style.userSelect = 'none';
+      slot.style.boxSizing = 'border-box';
+
+      // Key badge
+      const keyBadge = document.createElement('span');
+      keyBadge.textContent = sp.key;
+      keyBadge.style.position = 'absolute';
+      keyBadge.style.top = '2px';
+      keyBadge.style.left = '3px';
+      keyBadge.style.fontSize = '8px';
+      keyBadge.style.fontWeight = '800';
+      keyBadge.style.background = sp.isUltimate ? '#7c2d12' : '#1e293b';
+      keyBadge.style.color = sp.isUltimate ? '#fed7aa' : '#94a3b8';
+      keyBadge.style.padding = '1px 3px';
+      keyBadge.style.borderRadius = '2px';
+      slot.appendChild(keyBadge);
+
+      // Mastery stars
+      const stars = document.createElement('span');
+      stars.className = 'slot-stars';
+      stars.style.position = 'absolute';
+      stars.style.top = '2px';
+      stars.style.right = '3px';
+      stars.style.fontSize = '8px';
+      stars.style.color = '#facc15';
+      stars.style.lineHeight = '1';
+      slot.appendChild(stars);
+
+      // Icon
+      const icon = document.createElement('span');
+      icon.textContent = sp.icon;
+      icon.style.fontSize = '18px';
+      icon.style.marginTop = '2px';
+      slot.appendChild(icon);
+
+      // Name
+      const name = document.createElement('span');
+      name.textContent = sp.name.split(' ')[0];
+      name.style.fontSize = '8px';
+      name.style.color = sp.isUltimate ? '#fde047' : '#94a3b8';
+      name.style.fontWeight = 'bold';
+      name.style.marginTop = '1px';
+      slot.appendChild(name);
+
+      // Cost
+      const cost = document.createElement('span');
+      cost.className = 'slot-cost';
+      cost.textContent = sp.isUltimate ? '70% MP' : `${sp.manaCost} MP`;
+      cost.style.position = 'absolute';
+      cost.style.bottom = '2px';
+      cost.style.right = '3px';
+      cost.style.fontSize = '7px';
+      cost.style.fontWeight = '700';
+      cost.style.color = sp.isUltimate ? '#fde047' : '#38bdf8';
+      slot.appendChild(cost);
+
+      // Cooldown overlay
+      const cdOverlay = document.createElement('div');
+      cdOverlay.className = 'slot-cd';
+      cdOverlay.style.position = 'absolute';
+      cdOverlay.style.inset = '0';
+      cdOverlay.style.background = 'rgba(0, 0, 0, 0.75)';
+      cdOverlay.style.borderRadius = '5px';
+      cdOverlay.style.display = 'none';
+      cdOverlay.style.alignItems = 'center';
+      cdOverlay.style.justifyContent = 'center';
+      cdOverlay.style.fontSize = '11px';
+      cdOverlay.style.fontWeight = 'bold';
+      cdOverlay.style.color = '#fde047';
+      slot.appendChild(cdOverlay);
+
+      // Locked overlay
+      const lockedOverlay = document.createElement('div');
+      lockedOverlay.className = 'slot-locked';
+      lockedOverlay.style.position = 'absolute';
+      lockedOverlay.style.inset = '0';
+      lockedOverlay.style.background = 'rgba(0, 0, 0, 0.82)';
+      lockedOverlay.style.borderRadius = '5px';
+      lockedOverlay.style.display = 'none';
+      lockedOverlay.style.alignItems = 'center';
+      lockedOverlay.style.justifyContent = 'center';
+      lockedOverlay.style.fontSize = '9px';
+      lockedOverlay.style.fontWeight = 'bold';
+      lockedOverlay.style.color = '#ef4444';
+      lockedOverlay.textContent = `🔒 Lv${sp.unlockLevel}`;
+      slot.appendChild(lockedOverlay);
+
+      slot.addEventListener('click', () => {
+        if (this.onCastSpell) this.onCastSpell(sp.id);
+      });
+
+      slot.addEventListener('mouseenter', () => {
+        this.showSpellTooltip(sp, slot);
+      });
+      slot.addEventListener('mouseleave', () => {
+        this.hideSpellTooltip();
+      });
+
+      this.spellBar.appendChild(slot);
+      this.spellSlots.set(sp.id, { slot, stars, cost, cdOverlay, lockedOverlay, sp });
+    }
+    this.container.appendChild(this.spellBar);
+
+    // Spell Tooltip
+    this.spellTooltip = document.createElement('div');
+    this.spellTooltip.id = 'hud-spell-tooltip';
+    this.spellTooltip.style.display = 'none';
+    this.spellTooltip.style.position = 'fixed';
+    this.spellTooltip.style.zIndex = '10005';
+    this.spellTooltip.style.pointerEvents = 'none';
+    this.spellTooltip.style.background = 'rgba(12, 18, 25, 0.96)';
+    this.spellTooltip.style.border = '1px solid #f97316';
+    this.spellTooltip.style.borderRadius = '6px';
+    this.spellTooltip.style.padding = '8px 12px';
+    this.spellTooltip.style.maxWidth = '260px';
+    this.spellTooltip.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.85)';
+    this.spellTooltip.style.color = '#f1f5f9';
+    this.spellTooltip.style.fontSize = '11px';
+    this.spellTooltip.style.lineHeight = '1.4';
+    this.container.appendChild(this.spellTooltip);
+
+    // Overhead Cast Bar
+    this.castBar = document.createElement('div');
+    this.castBar.id = 'hud-overhead-cast-bar';
+    this.castBar.style.position = 'fixed';
+    this.castBar.style.width = '160px';
+    this.castBar.style.height = '14px';
+    this.castBar.style.background = 'rgba(15, 23, 42, 0.9)';
+    this.castBar.style.border = '1px solid #f97316';
+    this.castBar.style.borderRadius = '4px';
+    this.castBar.style.overflow = 'hidden';
+    this.castBar.style.transform = 'translate(-50%, -100%)';
+    this.castBar.style.pointerEvents = 'none';
+    this.castBar.style.display = 'none';
+    this.castBar.style.zIndex = '10000';
+    this.castBar.style.boxShadow = '0 0 10px rgba(249, 115, 22, 0.6)';
+
+    this.castFill = document.createElement('div');
+    this.castFill.style.height = '100%';
+    this.castFill.style.width = '0%';
+    this.castFill.style.background = 'linear-gradient(90deg, #ea580c, #facc15)';
+    this.castFill.style.transition = 'width 0.04s linear';
+    this.castBar.appendChild(this.castFill);
+
+    this.castText = document.createElement('div');
+    this.castText.style.position = 'absolute';
+    this.castText.style.inset = '0';
+    this.castText.style.display = 'flex';
+    this.castText.style.alignItems = 'center';
+    this.castText.style.justifyContent = 'center';
+    this.castText.style.fontSize = '9px';
+    this.castText.style.fontWeight = 'bold';
+    this.castText.style.color = '#fff';
+    this.castText.style.textShadow = '0 1px 2px #000';
+    this.castBar.appendChild(this.castText);
+
+    this.container.appendChild(this.castBar);
+  }
+
+  showSpellTooltip(spell, targetElement) {
+    if (!this.spellTooltip) return;
+    const costText = spell.isUltimate ? `${Math.round((spell.manaCostRatio || 0.70) * 100)}% Max MP` : `${spell.manaCost} MP`;
+    this.spellTooltip.innerHTML = `
+      <div style="font-weight:bold; color:#f97316; font-size:12px; margin-bottom:4px;">${spell.name} [${spell.key}]</div>
+      <div style="display:flex; justify-content:space-between; color:#94a3b8; font-size:10px; margin-bottom:4px;">
+        <span>Cost: <strong style="color:#38bdf8;">${costText}</strong></span>
+        <span>Cast: <strong style="color:#fde047;">${spell.castTime}s</strong></span>
+        <span>CD: <strong style="color:#fde047;">${spell.cooldown}s</strong></span>
+      </div>
+      <div style="color:#cbd5e1; font-size:10px;">${spell.description}</div>
+    `;
+    const rect = targetElement.getBoundingClientRect();
+    this.spellTooltip.style.left = `${Math.max(10, rect.left + rect.width / 2 - 130)}px`;
+    this.spellTooltip.style.bottom = `${window.innerHeight - rect.top + 10}px`;
+    this.spellTooltip.style.display = 'block';
+  }
+
+  hideSpellTooltip() {
+    if (this.spellTooltip) this.spellTooltip.style.display = 'none';
+  }
+
+  updateReticle(isAiming, drawAmount = 0, isTremor = false) {
+    if (!this.reticle) return;
+    if (isAiming) {
+      this.reticle.style.display = 'flex';
+      const tremor = isTremor ? (Math.random() - 0.5) * 6 : 0;
+      const radius = Math.max(12, Math.round(48 - drawAmount * 36 + tremor));
+      this.reticleCircle.style.width = `${radius}px`;
+      this.reticleCircle.style.height = `${radius}px`;
+
+      if (drawAmount >= 0.95) {
+        this.reticleCircle.style.borderColor = '#facc15';
+        this.reticleCircle.style.boxShadow = '0 0 8px #eab308';
+        this.reticleDot.style.backgroundColor = '#fef08a';
+      } else {
+        this.reticleCircle.style.borderColor = 'rgba(255, 255, 255, 0.75)';
+        this.reticleCircle.style.boxShadow = 'none';
+        this.reticleDot.style.backgroundColor = '#ffffff';
+      }
+    } else {
+      this.reticle.style.display = 'none';
+    }
   }
 
   showDamageNumber(damage, worldPos, isFinisher) {
@@ -412,8 +786,10 @@ export class Hud {
     el.textContent = `${damage}`;
     el.style.position = 'absolute';
     el.style.fontWeight = 'bold';
-    el.style.fontSize = isFinisher ? '24px' : '18px';
-    el.style.color = isFinisher ? '#ffeb3b' : '#ffffff';
+    const isBurn = isFinisher === 'burn';
+    const isCrit = isFinisher === true || isFinisher === 'headshot' || isFinisher === 'crit';
+    el.style.fontSize = isCrit ? '24px' : '18px';
+    el.style.color = isBurn ? '#ff9800' : (isCrit ? '#facc15' : '#ffffff');
     el.style.textShadow = '0 1px 3px #000';
     el.style.pointerEvents = 'none';
     this.container.appendChild(el);
@@ -555,35 +931,56 @@ export class Hud {
   update(delta, player, enemies, camera, renderer, bossDefeated, floorNumber = null) {
     if (!player) return;
 
-    // Shield State Badge
+    // The HUD follows the controlled hero's equipped weapon (single source of
+    // truth: getHeroLoadout). Widgets that do not belong are hidden.
+    const hudMode = player.loadout?.hudMode || 'melee';
+    const isMage = hudMode === 'mage';
+    const isArcher = hudMode === 'archer';
+    const isMelee = hudMode === 'melee';
+
+    this.applyHintText(hudMode);
+
+    // Archery Aim Reticle
+    const isAimingBow = Boolean(player.isAiming && player.loadout?.weaponType === 'bow');
+    this.updateReticle(isAimingBow, player.drawAmount || 0, Boolean(player.isTremor));
+
+    // Shield State Badge (melee loadouts only)
     if (this.shieldBadge) {
-      if (player.guardBreakTimer > 0) {
-        this.shieldBadge.textContent = '⚠️ GUARD BROKEN';
-        this.shieldBadge.style.color = '#ff4444';
-        this.shieldBadge.style.borderColor = '#ff4444';
-      } else if (player.isBlocking) {
-        if (player.blockTimer <= 0.22) {
-          this.shieldBadge.textContent = '⚡ PARRY READY';
-          this.shieldBadge.style.color = '#00ffff';
-          this.shieldBadge.style.borderColor = '#00ffff';
-        } else {
-          this.shieldBadge.textContent = '🛡️ BLOCKING';
-          this.shieldBadge.style.color = '#ffbb33';
-          this.shieldBadge.style.borderColor = '#ffbb33';
-        }
-      } else if (!player.shield || player.shield.durability <= 0) {
-        this.shieldBadge.textContent = '🛡️ NO SHIELD';
-        this.shieldBadge.style.color = '#777777';
-        this.shieldBadge.style.borderColor = '#555555';
+      if (!isMelee) {
+        this.shieldBadge.style.display = 'none';
       } else {
-        this.shieldBadge.textContent = '🛡️ READY';
-        this.shieldBadge.style.color = '#43a047';
-        this.shieldBadge.style.borderColor = '#43a047';
+        this.shieldBadge.style.display = 'inline-flex';
+        if (player.guardBreakTimer > 0) {
+          this.shieldBadge.textContent = '⚠️ GUARD BROKEN';
+          this.shieldBadge.style.color = '#ff4444';
+          this.shieldBadge.style.borderColor = '#ff4444';
+        } else if (player.isBlocking) {
+          if (player.blockTimer <= 0.22) {
+            this.shieldBadge.textContent = '⚡ PARRY READY';
+            this.shieldBadge.style.color = '#00ffff';
+            this.shieldBadge.style.borderColor = '#00ffff';
+          } else {
+            this.shieldBadge.textContent = '🛡️ BLOCKING';
+            this.shieldBadge.style.color = '#ffbb33';
+            this.shieldBadge.style.borderColor = '#ffbb33';
+          }
+        } else if (!player.shield || player.shield.durability <= 0) {
+          this.shieldBadge.textContent = '🛡️ NO SHIELD';
+          this.shieldBadge.style.color = '#777777';
+          this.shieldBadge.style.borderColor = '#555555';
+        } else {
+          this.shieldBadge.textContent = '🛡️ READY';
+          this.shieldBadge.style.color = '#43a047';
+          this.shieldBadge.style.borderColor = '#43a047';
+        }
       }
     }
 
     // Equipment Durability Panel
     if (this.equipPanel) {
+      // The shield row only belongs to a melee loadout.
+      this.shieldRow.style.display = isMelee ? 'flex' : 'none';
+
       if (player.weapon && player.weapon.durability > 0 && player.weapon.id !== 'bare_fists') {
         this.weaponNameLabel.textContent = `⚔️ ${player.weapon.name}`;
         const pct = Math.max(0, Math.min(100, (player.weapon.durability / player.weapon.maxDurability) * 100));
@@ -621,6 +1018,120 @@ export class Hud {
     const staPct = (sta / player.maxStamina) * 100;
     this.staBarFill.style.width = `${staPct}%`;
     this.staLabel.textContent = `STA ${Math.round(sta)}/${player.maxStamina}`;
+
+    // Mana Bar & Potion / Quiver Badges
+    if (this.manaBarBg) {
+      if (isMage) {
+        this.manaBarBg.style.display = 'block';
+        const mp = Math.max(0, player.mana || 0);
+        const maxMp = player.maxMana || 100;
+        const mpPct = Math.min(100, Math.max(0, (mp / maxMp) * 100));
+        this.manaBarFill.style.width = `${mpPct}%`;
+        this.manaLabel.textContent = `MP ${Math.round(mp)}/${maxMp}`;
+        if (player.manaFizzleTimer > 0) {
+          this.manaBarFill.style.backgroundColor = '#ef4444';
+        } else {
+          this.manaBarFill.style.backgroundColor = '#2563eb';
+        }
+      } else {
+        this.manaBarBg.style.display = 'none';
+      }
+    }
+
+    if (this.potionBadge) {
+      if (isMage) {
+        this.potionBadge.style.display = 'inline-flex';
+        const cdStr = player.manaPotionCooldown > 0 ? ` (${player.manaPotionCooldown.toFixed(1)}s)` : '';
+        this.potionBadge.textContent = `🧪 ${player.manaPotions ?? 3}/3 [Q]${cdStr}`;
+      } else {
+        this.potionBadge.style.display = 'none';
+      }
+    }
+
+    if (this.quiverBadge) {
+      if (isArcher) {
+        this.quiverBadge.style.display = 'inline-flex';
+        this.quiverBadge.textContent = `🏹 ${player.arrows ?? 20}/${player.maxArrows || 20}`;
+      } else {
+        this.quiverBadge.style.display = 'none';
+      }
+    }
+
+    if (this.overheatBadge) {
+      if (isMage && player.isOverheated) {
+        this.overheatBadge.style.display = 'inline-flex';
+        this.overheatBadge.textContent = `🔥 OVERHEATED! (${player.overheatTimer.toFixed(1)}s)`;
+      } else {
+        this.overheatBadge.style.display = 'none';
+      }
+    }
+
+    // Bottom Spell Bar
+    if (this.spellBar) {
+      if (isMage) {
+        this.spellBar.style.display = 'flex';
+        for (const [sId, slotObj] of this.spellSlots) {
+          const sp = slotObj.sp;
+          const cd = player.spellCooldowns ? (player.spellCooldowns[sId] || 0) : 0;
+          if (cd > 0) {
+            slotObj.cdOverlay.style.display = 'flex';
+            slotObj.cdOverlay.textContent = `${cd.toFixed(1)}s`;
+          } else {
+            slotObj.cdOverlay.style.display = 'none';
+          }
+
+          const isLocked = (player.mageLevel || 1) < sp.unlockLevel;
+          slotObj.lockedOverlay.style.display = isLocked ? 'flex' : 'none';
+
+          const mastery = player.spellMastery ? (player.spellMastery[sId]?.level || 0) : 0;
+          slotObj.stars.textContent = mastery > 0 ? '★'.repeat(mastery) : '';
+
+          let reqMana = sp.isUltimate ? ((player.maxMana || 100) * (sp.manaCostRatio || 0.70)) : sp.manaCost;
+          if (mastery > 0 && !sp.isUltimate && player.getDiscountedManaCost) {
+            reqMana = player.getDiscountedManaCost(sId, reqMana);
+          }
+          if (slotObj.cost && !sp.isUltimate && sId !== 'infernoBeam') {
+            slotObj.cost.textContent = `${reqMana} MP`;
+          }
+
+          const canAfford = (player.mana || 0) >= reqMana;
+          if (!canAfford && !isLocked && cd <= 0) {
+            slotObj.slot.style.opacity = '0.6';
+          } else {
+            slotObj.slot.style.opacity = '1.0';
+          }
+
+          if (sId === 'infernoBeam' && player.channeledSpell) {
+            slotObj.slot.style.borderColor = '#ef4444';
+            slotObj.slot.style.boxShadow = '0 0 10px #ef4444';
+          } else {
+            slotObj.slot.style.borderColor = sp.isUltimate ? '#d97706' : '#334155';
+            slotObj.slot.style.boxShadow = 'none';
+          }
+        }
+      } else {
+        this.spellBar.style.display = 'none';
+      }
+    }
+
+    // Overhead Cast Bar
+    if (this.castBar) {
+      if (player.isCasting && player.currentSpell && camera) {
+        this.castBar.style.display = 'block';
+        _castScreenPos.copy(player.mesh.position).add(new THREE.Vector3(0, 2.3, 0));
+        _castScreenPos.project(camera);
+        const sx = ((_castScreenPos.x + 1) * 0.5) * window.innerWidth;
+        const sy = ((-_castScreenPos.y + 1) * 0.5) * window.innerHeight;
+        this.castBar.style.left = `${sx}px`;
+        this.castBar.style.top = `${sy}px`;
+
+        const pct = player.castDuration > 0 ? Math.min(100, (player.castProgress / player.castDuration) * 100) : 0;
+        this.castFill.style.width = `${pct}%`;
+        this.castText.textContent = `Casting ${player.currentSpell.name}...`;
+      } else {
+        this.castBar.style.display = 'none';
+      }
+    }
 
     // 2. Enemies Remaining & Floor Label (Single line)
     const activeEnemies = (enemies || []).filter((e) => !e.dead && !e.isDying);
@@ -719,6 +1230,25 @@ export class Hud {
       this.autoBtn.style.color = '#888888';
       this.autoBtn.style.boxShadow = 'none';
       this.autoBtn.textContent = 'AUTO [X]';
+    }
+  }
+
+  /**
+   * Swaps the hotkey hint line to match the controlled hero's weapon.
+   */
+  applyHintText(hudMode) {
+    if (this._hintMode === hudMode) return;
+    this._hintMode = hudMode;
+    if (!this.hints) return;
+    if (hudMode === 'mage') {
+      this.hints.textContent =
+        'WASD Move | Arrow Keys Rotate/Pitch | LEFT CLICK: CAST EMBER BOLT | 1-6 Spells | R Ultimate | Q Mana Potion | SPACE Roll | X Auto | ? Toggle Hints';
+    } else if (hudMode === 'archer') {
+      this.hints.textContent =
+        'WASD Move | Arrow Keys Rotate/Pitch | HOLD RIGHT CLICK: Draw Bow | LEFT CLICK: Loose Arrow | Q Roll | SPACE Roll | X Auto | ? Toggle Hints';
+    } else {
+      this.hints.textContent =
+        'WASD Move | Arrow Keys Rotate/Pitch | Wheel Zoom | RIGHT CLICK: ATTACK | LEFT CLICK (HOLD): BLOCK | Q Roll | F Bash | X Auto | C Wheel | ? Toggle Hints';
     }
   }
 

@@ -38,6 +38,11 @@ const towerScene = new TowerScene(renderer, input);
 
 sceneManager.register('hub', hubScene);
 sceneManager.register('tower', towerScene);
+if (typeof window !== 'undefined') {
+  window.sceneManager = sceneManager;
+  window.hubScene = hubScene;
+  window.towerScene = towerScene;
+}
 
 // 4. Handle Window Resize
 window.addEventListener('resize', () => {

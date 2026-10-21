@@ -6,6 +6,7 @@ import { showHeroDeathNotice } from '../ui/Notices.js';
 import { spawnSparks } from './Combat.js';
 import { HeroRig } from '../art/HeroRig.js';
 import { generateLook } from '../art/looks.js';
+import { getHeroLoadout } from '../core/loadout.js';
 
 export class Ally {
   constructor(scene, heroData, isNovice = false, slotIndex = 0) {
@@ -101,25 +102,30 @@ export class Ally {
     this.mesh.add(this.rig.group);
     this.mesh._heroRig = this.rig;
 
-    // Equip hero's items or role-based defaults
-    const eq = hero.equipment || {};
-    let weapon = eq.weapon;
-    let offhand = eq.offhand;
-    let armor = eq.armor;
+    this.applyLoadout();
+  }
 
-    if (!weapon) {
-      if (this.role === 'spear') weapon = { weaponType: 'spear', grade: 'D' };
-      else if (this.role === 'scout') {
-        weapon = { weaponType: 'bow', grade: 'E' };
-        offhand = { weaponType: 'dagger', grade: 'E' };
-      } else if (this.role === 'berserker') weapon = { weaponType: 'greatsword', grade: 'C' };
-      else if (this.role === 'mage') weapon = { weaponType: 'staff', grade: 'D' };
-      else {
-        weapon = { weaponType: 'sword', grade: 'D' };
-        offhand = { weaponType: 'shield', grade: 'E' };
-      }
+  /**
+   * Equips the hero's own gear. When the hero carries nothing usable the
+   * class default loadout is used so the squad member is never empty handed.
+   */
+  applyLoadout() {
+    if (!this.rig) return;
+    const loadout = getHeroLoadout(this.hero);
+    this.loadout = loadout;
+
+    let weapon = loadout.weapon;
+    let offhand = loadout.offhandType === 'none' ? null : loadout.offhand;
+
+    if (loadout.weaponType === 'none') {
+      const profile = loadout.profile;
+      const weaponType = profile ? profile.defaultWeaponType : 'sword';
+      const offhandType = profile ? profile.defaultOffhandType : 'shield';
+      weapon = { weaponType, grade: 'D' };
+      offhand = offhandType === 'shield' ? { weaponType: 'shield', grade: 'E' } : null;
     }
-    this.rig.equip({ weapon, offhand, armor });
+
+    this.rig.equip({ weapon, offhand, armor: loadout.armor });
   }
 
   buildHealthBar() {

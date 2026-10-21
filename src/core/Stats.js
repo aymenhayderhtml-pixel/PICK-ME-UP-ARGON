@@ -1,4 +1,30 @@
 import { getSkillEffects } from '../data/skills.js';
+import { getStarMultiplier } from '../data/rules.js';
+import { TRAINING_CONFIG } from '../data/training.config.js';
+
+/**
+ * Current level of the Pain Tolerance skill (0 when the hero does not have it).
+ * Pain Tolerance may exist as a levelled skill and/or as a legacy 1-level
+ * talent; the highest of the two wins.
+ */
+export function getPainToleranceLevel(hero) {
+  if (!hero) return 0;
+  let level = 0;
+  const norm = (v) => String(v || '').toLowerCase().replace(/\s+/g, '_');
+  for (const s of hero.skills || []) {
+    const id = typeof s === 'string' ? s : (s.id || s.name || '');
+    if (norm(id) === 'pain_tolerance') {
+      level = Math.max(level, typeof s === 'object' ? (s.level || 1) : 1);
+    }
+  }
+  for (const t of hero.talents || []) {
+    const id = typeof t === 'string' ? t : (t.id || t.name || '');
+    if (norm(id) === 'pain_tolerance') {
+      level = Math.max(level, 1);
+    }
+  }
+  return level;
+}
 
 export function getCombatStats(hero, party = null, relations = null) {
   if (!hero) {
@@ -38,8 +64,8 @@ export function getCombatStats(hero, party = null, relations = null) {
   let blockWindow = 0.2;
   let reach = 2.0;
 
-  // Star scaling: +5% per star rank above 1
-  const starMult = 1 + (star - 1) * 0.05;
+  // Star scaling: stars are only a starting point (1.0 at 1 star, 1.5 at 7).
+  const starMult = getStarMultiplier(star);
   maxHp *= starMult;
   damage *= starMult;
 
@@ -145,6 +171,13 @@ export function getCombatStats(hero, party = null, relations = null) {
     moveSpeed *= 0.8;
   }
 
+  // Pain Tolerance: each level shaves incoming damage.
+  const painToleranceLevel = getPainToleranceLevel(hero);
+  const incomingDamageReduction = Math.min(
+    0.75,
+    painToleranceLevel * TRAINING_CONFIG.PAIN_TOLERANCE_DR_PER_LEVEL
+  );
+
   return {
     maxHp: Math.round(maxHp),
     maxStamina: Math.round(maxStamina),
@@ -161,6 +194,8 @@ export function getCombatStats(hero, party = null, relations = null) {
     staminaDrainMult,
     reach,
     attackSpeed: Math.round(attackSpeed * 100) / 100,
+    painToleranceLevel,
+    incomingDamageReduction,
     isExhausted,
   };
 }
@@ -243,14 +278,21 @@ export function getHeroThreeGroups(hero) {
     return { mentality: fallback, skills: fallback, physical: fallback };
   }
 
-  // Mentality: composure, wil, mental talents
+  // Mentality: the 0..100 Mentality stat is primary; the legacy composure
+  // field is only the fallback for saves that predate the emotion system.
   const wil = hero.stats?.wil || 5;
-  const composure = hero.composure !== undefined ? hero.composure : 50;
-  let mentScore = composure * 0.6 + wil * 2.5;
+  const mentalBase =
+    hero.mentality !== undefined && hero.mentality !== null
+      ? hero.mentality
+      : (hero.composure !== undefined ? hero.composure : 50);
+  let mentScore = mentalBase * 0.6 + wil * 2.5;
   const tList = (hero.talents || []).map((t) => (t || '').toLowerCase());
+  const sList = (hero.skills || []).map((s) =>
+    (typeof s === 'string' ? s : (s.id || s.name || '')).toLowerCase()
+  );
   if (tList.includes('composure')) mentScore += 12;
   if (tList.includes('natural_leader')) mentScore += 10;
-  if (tList.includes('pain_tolerance')) mentScore += 8;
+  if (tList.includes('pain_tolerance') || sList.includes('pain_tolerance')) mentScore += 8;
   if (hero.id === 'hero_han') mentScore += 15;
 
   const toGrade = (sc) => (sc >= 85 ? 'S' : sc >= 70 ? 'A' : sc >= 55 ? 'B' : sc >= 40 ? 'C' : sc >= 25 ? 'D' : 'E');

@@ -3,7 +3,7 @@ import { LAYOUT } from '../art/town/layout.js';
 import { getGroundY } from '../art/town/ground.js';
 import { buildTown } from '../art/town/TownAssembler.js';
 import { Iselle } from '../hub/Iselle.js';
-import { HubHeroesManager } from '../hub/HubHeroes.js';
+import { HubHeroesManager, HubHeroNPC } from '../hub/HubHeroes.js';
 import { Player } from '../player/Player.js';
 import { ThirdPersonCamera } from '../player/ThirdPersonCamera.js';
 import { gameState } from '../core/GameState.js';
@@ -22,6 +22,10 @@ import { BlacksmithWindow } from '../ui/BlacksmithWindow.js';
 import { EquipmentWindow } from '../ui/EquipmentWindow.js';
 import { DungeonBoardWindow } from '../ui/DungeonBoardWindow.js';
 import { OptionsWindow } from '../ui/OptionsWindow.js';
+import { IselleReportWindow } from '../ui/IselleReportWindow.js';
+import { runOfflineLoginSimulation } from '../core/LoginSimulation.js';
+import { TownSparringController } from '../hub/TownSparringController.js';
+import { applyEatOutcome } from '../core/EmotionEngine.js';
 import { TrainingManager } from '../hub/TrainingManager.js';
 import { pickLine } from '../data/iselle.js';
 import { updateHumanoidCameraFade } from '../core/CameraFade.js';
@@ -33,10 +37,9 @@ import { spawnHitSparks } from '../fx/WeaponFX.js';
 import { AccountCreationScreen } from '../ui/AccountCreationScreen.js';
 import { IselleTutorial } from '../ui/IselleTutorial.js';
 import { createHeroFromTemplate } from '../data/heroes.js';
-import { HubHeroNPC } from '../hub/HubHeroes.js';
 import { createLabelSprite, updateLabels } from '../ui/Label.js';
 import { NavGrid } from '../hub/NavGrid.js';
-import { buildWalkHeightMap } from '../art/town/WalkHeight.js';
+import { buildWalkHeightMap, updateUndergroundGuard } from '../art/town/WalkHeight.js';
 import { GroundDebug } from '../debug/GroundDebug.js';
 
 export class HubScene {
@@ -111,6 +114,15 @@ export class HubScene {
     this.heroesManager = new HubHeroesManager(this.scene, this.iselle, this.navGrid);
     this.accountCreationScreen = null;
     this.iselleTutorial = null;
+
+    // 5b. Live sparring inside the training yard
+    this.sparringController = new TownSparringController(
+      this.scene,
+      this.heroesManager,
+      this.iselle,
+      this.navGrid
+    );
+    this._lastActivityDay = 0;
 
     // 6. Collision adapter for Player.update()
     this.collisionDungeon = {
@@ -206,6 +218,9 @@ export class HubScene {
       },
       (heroId) => {
         this.playAwakeningEffect(heroId);
+      },
+      () => {
+        this.showLatestIselleReport();
       }
     );
 
@@ -219,6 +234,13 @@ export class HubScene {
     // 12. Dormitory Window
     this.dormitoryWindow = new DormitoryWindow(() => {
       this.heroesManager.restAll();
+    });
+
+    // 12b. Iselle's Report (login report)
+    this.iselleReportWindow = new IselleReportWindow(() => {
+      // The report is dismissed: respawn the roster so the fallen heroes are gone.
+      this.heroesManager.spawnHeroes(gameState.heroes, this.getWalkY);
+      this.hud.updateCurrency(gameState.gold, gameState.gems, gameState.freeTickets);
     });
 
     // 13. Blacksmith Window
@@ -457,6 +479,8 @@ export class HubScene {
       }
 
       if (e.code === 'F3') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('debug') !== '1') return;
         e.preventDefault();
         const active = this.hud.toggleF3();
         if (active) this.updateF3DebugStats();
@@ -646,7 +670,7 @@ export class HubScene {
           } else if (b.id === 'dungeon_board' || b.name === 'Dungeon Board') {
             this.dungeonBoardWindow.open();
           } else if (b.id === 'mess_hall_row' || b.name === 'Mess Hall') {
-            showSystemMessage('[The Mess Hall is locked. Clear Floor 10 to unlock.]');
+            this.feedSquadAtMessHall();
           } else if (b.id === 'landing_area') {
             showSystemMessage('[Landing Area: Gate to the floating city Niflheimr.]');
           } else if (b.id === 'town_square') {
@@ -760,6 +784,10 @@ export class HubScene {
 
     // Provide dummy anchors to training manager
     this.trainingManager.setAnchors(this.town.anchors);
+    this.sparringController.setAnchors(
+      this.town.anchors,
+      LAYOUT.zones.training_grounds?.trainingZones?.sparring_ring?.radius || 2.2
+    );
 
     // Create landmark sign sprites
     this.createSignSprites();
@@ -809,14 +837,89 @@ export class HubScene {
       if (!this.accountCreationScreen) {
         this.accountCreationScreen = new AccountCreationScreen(() => {
           showSystemMessage('[Welcome to the world of Pick Me Up!]');
-          this.checkTutorial();
+          this.checkOfflineLoginReport();
         });
       }
       this.accountCreationScreen.open();
       return;
     }
 
+    this.checkOfflineLoginReport();
+  }
+
+  /**
+   * Runs the offline simulation for the time the player was away and shows
+   * "Iselle's Report" before gameplay. Uses the SAME simulation code path as
+   * live play (src/core/DailyDecisionEngine.js).
+   */
+  checkOfflineLoginReport() {
+    const report = runOfflineLoginSimulation(gameState, Date.now(), { isellePresent: true });
+    if (report) {
+      report.iselleQuote = pickLine(report.hasIncident ? 'reportIncident' : 'reportPeaceful');
+      this.iselleReportWindow.openReport(report);
+      if (this.iselle) {
+        this.iselle.say('reportIntro', { force: true, text: report.iselleQuote });
+      }
+      if (report.fallenHeroes && report.fallenHeroes.length > 0) {
+        // A hero who died while the player was away dissolves into light.
+        this.playHeroDissolve(report.fallenHeroes.length);
+        if (this.iselle) {
+          this.iselle.say('heroDied', { force: true });
+        }
+      }
+      return;
+    }
     this.checkTutorial();
+  }
+
+  /**
+   * The light pillar that marks a hero who died while the player was away.
+   */
+  playHeroDissolve(count = 1) {
+    const cfg = LAYOUT.zones.training_grounds;
+    const x = cfg ? cfg.center.x : -24;
+    const z = cfg ? cfg.center.z : 20;
+    const y = this.getWalkY(x, z);
+    for (let i = 0; i < Math.min(count, 5); i++) {
+      const offset = (i - (Math.min(count, 5) - 1) / 2) * 0.9;
+      spawnSparks(
+        this.scene,
+        new THREE.Vector3(x + offset, y + 1.1, z),
+        0xa8f4ff,
+        18
+      );
+    }
+  }
+
+  /** Shows the most recent "Iselle's Report" from the login report history. */
+  showLatestIselleReport() {
+    const history = gameState.loginReportHistory || [];
+    if (history.length === 0) {
+      showSystemMessage('[No report yet. Come back after being away for a while.]');
+      return;
+    }
+    const report = history[0];
+    if (!report.iselleQuote) {
+      report.iselleQuote = pickLine(report.hasIncident ? 'reportIncident' : 'reportPeaceful');
+    }
+    this.iselleReportWindow.openReport(report);
+  }
+
+  /**
+   * Feeds the squad at the Mess Hall. Heroes who are hungry eat, which lowers
+   * their hunger and raises their motivation.
+   */
+  feedSquadAtMessHall() {
+    const party = (gameState.party || []).map((p) => (typeof p === 'string' ? p : p.id));
+    let count = 0;
+    for (const id of party) {
+      const hero = gameState.heroes.find((h) => h.id === id && h.alive);
+      if (!hero) continue;
+      applyEatOutcome(hero, gameState.foodQuality);
+      count++;
+    }
+    showSystemMessage(`[The squad eats at the Mess Hall. ${count} fed.]`);
+    gameState.saveToLocalStorage();
   }
 
   checkTutorial() {
@@ -1127,6 +1230,7 @@ export class HubScene {
     if (this.synthesisEffect) this.synthesisEffect.endEffect();
     if (this.trainingWindow) this.trainingWindow.close();
     if (this.dormitoryWindow) this.dormitoryWindow.close();
+    if (this.iselleReportWindow) this.iselleReportWindow.close();
     if (this.blacksmithWindow) this.blacksmithWindow.close();
     if (this.equipmentWindow) this.equipmentWindow.close();
     if (this.optionsWindow) this.optionsWindow.close();
@@ -1481,7 +1585,13 @@ export class HubScene {
     } else {
       const cameraYaw = this.thirdPersonCamera.getYaw();
       const effectiveInput = windowOpen
-        ? { isDown: () => false, consumeMouseDelta: () => ({ x: 0, y: 0 }) }
+        ? {
+            isDown: () => false,
+            isActionDown: () => false,
+            isLmbDown: () => false,
+            isRmbDown: () => false,
+            consumeMouseDelta: () => ({ x: 0, y: 0 }),
+          }
         : this.input;
       this.player.update(delta, effectiveInput, cameraYaw, this.collisionDungeon, this.thirdPersonCamera);
 
@@ -1493,10 +1603,34 @@ export class HubScene {
       this.thirdPersonCamera.update(delta, effectiveInput);
     }
 
+    // Runtime underground guard: snap entities up if feet stay > 0.4 below getWalkY for > 0.3s
+    if (this.player?.mesh) {
+      updateUndergroundGuard(this.player.mesh, delta, this.getWalkY);
+    }
+    if (this.heroesManager?.npcs) {
+      for (const npc of this.heroesManager.npcs) {
+        if (npc?.mesh) updateUndergroundGuard(npc.mesh, delta, this.getWalkY);
+      }
+    }
+
     // 11. Systems & Entities update
     this.iselle.update(delta, time, this.player.mesh.position, this.getWalkY, this.camera);
     this.heroesManager.update(delta, this.getWalkY, this.player.mesh.position, isNight, this, this.camera);
     this.trainingManager.update(delta, this.getWalkY);
+
+    // A new game day means the daily decision has run: send every hero to the
+    // activity that was chosen for them.
+    if (gameState.dayCount !== this._lastActivityDay) {
+      this._lastActivityDay = gameState.dayCount;
+      this.heroesManager.assignDailyActivities(
+        LAYOUT.zones.training_grounds?.trainingZones,
+        this.town?.anchors,
+        this.sparringController
+      );
+    }
+
+    // Live sparring inside the training yard.
+    this.sparringController.update(delta);
 
     if (this.showWalkHeightDebug) {
       this.updateWalkHeightDebug();

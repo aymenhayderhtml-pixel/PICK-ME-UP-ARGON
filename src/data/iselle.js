@@ -79,6 +79,36 @@ export const ISELLE_LINES = {
     'A soldier who will not fight has no place in Town 1377.',
     'Erased for insubordination. The Master’s word is absolute.',
   ],
+  reportIntro: [
+    'Welcome back, Master! While you were snoring, your heroes certainly did not.',
+    'Your report is ready. I hope you like the sound of that, because it is not all good news.',
+    'I kept track of every single thing they did, Master. Every. Single. Thing.',
+    'The town did not collapse while you were away! ...Mostly.',
+    'Here is your report, Master. Do not blame me for the parts I did not write.',
+    'I have been busy. Busy keeping them from killing each other, mostly.',
+  ],
+  reportPeaceful: [
+    'A peaceful few days. Suspiciously peaceful, actually.',
+    'Nothing happened. I am as shocked as you are.',
+    'They trained, they ate, they slept. Almost disappointing.',
+    'No blood, no broken laws, no complaints. I almost did not know what to write.',
+    'A quiet spell in Niflheimr. I did not trust it either.',
+  ],
+  reportIncident: [
+    'I had to intervene. Several times. You were not here to see it.',
+    'There were incidents, Master. Plural. I wrote them all down.',
+    'Someone broke a rule. Someone else probably deserved it.',
+    'I stopped a fight before it became a funeral, Master. You are welcome.',
+    'A hero fell, Master. I did what I could. It was not enough.',
+  ],
+  lawReprimand: [
+    'That is a LOBBY LAW, hero. Read it!',
+    'No fighting outside the ring! No fighting at all unless I say so!',
+    'A critical strike in a spar is not a spar, it is a murder attempt!',
+    'Do not hit a hero who is already on the floor! Is that so hard?',
+    'Rules. Rules. RULES. I am going to have to make a sign.',
+    'I have separated you. Try to stay separated.',
+  ],
 };
 
 export function pickLine(category) {

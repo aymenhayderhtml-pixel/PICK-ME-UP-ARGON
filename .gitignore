@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Unreferenced QA recordings (large binaries, not linked from any doc)
+docs/videos_v1/
+docs/videos_v2/
+docs/screenshots_v1/
+docs/screenshots_v2/
+docs/screenshots_slice2/
+docs/screenshots_slice3/

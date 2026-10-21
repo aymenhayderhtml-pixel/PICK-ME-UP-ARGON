@@ -108,18 +108,18 @@ export const LAYOUT = {
       id: 'space_time_rift',
       name: 'Space-Time Rift',
       aliases: ['Tower Gate'],
-      center: { x: 27.0, z: -27.0 },
+      center: { x: 32.53, z: -32.53 },
       footprint: { type: 'box', width: 6.5, height: 10.0, depth: 2.5 },
       rotation: 0,
       door: {
         id: 'door_space_time_rift',
-        position: { x: 27.0, y: 0.0, z: -25.5 },
-        outward: { x: 0.0, y: 0.0, z: 1.0 }
+        position: { x: 31.11, y: 0.0, z: -31.11 },
+        outward: { x: -0.7071, y: 0.0, z: 0.7071 }
       },
       doorCorridor: [
-        { x: 27.0, z: -27.0 },
-        { x: 27.0, z: -25.5 },
-        { x: 27.0, z: -23.0 }
+        { x: 32.53, z: -32.53 },
+        { x: 31.11, z: -31.11 },
+        { x: 28.5, z: -28.5 }
       ],
       interactionRadius: 4.5,
       signText: 'SPACE-TIME RIFT',
@@ -202,7 +202,41 @@ export const LAYOUT = {
         { id: 'dummy_1', stand: { x: -26.4, y: 0, z: 16.8 }, dummy: { x: -26.4, y: 0, z: 18.0 } },
         { id: 'dummy_2', stand: { x: -24.0, y: 0, z: 16.8 }, dummy: { x: -24.0, y: 0, z: 18.0 } },
         { id: 'dummy_3', stand: { x: -21.6, y: 0, z: 16.8 }, dummy: { x: -21.6, y: 0, z: 18.0 } }
-      ]
+      ],
+      // Four sub-zones of the training place. The wooden dummies teach sword
+      // and shield, the archery targets teach the bow, the fire targets teach
+      // the staff, and the sparring ring is where heroes fight each other.
+      trainingZones: {
+        wooden_dummies: {
+          id: 'wooden_dummies',
+          slots: [
+            { stand: { x: -26.4, y: 0, z: 16.8 }, target: { x: -26.4, y: 1.25, z: 18.0 }, anchorId: 'dummy_0' },
+            { stand: { x: -24.0, y: 0, z: 16.8 }, target: { x: -24.0, y: 1.25, z: 18.0 }, anchorId: 'dummy_1' },
+            { stand: { x: -21.6, y: 0, z: 16.8 }, target: { x: -21.6, y: 1.25, z: 18.0 }, anchorId: 'dummy_2' }
+          ]
+        },
+        archery_targets: {
+          id: 'archery_targets',
+          slots: [
+            { stand: { x: -19.8, y: 0, z: 20.0 }, target: { x: -19.8, y: 1.35, z: 26.5 }, anchorId: 'archery_target_0' },
+            { stand: { x: -17.6, y: 0, z: 20.0 }, target: { x: -17.6, y: 1.35, z: 26.5 }, anchorId: 'archery_target_1' }
+          ]
+        },
+        fire_targets: {
+          id: 'fire_targets',
+          slots: [
+            { stand: { x: -29.6, y: 0, z: 14.2 }, target: { x: -29.6, y: 1.4, z: 15.6 }, anchorId: 'fire_target_0' },
+            { stand: { x: -27.8, y: 0, z: 14.2 }, target: { x: -27.8, y: 1.4, z: 15.6 }, anchorId: 'fire_target_1' }
+          ]
+        },
+        sparring_ring: {
+          id: 'sparring_ring',
+          center: { x: -18.7, y: 0, z: 23.3 },
+          radius: 1.9,
+          spotA: { x: -19.6, y: 0, z: 23.3 },
+          spotB: { x: -17.8, y: 0, z: 23.3 }
+        }
+      }
     },
 
     residences: {
@@ -244,7 +278,7 @@ export const LAYOUT = {
         { x: 8.0, z: 33.0 }
       ],
       interactionRadius: 9.0,
-      signText: 'MESS HALL (LOCKED)',
+      signText: 'MESS HALL',
       signOffset: { x: 0, y: 5.2, z: 0 }
     },
 
@@ -362,7 +396,7 @@ export const LAYOUT = {
   roads: [
     { id: 'road_square_landing', from: { x: 14.0, z: -8.0 }, to: { x: 20.0, z: 26.0 }, width: 4.8 },
     { id: 'road_square_summoning', from: { x: 14.0, z: -8.0 }, to: { x: 26.0, z: 4.0 }, width: 4.5 },
-    { id: 'road_square_rift', from: { x: 14.0, z: -8.0 }, to: { x: 27.0, z: -27.0 }, width: 5.0 },
+    { id: 'road_square_rift', from: { x: 14.0, z: -8.0 }, to: { x: 29.5, z: -29.5 }, width: 5.0 },
     { id: 'road_square_synthesis', from: { x: 14.0, z: -8.0 }, to: { x: 0.0, z: -32.0 }, width: 4.5 },
     { id: 'road_square_armory', from: { x: 14.0, z: -8.0 }, to: { x: -6.0, z: -20.0 }, width: 4.2 },
     { id: 'road_square_residences', from: { x: 14.0, z: -8.0 }, to: { x: -26.0, z: -4.0 }, width: 5.0 },

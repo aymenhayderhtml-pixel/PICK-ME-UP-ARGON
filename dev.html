@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>" />
+    <title>Pick Me Up - Dev Lab (Unified Combat & Art Sandbox)</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+      }
+      body {
+        overflow: hidden;
+        background-color: #0c1219;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+        color: #e2e8f0;
+      }
+      #canvas-container {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+
+      /* Top Tab Bar & Global Toolbar */
+      #top-navbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 48px;
+        background: rgba(12, 18, 25, 0.94);
+        border-bottom: 1px solid #1e3a5f;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        z-index: 100;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+      }
+      .brand-title {
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        color: #38bdf8;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .brand-badge {
+        font-size: 9px;
+        background: #0284c7;
+        color: #fff;
+        padding: 2px 6px;
+        border-radius: 3px;
+      }
+      .tabs-group {
+        display: flex;
+        gap: 4px;
+      }
+      .tab-btn {
+        background: transparent;
+        border: 1px solid transparent;
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .tab-btn:hover {
+        color: #f1f5f9;
+        background: #1e293b;
+      }
+      .tab-btn.active {
+        color: #38bdf8;
+        background: #132235;
+        border-color: #0284c7;
+      }
+
+      .toolbar-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tool-btn {
+        background: #132235;
+        border: 1px solid #1e3a5f;
+        color: #e2e8f0;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 5px 9px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .tool-btn:hover {
+        background: #1e3a5f;
+        border-color: #38bdf8;
+      }
+      .tool-btn.active {
+        background: #0284c7;
+        border-color: #38bdf8;
+        color: #fff;
+      }
+
+      /* Side Panels */
+      .side-panel {
+        position: fixed;
+        top: 56px;
+        bottom: 12px;
+        width: 320px;
+        background: rgba(12, 18, 25, 0.94);
+        border: 1px solid #1e3a5f;
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        z-index: 90;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
+      }
+      #left-panel {
+        left: 12px;
+      }
+      #right-panel {
+        right: 12px;
+        width: 290px;
+      }
+      .panel-collapsed-left {
+        transform: translateX(-340px);
+      }
+      .panel-collapsed-right {
+        transform: translateX(310px);
+      }
+      .panel-header {
+        padding: 10px 14px;
+        border-bottom: 1px solid #1e3a5f;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: rgba(19, 34, 53, 0.6);
+      }
+      .panel-header h3 {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: #38bdf8;
+      }
+      .panel-toggle-btn {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 13px;
+        cursor: pointer;
+        padding: 2px 6px;
+      }
+      .panel-toggle-btn:hover {
+        color: #fff;
+      }
+      .panel-body {
+        padding: 12px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        flex: 1;
+        min-height: 0;
+        scrollbar-width: thin;
+        scrollbar-color: #1e3a5f #0c1219;
+      }
+
+      /* External Toggle Buttons for collapsed panels */
+      .panel-tab-toggle {
+        position: fixed;
+        top: 60px;
+        background: #132235;
+        border: 1px solid #1e3a5f;
+        color: #38bdf8;
+        padding: 8px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        z-index: 80;
+        font-size: 12px;
+        font-weight: bold;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+      }
+      #toggle-left-btn { left: 12px; }
+      #toggle-right-btn { right: 12px; }
+
+      /* Form elements */
+      .control-row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .slider-row {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-bottom: 10px;
+      }
+      .control-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      }
+      .control-label .val {
+        color: #38bdf8;
+        font-weight: 700;
+        font-family: monospace;
+        font-size: 11px;
+      }
+      select, input[type="text"], input[type="number"] {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 4px;
+        color: #f1f5f9;
+        font-size: 11px;
+        padding: 6px 8px;
+        outline: none;
+      }
+      select:focus, input:focus {
+        border-color: #38bdf8;
+      }
+      input[type="range"] {
+        accent-color: #38bdf8;
+        height: 6px;
+        width: 100%;
+        margin: 2px 0 0 0;
+        cursor: pointer;
+      }
+      .btn-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+        gap: 5px;
+      }
+      .btn-action {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #e2e8f0;
+        padding: 6px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.15s;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .btn-action:hover {
+        background: #0284c7;
+        border-color: #38bdf8;
+        color: #fff;
+      }
+      .btn-action.active {
+        background: #0284c7;
+        border-color: #38bdf8;
+        color: #fff;
+      }
+      .btn-primary {
+        background: #0369a1;
+        border-color: #0284c7;
+        color: #fff;
+        padding: 7px;
+        font-weight: bold;
+      }
+      .btn-primary:hover {
+        background: #0284c7;
+      }
+      .btn-danger {
+        background: #991b1b;
+        border-color: #ef4444;
+        color: #fff;
+      }
+      .btn-danger:hover {
+        background: #b91c1c;
+      }
+
+      /* Hero Bars & HUD */
+      .bar-wrap {
+        width: 100%;
+        height: 12px;
+        background: #1e293b;
+        border-radius: 3px;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid #334155;
+      }
+      .bar-fill {
+        height: 100%;
+        transition: width 0.08s ease-out;
+      }
+      .bar-text {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        font-size: 8px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        text-shadow: 0 1px 2px #000;
+      }
+
+      /* Live Top Telemetry (below toolbar, avoids covering spell bar) */
+      #telemetry-corner {
+        position: fixed;
+        top: 54px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(12, 18, 25, 0.92);
+        border: 1px solid #1e3a5f;
+        border-radius: 6px;
+        padding: 5px 14px;
+        font-size: 10px;
+        font-family: monospace;
+        color: #38bdf8;
+        display: flex;
+        gap: 14px;
+        z-index: 100;
+        pointer-events: none;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+      }
+      .tel-val {
+        color: #f1f5f9;
+        font-weight: bold;
+      }
+
+      /* Stats Table & Canvas */
+      #stats-chart-canvas {
+        width: 100%;
+        height: 110px;
+        border-radius: 4px;
+        border: 1px solid #334155;
+        background: #0f172a;
+      }
+      .stat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        font-size: 10px;
+      }
+      .stat-card {
+        background: #1e293b;
+        padding: 6px 8px;
+        border-radius: 4px;
+        border: 1px solid #334155;
+      }
+      .stat-card .label { color: #94a3b8; font-size: 9px; }
+      .stat-card .value { font-size: 12px; font-weight: bold; color: #38bdf8; margin-top: 2px; }
+
+      /* Controls Help Panel (collapsible) */
+      #controls-guide {
+        background: #132235;
+        border: 1px solid #1e3a5f;
+        border-radius: 4px;
+        padding: 8px 10px;
+        font-size: 9px;
+        line-height: 1.5;
+        color: #cbd5e1;
+      }
+      #controls-guide strong { color: #38bdf8; }
+
+      /* Fire Mage Spell Bar */
+      #spell-bar {
+        position: fixed;
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 6px;
+        z-index: 95;
+        background: rgba(12, 18, 25, 0.94);
+        border: 1px solid #1e3a5f;
+        padding: 6px 8px;
+        border-radius: 8px;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(8px);
+      }
+      .spell-slot {
+        width: 56px;
+        height: 62px;
+        position: relative;
+        background: #132235;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+        transition: transform 0.1s, border-color 0.15s;
+        box-sizing: border-box;
+      }
+      .spell-slot:hover {
+        border-color: #f97316;
+        transform: translateY(-2px);
+      }
+      .spell-slot.active-channel {
+        border-color: #ef4444;
+        box-shadow: 0 0 10px #ef4444;
+      }
+      .spell-slot.unaffordable {
+        filter: grayscale(70%) opacity(0.55);
+        cursor: not-allowed;
+      }
+      .spell-slot.locked {
+        filter: grayscale(100%) opacity(0.35);
+        cursor: not-allowed;
+      }
+      .spell-slot-key {
+        position: absolute;
+        top: 2px;
+        left: 3px;
+        font-size: 8px;
+        font-weight: 800;
+        background: #1e293b;
+        color: #94a3b8;
+        padding: 1px 3px;
+        border-radius: 2px;
+      }
+      .spell-slot-icon {
+        font-size: 18px;
+        margin-top: 4px;
+      }
+      .spell-slot-cost {
+        position: absolute;
+        bottom: 2px;
+        right: 3px;
+        font-size: 8px;
+        font-weight: 700;
+        color: #38bdf8;
+      }
+      .spell-mastery-stars {
+        position: absolute;
+        top: 2px;
+        right: 3px;
+        font-size: 8px;
+        color: #facc15;
+        letter-spacing: -1px;
+        line-height: 1;
+        text-shadow: 0 0 3px rgba(250, 204, 21, 0.6);
+      }
+      .spell-slot-name {
+        font-size: 7px;
+        color: #94a3b8;
+        text-align: center;
+        max-width: 52px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-top: 1px;
+      }
+      .spell-cd-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        border-radius: 5px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: bold;
+        color: #fde047;
+      }
+      .spell-slot.slot-ultimate {
+        border-color: #d97706;
+        background: #1e1b18;
+      }
+
+      /* Overhead Floating Cast Bar */
+      #overhead-cast-bar {
+        position: fixed;
+        width: 140px;
+        height: 14px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid #f97316;
+        border-radius: 4px;
+        overflow: hidden;
+        transform: translate(-50%, -100%);
+        pointer-events: none;
+        display: none;
+        z-index: 100;
+        box-shadow: 0 0 10px rgba(249, 115, 22, 0.6);
+      }
+      #overhead-cast-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #ea580c, #facc15);
+        transition: width 0.04s linear;
+      }
+      #overhead-cast-text {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 8px;
+        font-weight: bold;
+        color: #fff;
+        text-shadow: 0 1px 2px #000;
+        letter-spacing: 0.5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="canvas-container"></div>
+
+    <!-- Top Navigation Bar & Tools -->
+    <header id="top-navbar">
+      <div class="brand-title">
+        <span>⚔️ PMU DEV LAB</span>
+        <span class="brand-badge">UNIFIED</span>
+      </div>
+
+      <!-- Tab Buttons -->
+      <nav class="tabs-group">
+        <button class="tab-btn active" data-tab="tab-arena">Arena</button>
+        <button class="tab-btn" data-tab="tab-weapons">Weapons</button>
+        <button class="tab-btn" data-tab="tab-spells">Spells</button>
+        <button class="tab-btn" data-tab="tab-enemies">Enemies</button>
+        <button class="tab-btn" data-tab="tab-squad">Squad</button>
+        <button class="tab-btn" data-tab="tab-stats">Stats</button>
+      </nav>
+
+      <!-- Global Toolbar -->
+      <div class="toolbar-group">
+        <button id="btn-reset-r" class="tool-btn" title="Reset Arena (R)">🔄 Reset [R]</button>
+        <button id="btn-pause-p" class="tool-btn" title="Pause / Resume (P)">⏸ Pause [P]</button>
+        <button id="btn-step-n" class="tool-btn" title="Step One Frame (N)">⏯ Step [N]</button>
+
+        <span style="color:#475569; font-size:10px;">|</span>
+        <button class="tool-btn btn-speed" data-speed="0.05">0.05x</button>
+        <button class="tool-btn btn-speed" data-speed="0.2">0.2x</button>
+        <button class="tool-btn btn-speed" data-speed="0.5">0.5x</button>
+        <button class="tool-btn btn-speed active" data-speed="1.0">1x</button>
+
+        <span style="color:#475569; font-size:10px;">|</span>
+        <button id="btn-wireframes" class="tool-btn">Wireframes</button>
+        <button id="btn-hitboxes" class="tool-btn">Hitboxes</button>
+        <button id="btn-debug-text" class="tool-btn active">Debug Text</button>
+      </div>
+    </header>
+
+    <!-- Side Panel Collapse Toggles -->
+    <button id="toggle-left-btn" class="panel-tab-toggle" style="display:none;">◀</button>
+    <button id="toggle-right-btn" class="panel-tab-toggle" style="display:none;">▶</button>
+
+    <!-- Left Side Panel: Hero HUD + Active Tab Content -->
+    <aside id="left-panel" class="side-panel">
+      <div class="panel-header">
+        <h3 id="tab-panel-title">Arena Scenario</h3>
+        <button id="btn-collapse-left" class="panel-toggle-btn" title="Collapse Panel">◀</button>
+      </div>
+
+      <!-- Hero Real-Time Bars HUD -->
+      <div style="padding:10px 12px; background:#0f172a; border-bottom:1px solid #1e3a5f; display:flex; flex-direction:column; gap:5px;">
+        <div style="display:flex; justify-content:space-between; font-size:10px; font-weight:bold;">
+          <span id="hero-display-name" style="color:#38bdf8;">Han Islat</span>
+          <span id="hero-state-display" style="color:#e2e8f0;">IDLE</span>
+        </div>
+        <div class="bar-wrap">
+          <div id="hud-hp-bar" class="bar-fill" style="background:#ef4444; width:100%;"></div>
+          <div id="hud-hp-text" class="bar-text">HP: 120 / 120</div>
+        </div>
+        <!-- Mana Bar: blue, positioned directly under HP bar -->
+        <div class="bar-wrap" style="position:relative;">
+          <div id="hud-mana-bar" class="bar-fill" style="background:#2563eb; width:100%; transition:background 0.15s ease;"></div>
+          <div id="hud-mana-text" class="bar-text">MANA: 100 / 100</div>
+          <div id="hud-overheat-badge" style="display:none; position:absolute; right:4px; top:1px; background:#ef4444; color:#fff; font-size:8px; font-weight:900; padding:0 4px; border-radius:2px; letter-spacing:0.5px; z-index:2;">OVERHEATED</div>
+        </div>
+        <div class="bar-wrap">
+          <div id="hud-stamina-bar" class="bar-fill" style="background:#0284c7; width:100%;"></div>
+          <div id="hud-stamina-text" class="bar-text">STAMINA: 100 / 100</div>
+        </div>
+        <div class="bar-wrap">
+          <div id="hud-poise-bar" class="bar-fill" style="background:#f59e0b; width:100%;"></div>
+          <div id="hud-poise-text" class="bar-text">POISE: 100 / 100</div>
+        </div>
+        <div id="hud-potion-wrap" style="display:flex; justify-content:space-between; font-size:9px; font-weight:bold; padding-top:2px;">
+          <span style="color:#94a3b8;">MANA POTION [Q]</span>
+          <span id="hud-potion-text" style="color:#38bdf8;">Potions: 3 / 3 (Ready)</span>
+        </div>
+        <div id="hud-arrows-wrap" style="display:flex; justify-content:space-between; font-size:9px; font-weight:bold; padding-top:2px;">
+          <span style="color:#94a3b8;">QUIVER</span>
+          <span id="hud-arrows-text" style="color:#38bdf8;">Arrows: 20 / 20</span>
+        </div>
+      </div>
+
+      <div class="panel-body">
+        <!-- TAB 1: Arena Scenario Builder -->
+        <div id="tab-arena" class="tab-content">
+          <div class="control-row">
+            <label class="control-label">Hero Archetype</label>
+            <select id="arena-hero-select">
+              <option value="han" selected>Han Islat (Vanguard)</option>
+              <option value="jenna">Jenna (Scout)</option>
+              <option value="aaron">Aaron (Tank)</option>
+              <option value="velkist">Velkist (Berserker)</option>
+              <option value="eolka">Eolka (Fire Mage)</option>
+            </select>
+          </div>
+
+          <div class="control-row">
+            <label class="control-label">Weapon Kind (All 9)</label>
+            <select id="arena-weapon-select">
+              <option value="sword" selected>Sword (1H)</option>
+              <option value="greatsword">Greatsword (2H)</option>
+              <option value="spear">Spear (2H)</option>
+              <option value="dagger">Dagger (1H)</option>
+              <option value="bow">Bow (2H Archery)</option>
+              <option value="staff">Staff (2H Magic)</option>
+              <option value="mace">Mace (1H)</option>
+              <option value="club">Club (1H)</option>
+              <option value="pickaxe">Pickaxe (1H)</option>
+            </select>
+          </div>
+
+          <div class="control-row" id="row-shield-select">
+            <label class="control-label">Shield</label>
+            <select id="arena-shield-select">
+              <option value="ironRound" selected>Iron Round Shield</option>
+              <option value="woodenRound">Wooden Round Shield</option>
+              <option value="plank">Plank Shield</option>
+              <option value="kite">Kite Shield</option>
+              <option value="none">No Shield</option>
+            </select>
+          </div>
+          <div id="shield-archers-notice" style="display:none; color:#f59e0b; font-size:10px; font-weight:bold; background:#1e293b; padding:6px 8px; border-radius:4px; border:1px solid #78350f;">
+            Archers do not use shields
+          </div>
+
+          <div class="control-row">
+            <label class="control-label">Equipment Grade</label>
+            <select id="arena-grade-select">
+              <option value="E">Grade E (Rusty / Worn)</option>
+              <option value="D" selected>Grade D (Common)</option>
+              <option value="C">Grade C (Refined)</option>
+              <option value="B">Grade B (Knight)</option>
+              <option value="A">Grade A (Masterwork)</option>
+              <option value="S">Grade S (Relic)</option>
+              <option value="S+">Grade S+ (Legendary)</option>
+            </select>
+          </div>
+
+          <!-- Mage Level Controller -->
+          <div class="control-row slider-row" id="row-mage-level">
+            <div class="control-label">
+              <span>Mage Level (1-20)</span>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <input type="number" id="input-mage-level" min="1" max="20" value="1" style="width:48px; padding:2px 4px; font-size:11px; text-align:right;" />
+              </div>
+            </div>
+            <input type="range" id="slider-mage-level" min="1" max="20" value="1" />
+          </div>
+          <button id="btn-unlock-all-spells" class="btn-action" style="width:100%; margin-bottom:10px; background:#7c2d12; border-color:#ea580c; color:#fed7aa; font-weight:bold;">✨ Unlock All Spells (Lv 12)</button>
+
+          <!-- Hero State Sliders -->
+          <div class="control-row slider-row">
+            <div class="control-label">
+              <span>Max HP</span>
+              <span id="val-hp" class="val">120</span>
+            </div>
+            <input type="range" id="slider-hp" min="50" max="500" value="120" />
+          </div>
+          <div class="control-row slider-row">
+            <div class="control-label">
+              <span>Max Stamina</span>
+              <span id="val-stamina" class="val">100</span>
+            </div>
+            <input type="range" id="slider-stamina" min="20" max="150" value="100" />
+          </div>
+          <div class="control-row slider-row">
+            <div class="control-label">
+              <span>Max Mana</span>
+              <span id="val-mana" class="val">100</span>
+            </div>
+            <input type="range" id="slider-mana" min="20" max="300" value="100" />
+          </div>
+          <div class="control-row slider-row">
+            <div class="control-label">
+              <span>Max Poise</span>
+              <span id="val-poise" class="val">100</span>
+            </div>
+            <input type="range" id="slider-poise" min="15" max="250" value="100" />
+          </div>
+          <div class="control-row slider-row" id="row-quiver-slider">
+            <div class="control-label">
+              <span>Quiver Arrows</span>
+              <span id="val-quiver" class="val">20</span>
+            </div>
+            <input type="range" id="slider-quiver" min="0" max="50" value="20" />
+          </div>
+
+          <hr style="border:none; border-top:1px solid #1e3a5f; margin:6px 0;" />
+
+          <button id="btn-apply-hero" class="btn-action btn-primary" style="width:100%;">Apply Hero Config</button>
+
+          <!-- Add Enemies / Allies Builder -->
+          <div style="font-size:11px; font-weight:bold; color:#38bdf8; margin-top:8px;">Add Combatants</div>
+          <div class="control-row">
+            <label class="control-label">Entity Type</label>
+            <select id="spawn-type-select">
+              <option value="grunt" selected>Goblin Grunt (Dagger)</option>
+              <option value="shaman">Goblin Shaman (Staff Caster)</option>
+              <option value="elite">Elite Knight Dummy (Greatsword)</option>
+              <option value="timed">Timed Attacker (Sword+Shield)</option>
+              <option value="dummy">Passive Dummy (Infinite HP)</option>
+              <option value="wolf">Prairie Wolf (Beast)</option>
+            </select>
+          </div>
+
+          <div style="display:flex; gap:8px;">
+            <div class="control-row" style="flex:1;">
+              <label class="control-label">Team</label>
+              <select id="spawn-team-select">
+                <option value="enemy" selected>Enemy</option>
+                <option value="player">Ally (Player Team)</option>
+              </select>
+            </div>
+            <div class="control-row" style="flex:1;">
+              <label class="control-label">Pattern</label>
+              <select id="spawn-pattern-select">
+                <option value="line" selected>Line</option>
+                <option value="circle">Circle</option>
+                <option value="cluster">Cluster</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="control-row slider-row">
+            <div class="control-label">
+              <span>Count</span>
+              <span id="val-spawn-count" class="val">3</span>
+            </div>
+            <input type="range" id="slider-spawn-count" min="1" max="15" value="3" />
+          </div>
+
+          <div style="display:flex; gap:6px; margin-top:6px;">
+            <button id="btn-spawn-batch" class="btn-action btn-primary" style="flex:1;">+ Add Combatants</button>
+            <button id="btn-clear-scenario" class="btn-action btn-danger" style="flex:1;">Clear Arena</button>
+          </div>
+        </div>
+
+        <!-- TAB 2: Weapons & Shield Art Viewer -->
+        <div id="tab-weapons" class="tab-content" style="display:none;">
+          <div class="control-row">
+            <label class="control-label">Equip Weapon</label>
+            <div class="btn-grid" id="grid-weapons">
+              <button class="btn-action active" data-weapon="sword">Sword</button>
+              <button class="btn-action" data-weapon="greatsword">G-Sword</button>
+              <button class="btn-action" data-weapon="spear">Spear</button>
+              <button class="btn-action" data-weapon="dagger">Dagger</button>
+              <button class="btn-action" data-weapon="bow">Bow</button>
+              <button class="btn-action" data-weapon="staff">Staff</button>
+              <button class="btn-action" data-weapon="mace">Mace</button>
+              <button class="btn-action" data-weapon="club">Club</button>
+              <button class="btn-action" data-weapon="pickaxe">Pickaxe</button>
+            </div>
+          </div>
+
+          <div class="control-row">
+            <label class="control-label">Equip Shield</label>
+            <div class="btn-grid" id="grid-shields">
+              <button class="btn-action active" data-shield="ironRound">Iron</button>
+              <button class="btn-action" data-shield="woodenRound">Wood</button>
+              <button class="btn-action" data-shield="plank">Plank</button>
+              <button class="btn-action" data-shield="kite">Kite</button>
+              <button class="btn-action" data-shield="none">None</button>
+            </div>
+          </div>
+
+          <div class="control-row">
+            <label class="control-label">Grade</label>
+            <div class="btn-grid" id="grid-grades">
+              <button class="btn-action" data-grade="E">E</button>
+              <button class="btn-action active" data-grade="D">D</button>
+              <button class="btn-action" data-grade="C">C</button>
+              <button class="btn-action" data-grade="B">B</button>
+              <button class="btn-action" data-grade="A">A</button>
+              <button class="btn-action" data-grade="S">S</button>
+              <button class="btn-action" data-grade="S+">S+</button>
+            </div>
+          </div>
+
+          <div class="control-row">
+            <label class="control-label">Hero Animations & Poses</label>
+            <div class="btn-grid">
+              <button class="btn-action btn-pose" data-pose="idle">Idle</button>
+              <button class="btn-action btn-pose" data-pose="attack1">Light 1</button>
+              <button class="btn-action btn-pose" data-pose="attack2">Light 2</button>
+              <button class="btn-action btn-pose" data-pose="attack3">Heavy</button>
+              <button class="btn-action btn-pose" data-pose="block">Block</button>
+              <button class="btn-action btn-pose" data-pose="roll">Dodge</button>
+              <button class="btn-action btn-pose" data-pose="aim">Bow Aim</button>
+              <button id="btn-combo-loop" class="btn-action" style="grid-column: span 2;">Combo Loop: OFF</button>
+            </div>
+          </div>
+
+          <div class="control-row slider-row">
+            <div class="control-label">
+              <span>Anim Speed</span>
+              <span id="val-anim-speed" class="val">1.0x</span>
+            </div>
+            <input type="range" id="slider-anim-speed" min="0.1" max="2.0" step="0.05" value="1.0" />
+          </div>
+
+          <div class="control-row">
+            <button id="btn-test-bow-fire" class="btn-action btn-primary" style="width:100%;">Fire Test Arrow (LMB)</button>
+          </div>
+        </div>
+
+        <!-- TAB 3: Spells & Magic Subsystem -->
+        <div id="tab-spells" class="tab-content" style="display:none;">
+          <div class="control-row">
+            <label class="control-label">Select Caster</label>
+            <select id="spell-caster-select">
+              <!-- Dynamically populated -->
+            </select>
+          </div>
+
+          <div class="control-row">
+            <label class="control-label">Cast Direct Spell</label>
+            <div style="display:flex; flex-direction:column; gap:5px;">
+              <button class="btn-action btn-cast" data-spell="fireball">🔥 Fireball (Projectile AoE) [Q]</button>
+              <button class="btn-action btn-cast" data-spell="iceSpike">❄️ Ice Spike (Linear Pierce) [E]</button>
+              <button class="btn-action btn-cast" data-spell="lightningChain">⚡ Lightning Chain (Jump Arc) [R]</button>
+              <button class="btn-action btn-cast" data-spell="heal">💚 Radiant Mend (Area Heal) [F]</button>
+              <button class="btn-action btn-cast" data-spell="ward">🛡️ Arcane Ward (Barrier Aura) [T]</button>
+              <button class="btn-action btn-cast" data-spell="meteor">☄️ Meteor Bombardment (Super Armor) [G]</button>
+            </div>
+          </div>
+
+          <div class="control-row slider-row">
+            <div class="control-label">
+              <span>Mana Cost Override</span>
+              <span id="val-spell-mana" class="val">Normal</span>
+            </div>
+            <input type="range" id="slider-spell-mana" min="0" max="100" value="50" />
+          </div>
+
+          <div class="control-row slider-row">
+            <div class="control-label">
+              <span>Cooldown Override</span>
+              <span id="val-spell-cd" class="val">Normal</span>
+            </div>
+            <input type="range" id="slider-spell-cd" min="0" max="10" step="0.5" value="5" />
+          </div>
+
+          <div class="control-row">
+            <label class="control-label">Geometric Shape Visualizer</label>
+            <button id="btn-toggle-shapes" class="btn-action active" style="width:100%;">Shape Debug Drawing: ON</button>
+          </div>
+
+          <div class="control-row" style="margin-top:10px;">
+            <label class="control-label">Video Capture Showcase</label>
+            <button id="btn-spell-showcase" class="btn-action" style="width:100%; background:#7c2d12; border-color:#ea580c; color:#fed7aa; font-weight:bold; padding:8px 12px; font-size:12px;">🎬 Run Spell Showcase (7 Spells vs 5 Dummies)</button>
+          </div>
+        </div>
+
+        <!-- TAB 4: Enemies & Spawn Controller -->
+        <div id="tab-enemies" class="tab-content" style="display:none;">
+          <div style="font-size:10px; color:#94a3b8; line-height:1.4;">
+            Rapid spawner and enemy encounter management. Spawns direct entities at arena target or mouse cursor.
+          </div>
+
+          <div class="control-row">
+            <label class="control-label">Cursor Spawn Type</label>
+            <select id="cursor-enemy-type">
+              <option value="grunt">Goblin Grunt</option>
+              <option value="shaman">Goblin Shaman</option>
+              <option value="elite">Elite Knight Dummy</option>
+              <option value="timed">Timed Attacker</option>
+              <option value="dummy">Passive Dummy</option>
+              <option value="wolf">Prairie Wolf</option>
+            </select>
+          </div>
+
+          <button id="btn-spawn-cursor" class="btn-action btn-primary" style="width:100%;">Spawn Enemy at Cursor</button>
+          <button id="btn-all-attack" class="btn-action" style="width:100%; background:#854d0e; border-color:#eab308; color:#fff;">Make All Enemies Attack at Once</button>
+          <button id="btn-kill-all" class="btn-action btn-danger" style="width:100%;">Kill All Enemies</button>
+        </div>
+
+        <!-- TAB 5: Squad Skills Controller -->
+        <div id="tab-squad" class="tab-content" style="display:none;">
+          <div style="font-size:10px; color:#94a3b8; line-height:1.4;">
+            Raid squad tactical hotkeys (1-4). Companion heroes fire coordinated abilities toward mouse aim.
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
+            <button class="btn-action btn-squad-skill" data-slot="0">
+              [1] Jenna: Piercing Volley (Ice Spike)
+            </button>
+            <button class="btn-action btn-squad-skill" data-slot="1">
+              [2] Aaron: Aegis Ward (Barrier Aura)
+            </button>
+            <button class="btn-action btn-squad-skill" data-slot="2">
+              [3] Velkist: Crimson Cleave (85 Poise Dmg)
+            </button>
+            <button class="btn-action btn-squad-skill" data-slot="3">
+              [4] Eolka: Meteor Bombardment (Super Armor)
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB 6: Stats & Fight Report -->
+        <div id="tab-stats" class="tab-content" style="display:none;">
+          <canvas id="stats-chart-canvas" width="290" height="110"></canvas>
+          <div style="display:flex; justify-content:space-between; font-size:9px; color:#64748b; margin-top:2px;">
+            <span style="color:#ef4444;">● HP</span>
+            <span style="color:#06b6d4;">● Stamina</span>
+            <span style="color:#f59e0b;">● Poise</span>
+          </div>
+
+          <div class="stat-grid" style="margin-top:8px;">
+            <div class="stat-card">
+              <div class="label">Damage Dealt</div>
+              <div class="value" id="st-dmg-dealt">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Damage Taken</div>
+              <div class="value" id="st-dmg-taken">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Rolling 10s DPS</div>
+              <div class="value" id="st-dps">0.0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Hits Landed</div>
+              <div class="value" id="st-hits">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Blocks</div>
+              <div class="value" id="st-blocks">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Parries</div>
+              <div class="value" id="st-parries">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Perfect Dodges</div>
+              <div class="value" id="st-dodges">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Poise Breaks</div>
+              <div class="value" id="st-poise-breaks">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Kills</div>
+              <div class="value" id="st-kills">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Deaths</div>
+              <div class="value" id="st-deaths">0</div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:6px; margin-top:10px;">
+            <button id="btn-reset-stats" class="btn-action" style="flex:1;">Reset Stats</button>
+            <button id="btn-export-stats" class="btn-action btn-primary" style="flex:1;">Export JSON</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right Side Panel: Cheats & Saved Setups -->
+    <aside id="right-panel" class="side-panel">
+      <div class="panel-header">
+        <h3>Cheats & Scenarios</h3>
+        <button id="btn-collapse-right" class="panel-toggle-btn" title="Collapse Panel">▶</button>
+      </div>
+
+      <div class="panel-body">
+        <!-- Developer Cheats -->
+        <div class="control-row">
+          <label class="control-label">Developer Cheats</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px;">
+            <button id="btn-cheat-god" class="btn-action">God Mode: OFF</button>
+            <button id="btn-cheat-stamina" class="btn-action">Inf Stamina: OFF</button>
+            <button id="btn-cheat-mana" class="btn-action">Inf Mana: OFF</button>
+            <button id="btn-cheat-cd" class="btn-action">No CDs: OFF</button>
+          </div>
+          <button id="btn-heal-all" class="btn-action" style="width:100%; margin-top:4px; background:#166534; border-color:#22c55e; color:#fff;">Heal All Combatants</button>
+        </div>
+
+        <hr style="border:none; border-top:1px solid #1e3a5f;" />
+
+        <!-- Saved Setups (LocalStorage & JSON) -->
+        <div class="control-row">
+          <label class="control-label">Saved Scenarios</label>
+          <input type="text" id="setup-name-input" placeholder="Setup Name (e.g. Han_vs_Swarm)" />
+          <div style="display:flex; gap:5px; margin-top:4px;">
+            <button id="btn-save-setup" class="btn-action btn-primary" style="flex:1;">Save Setup</button>
+            <button id="btn-delete-setup" class="btn-action btn-danger" style="flex:1;">Delete</button>
+          </div>
+          <div style="margin-top:6px;">
+            <select id="saved-setups-select" style="width:100%;">
+              <option value="">-- Load Saved Setup --</option>
+            </select>
+          </div>
+          <div style="display:flex; gap:5px; margin-top:4px;">
+            <button id="btn-load-setup" class="btn-action" style="flex:1;">Load</button>
+            <button id="btn-export-setup" class="btn-action" style="flex:1;">Export File</button>
+          </div>
+          <label class="btn-action" style="display:block; text-align:center; margin-top:4px; cursor:pointer;">
+            Import Setup JSON
+            <input type="file" id="file-import-setup" accept=".json" style="display:none;" />
+          </label>
+        </div>
+
+        <hr style="border:none; border-top:1px solid #1e3a5f;" />
+
+        <!-- Collapsible Controls Guide -->
+        <div class="control-row">
+          <label class="control-label" style="cursor:pointer;" id="toggle-guide-label">Controls Reference ▼</label>
+          <div id="controls-guide">
+            <strong>W, A, S, D:</strong> Move Hero<br />
+            <strong>LMB (Click):</strong> Light Attack Combo<br />
+            <strong>LMB (Hold):</strong> Charged Heavy Attack<br />
+            <strong>RMB (Hold):</strong> Shield Block<br />
+            <strong>RMB (Tap on Hit):</strong> Perfect Parry<br />
+            <strong>Space:</strong> Directional Dodge Roll<br />
+            <strong>Q:</strong> Mana Potion (Restores 40% Max MP)<br />
+            <strong>1 to 6 (Staff):</strong> Fire Spells (Ember, Volley, Fireball, Wall, Beam, Nova)<br />
+            <strong>R (Staff):</strong> Solar Cataclysm (5s Overhead Ultimate)<br />
+            <strong>1 to 4 (Other Wep):</strong> Squad Skills<br />
+            <strong>F3:</strong> Toggle Fire Mage Debug Panel<br />
+            <strong>Shift+R:</strong> Reset Arena<br />
+            <strong>P:</strong> Pause / Resume<br />
+            <strong>N:</strong> Step Single Frame<br />
+            <strong>Middle Drag / Alt+LMB:</strong> Orbit Cam
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Over-The-Shoulder Bow Aim Reticle & Hit Marker (Issues 2, 3, 4b) -->
+    <div id="aim-reticle" style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%) scale(1.35); width:40px; height:40px; pointer-events:none; display:none; z-index:95; transition:transform 0.05s linear;">
+      <!-- Dynamic Reticle Crosshairs -->
+      <div class="ret-bar" style="position:absolute; top:0; left:19px; width:2px; height:10px; background:#facc15; box-shadow:0 0 4px #000; border-radius:1px;"></div>
+      <div class="ret-bar" style="position:absolute; bottom:0; left:19px; width:2px; height:10px; background:#facc15; box-shadow:0 0 4px #000; border-radius:1px;"></div>
+      <div class="ret-bar" style="position:absolute; top:19px; left:0; width:10px; height:2px; background:#facc15; box-shadow:0 0 4px #000; border-radius:1px;"></div>
+      <div class="ret-bar" style="position:absolute; top:19px; right:0; width:10px; height:2px; background:#facc15; box-shadow:0 0 4px #000; border-radius:1px;"></div>
+      <div style="position:absolute; top:18px; left:18px; width:4px; height:4px; border-radius:50%; background:#facc15; box-shadow:0 0 6px #facc15;"></div>
+
+      <!-- Hit Marker 'X' (Issue 4b) -->
+      <div id="hit-marker" style="position:absolute; top:50%; left:50%; width:24px; height:24px; transform:translate(-50%, -50%); pointer-events:none; opacity:0; transition:opacity 0.06s ease-out;">
+        <div class="hm-line1" style="position:absolute; top:11px; left:2px; width:20px; height:2px; transform:rotate(45deg); background:#ffffff; box-shadow:0 0 4px #38bdf8; border-radius:1px;"></div>
+        <div class="hm-line2" style="position:absolute; top:11px; left:2px; width:20px; height:2px; transform:rotate(-45deg); background:#ffffff; box-shadow:0 0 4px #38bdf8; border-radius:1px;"></div>
+      </div>
+
+      <!-- Bow Draw Bar (Fix 1) -->
+      <div id="bow-draw-bar-wrap" style="position:absolute; bottom:-12px; left:50%; transform:translateX(-50%); width:32px; height:3px; background:rgba(0,0,0,0.65); border:1px solid #1e293b; border-radius:2px; overflow:hidden;">
+        <div id="bow-draw-bar-fill" style="width:0%; height:100%; background:#facc15; transition:width 0.03s linear;"></div>
+      </div>
+    </div>
+
+    <!-- Overhead Floating Cast Bar (>0.5s duration) -->
+    <div id="overhead-cast-bar">
+      <div id="overhead-cast-fill"></div>
+      <div id="overhead-cast-text">Fireball 0.5s / 0.7s</div>
+    </div>
+
+    <!-- Live Mouse & Hero State Debug Line (Issue 1) -->
+    <div id="input-hero-debug" style="position:fixed; bottom:84px; left:50%; transform:translateX(-50%); background:rgba(12,18,25,0.92); border:1px solid #1e3a5f; border-radius:4px; padding:4px 14px; font-size:10px; font-family:monospace; color:#38bdf8; z-index:90; pointer-events:none; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,0.6);">
+      LAST INPUT: NONE | HERO STATE: IDLE [NONE] | WEAPON: SWORD | ARROWS: 20/20
+    </div>
+
+    <!-- Bottom Fire Mage Spell Bar (keys 1-6 & R) -->
+    <div id="spell-bar">
+      <div class="spell-slot" data-spell="emberBolt" data-key="1" title="Ember Bolt [1] - Fast straight fireball">
+        <span class="spell-slot-key">1</span>
+        <span class="spell-slot-icon">🔥</span>
+        <span class="spell-slot-name">Ember</span>
+        <span class="spell-slot-cost">6 MP</span>
+        <div class="spell-cd-overlay">0.0s</div>
+      </div>
+      <div class="spell-slot" data-spell="fireDartVolley" data-key="2" title="Fire Dart Volley [2] - 3 spread fire darts">
+        <span class="spell-slot-key">2</span>
+        <span class="spell-slot-icon">✨</span>
+        <span class="spell-slot-name">Volley</span>
+        <span class="spell-slot-cost">12 MP</span>
+        <div class="spell-cd-overlay">0.0s</div>
+      </div>
+      <div class="spell-slot" data-spell="fireball" data-key="3" title="Fireball [3] - Explosive 2.5m AOE & 3s burn">
+        <span class="spell-slot-key">3</span>
+        <span class="spell-slot-icon">💥</span>
+        <span class="spell-slot-name">Fireball</span>
+        <span class="spell-slot-cost">22 MP</span>
+        <div class="spell-cd-overlay">0.0s</div>
+      </div>
+      <div class="spell-slot" data-spell="flameWall" data-key="4" title="Flame Wall [4] - 8m wide wall lasting 6s">
+        <span class="spell-slot-key">4</span>
+        <span class="spell-slot-icon">🧱</span>
+        <span class="spell-slot-name">Wall</span>
+        <span class="spell-slot-cost">30 MP</span>
+        <div class="spell-cd-overlay">0.0s</div>
+      </div>
+      <div class="spell-slot" data-spell="infernoBeam" data-key="5" title="Inferno Beam [5] - Channeled heat beam (8 MP/s)">
+        <span class="spell-slot-key">5</span>
+        <span class="spell-slot-icon">⚡</span>
+        <span class="spell-slot-name">Beam</span>
+        <span class="spell-slot-cost">8/s</span>
+        <div class="spell-cd-overlay">0.0s</div>
+      </div>
+      <div class="spell-slot" data-spell="fireNova" data-key="6" title="Fire Nova [6] - 6m radial blast & knockback">
+        <span class="spell-slot-key">6</span>
+        <span class="spell-slot-icon">🔆</span>
+        <span class="spell-slot-name">Nova</span>
+        <span class="spell-slot-cost">45 MP</span>
+        <div class="spell-cd-overlay">0.0s</div>
+      </div>
+      <div class="spell-slot slot-ultimate" data-spell="solarCataclysm" data-key="R" title="Solar Cataclysm [R] - Ultimate 5s cast apocalyptic meteor storm">
+        <span class="spell-slot-key" style="background:#7c2d12; color:#fed7aa;">R</span>
+        <span class="spell-slot-icon">☀️</span>
+        <span class="spell-slot-name" style="color:#fde047; font-weight:bold;">Cataclysm</span>
+        <span class="spell-slot-cost" style="color:#fde047;">70% MP</span>
+        <div class="spell-cd-overlay">0.0s</div>
+    </div>
+    </div>
+
+    <!-- Spell Info Tooltip -->
+    <div id="spell-tooltip" style="display:none; position:fixed; z-index:250; pointer-events:none; background:rgba(12,18,25,0.96); border:1px solid #f97316; border-radius:6px; padding:8px 12px; font-family:sans-serif; box-shadow:0 6px 20px rgba(0,0,0,0.85); max-width:260px; backdrop-filter:blur(6px);">
+      <div id="st-name" style="color:#f97316; font-size:12px; font-weight:800; display:flex; justify-content:space-between; align-items:center;"></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px 8px; font-size:10px; color:#cbd5e1; margin-top:4px; font-family:monospace;">
+        <div>Mana: <span id="st-cost" style="color:#38bdf8; font-weight:bold;"></span></div>
+        <div>Cast: <span id="st-cast" style="color:#fde047; font-weight:bold;"></span></div>
+        <div>CD: <span id="st-cd" style="color:#fde047; font-weight:bold;"></span></div>
+        <div>Damage: <span id="st-dmg" style="color:#ef4444; font-weight:bold;"></span></div>
+      </div>
+      <div id="st-desc" style="font-size:9.5px; color:#94a3b8; margin-top:6px; line-height:1.4;"></div>
+    </div>
+
+    <!-- F3 Debug Panel -->
+    <div id="mage-debug-panel" style="position:fixed; top:56px; right:16px; width:280px; background:rgba(15,23,42,0.96); border:1px solid #f97316; border-radius:8px; padding:12px; z-index:200; box-shadow:0 8px 24px rgba(0,0,0,0.8); display:none; backdrop-filter:blur(8px);">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:6px; margin-bottom:8px;">
+        <h4 style="color:#f97316; font-size:12px; font-weight:bold; display:flex; align-items:center; gap:6px;">
+          <span>🔥 Fire Mage Debug [F3]</span>
+        </h4>
+        <button id="btn-close-mage-debug" style="background:none; border:none; color:#94a3b8; cursor:pointer; font-size:12px;">✕</button>
+      </div>
+      <div style="font-size:10px; color:#cbd5e1; margin-bottom:8px; display:flex; justify-content:space-between;">
+        <span>Level: <b id="dbg-mage-lvl" style="color:#38bdf8;">1</b></span>
+        <span>Mana: <b id="dbg-mage-mana" style="color:#38bdf8;">100/100</b></span>
+        <span>INT: <b id="dbg-mage-int" style="color:#38bdf8;">10</b></span>
+      </div>
+      <div class="control-row" style="margin-bottom:8px;">
+        <label class="control-label">Set Mage Level</label>
+        <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:4px;">
+          <button class="btn-action btn-set-lvl" data-lvl="1">Lv 1</button>
+          <button class="btn-action btn-set-lvl" data-lvl="3">Lv 3</button>
+          <button class="btn-action btn-set-lvl" data-lvl="5">Lv 5</button>
+          <button class="btn-action btn-set-lvl" data-lvl="9">Lv 9</button>
+          <button class="btn-action btn-set-lvl" data-lvl="12">Lv 12</button>
+        </div>
+      </div>
+      <div style="display:flex; gap:6px; margin-bottom:8px;">
+        <button id="btn-dbg-refill-mana" class="btn-action btn-primary" style="flex:1;">Refill Mana</button>
+        <button id="btn-dbg-refill-potions" class="btn-action" style="flex:1;">Refill Potions (3)</button>
+      </div>
+      <div style="margin-bottom:8px;">
+        <button id="btn-dbg-spawn-dummies" class="btn-action" style="width:100%; background:#1e3a5f; color:#38bdf8; border-color:#0284c7;">
+          🎯 Spawn 3 Dummy Enemies
+        </button>
+      </div>
+      <div class="control-row">
+        <label class="control-label">Cast Fire Spell</label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
+          <button class="btn-action btn-dbg-cast" data-spell="emberBolt">1: Ember Bolt</button>
+          <button class="btn-action btn-dbg-cast" data-spell="fireDartVolley">2: Dart Volley</button>
+          <button class="btn-action btn-dbg-cast" data-spell="fireball">3: Fireball</button>
+          <button class="btn-action btn-dbg-cast" data-spell="flameWall">4: Flame Wall</button>
+          <button class="btn-action btn-dbg-cast" data-spell="infernoBeam">5: Inferno Beam</button>
+          <button class="btn-action btn-dbg-cast" data-spell="fireNova">6: Fire Nova</button>
+          <button class="btn-action btn-dbg-cast" data-spell="solarCataclysm" style="grid-column: span 2; background:#7c2d12; border-color:#f97316; color:#fed7aa; font-weight:bold;">
+            R: Solar Cataclysm (Ultimate)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Corner Telemetry Overlay -->
+    <div id="telemetry-corner">
+      <span>FPS: <span id="tel-fps" class="tel-val">60</span></span>
+      <span>CPU: <span id="tel-cpu" class="tel-val">0.0 ms</span></span>
+      <span>ENTITIES: <span id="tel-entities" class="tel-val">0</span></span>
+      <span>TIMESCALE: <span id="tel-timescale" class="tel-val">1.0x</span></span>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./node_modules/three/build/three.module.js",
+          "three/": "./node_modules/three/",
+          "three/examples/jsm/utils/BufferGeometryUtils.js": "./node_modules/three/examples/jsm/utils/BufferGeometryUtils.js"
+        }
+      }
+    </script>
+    <!-- Dev Lab Integration Script -->
+    <script type="module">
+      import { DevLab } from './src/dev/devLab.js';
+      import { DevStorage } from './src/dev/devStorage.js';
+      import { timeScale } from './src/combat/TimeScale.js';
+      import { FIRE_SPELLS } from './src/combat/spells.config.js';
+
+      const container = document.getElementById('canvas-container');
+
+      // UI Elements references
+      const telFps = document.getElementById('tel-fps');
+      const telCpu = document.getElementById('tel-cpu');
+      const telEntities = document.getElementById('tel-entities');
+      const telTimeScale = document.getElementById('tel-timescale');
+
+      const heroNameEl = document.getElementById('hero-display-name');
+      const heroStateEl = document.getElementById('hero-state-display');
+      const hudHpBar = document.getElementById('hud-hp-bar');
+      const hudHpText = document.getElementById('hud-hp-text');
+      const hudStaminaBar = document.getElementById('hud-stamina-bar');
+      const hudStaminaText = document.getElementById('hud-stamina-text');
+      const hudManaBar = document.getElementById('hud-mana-bar');
+      const hudManaText = document.getElementById('hud-mana-text');
+      const hudPoiseBar = document.getElementById('hud-poise-bar');
+      const hudPoiseText = document.getElementById('hud-poise-text');
+
+      // Stats Elements
+      const stDmgDealt = document.getElementById('st-dmg-dealt');
+      const stDmgTaken = document.getElementById('st-dmg-taken');
+      const stDps = document.getElementById('st-dps');
+      const stHits = document.getElementById('st-hits');
+      const stBlocks = document.getElementById('st-blocks');
+      const stParries = document.getElementById('st-parries');
+      const stDodges = document.getElementById('st-dodges');
+      const stPoiseBreaks = document.getElementById('st-poise-breaks');
+      const stKills = document.getElementById('st-kills');
+      const stDeaths = document.getElementById('st-deaths');
+
+      // Initialize Dev Lab Instance
+      const lab = new DevLab(container, {
+        update: (instance) => {
+          // Update corner telemetry
+          telFps.textContent = instance.fps;
+          telCpu.textContent = `${instance.cpuTickMs.toFixed(2)} ms`;
+          telEntities.textContent = instance.combatants.length;
+          telTimeScale.textContent = `${(timeScale.currentScale * timeScale.debugScale).toFixed(2)}x`;
+
+          // Update active hero HUD bars
+          const hero = instance.activeHero;
+          if (hero) {
+            heroNameEl.textContent = hero.name;
+            heroStateEl.textContent = hero.stateMachine.state === 'CAST'
+              ? `CAST: ${hero.stateMachine.castPhase}`
+              : `${hero.stateMachine.state} [${hero.stateMachine.attackPhase}]`;
+
+            const hpRatio = Math.max(0, Math.min(100, (hero.hp / hero.maxHp) * 100));
+            hudHpBar.style.width = `${hpRatio}%`;
+            hudHpText.textContent = `HP: ${Math.round(hero.hp)} / ${hero.maxHp}`;
+
+            // Blue Mana Bar with Red Fizzle Flash
+            const manaRatio = Math.max(0, Math.min(100, (hero.mana / hero.maxMana) * 100));
+            hudManaBar.style.width = `${manaRatio}%`;
+            hudManaText.textContent = `MANA: ${Math.round(hero.mana)} / ${hero.maxMana}`;
+            if (hero.manaFizzleTimer > 0) {
+              hudManaBar.style.background = '#ef4444'; // Red flash on fizzle
+            } else {
+              hudManaBar.style.background = '#2563eb'; // Blue
+            }
+
+            const staRatio = Math.max(0, Math.min(100, (hero.stamina / hero.maxStamina) * 100));
+            hudStaminaBar.style.width = `${staRatio}%`;
+            hudStaminaText.textContent = `STAMINA: ${Math.round(hero.stamina)} / ${hero.maxStamina}`;
+
+            const poiseRatio = Math.max(0, Math.min(100, (hero.poise / hero.maxPoise) * 100));
+            hudPoiseBar.style.width = `${poiseRatio}%`;
+            hudPoiseText.textContent = `POISE: ${Math.round(hero.poise)} / ${hero.maxPoise}`;
+
+            // Potion Count Display
+            const hudPotionText = document.getElementById('hud-potion-text');
+            if (hudPotionText) {
+              const cd = hero.manaPotionCooldown > 0 ? `(${hero.manaPotionCooldown.toFixed(1)}s)` : '(Ready)';
+              hudPotionText.textContent = `Potions: ${hero.manaPotions ?? 3} / 3 ${cd}`;
+            }
+
+            const hudArrowsText = document.getElementById('hud-arrows-text');
+            if (hudArrowsText) {
+              hudArrowsText.textContent = `Arrows: ${hero.arrows ?? 0} / ${hero.maxArrows ?? 20}`;
+            }
+
+            // Sync Bottom Spell Bar
+            const spellSlots = document.querySelectorAll('#spell-bar .spell-slot');
+            spellSlots.forEach(slot => {
+              const spellId = slot.getAttribute('data-spell');
+              const spellData = FIRE_SPELLS[spellId];
+              if (!spellData) return;
+
+              const cd = hero.spellCooldowns ? (hero.spellCooldowns[spellId] || 0) : 0;
+              const cdOverlay = slot.querySelector('.spell-cd-overlay');
+              if (cdOverlay) {
+                if (cd > 0) {
+                  cdOverlay.style.display = 'flex';
+                  cdOverlay.textContent = `${cd.toFixed(1)}s`;
+                } else {
+                  cdOverlay.style.display = 'none';
+                }
+              }
+
+              // Check level unlock
+              const isLocked = (hero.mageLevel || 1) < spellData.unlockLevel;
+              slot.classList.toggle('locked', isLocked);
+
+              // Mastery stars rendering
+              let starsEl = slot.querySelector('.spell-mastery-stars');
+              if (!starsEl) {
+                starsEl = document.createElement('span');
+                starsEl.className = 'spell-mastery-stars';
+                slot.appendChild(starsEl);
+              }
+              const mastery = hero.spellMastery ? (hero.spellMastery[spellId]?.level || 0) : 0;
+              starsEl.textContent = mastery > 0 ? '★'.repeat(mastery) : '';
+
+              // Check mana affordability (accounting for mastery discount)
+              let requiredMana = spellData.manaCost;
+              if (spellData.isUltimate) {
+                requiredMana = hero.maxMana * (spellData.manaCostRatio || 0.70);
+              } else if (typeof hero.getDiscountedManaCost === 'function') {
+                requiredMana = hero.getDiscountedManaCost(spellId, requiredMana);
+              }
+              const costEl = slot.querySelector('.spell-slot-cost');
+              if (costEl && !spellData.isUltimate && spellId !== 'infernoBeam') {
+                costEl.textContent = `${Math.round(requiredMana)} MP`;
+              }
+              const canAfford = hero.mana >= requiredMana;
+              slot.classList.toggle('unaffordable', !canAfford && !isLocked);
+
+              // Active channeled highlight
+              if (spellId === 'infernoBeam' && hero.channeledSpell) {
+                slot.classList.add('active-channel');
+              } else {
+                slot.classList.remove('active-channel');
+              }
+            });
+
+            // Sync Arena Tab Mage Level controls if not focused
+            const sliderMageLvlEl = document.getElementById('slider-mage-level');
+            const inputMageLvlEl = document.getElementById('input-mage-level');
+            if (sliderMageLvlEl && document.activeElement !== sliderMageLvlEl && document.activeElement !== inputMageLvlEl) {
+              const curLvl = hero.mageLevel || 1;
+              if (parseInt(sliderMageLvlEl.value, 10) !== curLvl) {
+                sliderMageLvlEl.value = curLvl;
+                if (inputMageLvlEl) inputMageLvlEl.value = curLvl;
+              }
+            }
+
+            // Sync F3 Debug Panel
+            const dbgLvl = document.getElementById('dbg-mage-lvl');
+            const dbgMana = document.getElementById('dbg-mage-mana');
+            const dbgInt = document.getElementById('dbg-mage-int');
+            if (dbgLvl) dbgLvl.textContent = hero.mageLevel || 1;
+            if (dbgMana) dbgMana.textContent = `${Math.round(hero.mana)} / ${hero.maxMana}`;
+            if (dbgInt) dbgInt.textContent = hero.intelligence || 10;
+          } else {
+            heroNameEl.textContent = 'None';
+            heroStateEl.textContent = 'NONE';
+            hudHpBar.style.width = '0%';
+            hudHpText.textContent = 'HP: 0 / 0';
+            hudStaminaBar.style.width = '0%';
+            hudStaminaText.textContent = 'STAMINA: 0 / 0';
+            hudManaBar.style.width = '0%';
+            hudManaText.textContent = 'MANA: 0 / 0';
+            hudPoiseBar.style.width = '0%';
+            hudPoiseText.textContent = 'POISE: 0 / 0';
+            const hudArrowsText = document.getElementById('hud-arrows-text');
+            if (hudArrowsText) {
+              hudArrowsText.textContent = 'Arrows: 0 / 0';
+            }
+          }
+
+          // Update live fight report stats
+          stDmgDealt.textContent = Math.round(instance.stats.damageDealt);
+          stDmgTaken.textContent = Math.round(instance.stats.damageTaken);
+          stDps.textContent = instance.stats.getRollingDps().toFixed(1);
+          stHits.textContent = instance.stats.hitsLanded;
+          stBlocks.textContent = instance.stats.blocks;
+          stParries.textContent = instance.stats.parries;
+          stDodges.textContent = instance.stats.perfectDodges;
+          stPoiseBreaks.textContent = instance.stats.poiseBreaks;
+          stKills.textContent = instance.stats.kills;
+          stDeaths.textContent = instance.stats.deaths;
+        }
+      });
+
+      // Expose to window for automated QA verification & debugging
+      window.__devLab = lab;
+
+      // Tab Switching Logic
+      const tabBtns = document.querySelectorAll('.tab-btn');
+      const tabContents = document.querySelectorAll('.tab-content');
+      const tabPanelTitle = document.getElementById('tab-panel-title');
+
+      const TAB_TITLES = {
+        'tab-arena': 'Arena Scenario',
+        'tab-weapons': 'Weapons & Shields',
+        'tab-spells': 'Spells & Magic',
+        'tab-enemies': 'Enemies & Spawner',
+        'tab-squad': 'Raid Squad Skills',
+        'tab-stats': 'Live Fight Telemetry'
+      };
+
+      tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          tabBtns.forEach(b => b.classList.remove('active'));
+          tabContents.forEach(c => c.style.display = 'none');
+
+          btn.classList.add('active');
+          const targetId = btn.getAttribute('data-tab');
+          const targetContent = document.getElementById(targetId);
+          if (targetContent) targetContent.style.display = 'block';
+          if (tabPanelTitle) tabPanelTitle.textContent = TAB_TITLES[targetId] || 'Dev Lab';
+
+          // Ensure left panel is open when switching tabs
+          leftPanel.classList.remove('panel-collapsed-left');
+          toggleLeftBtn.style.display = 'none';
+
+          // Update spell caster dropdown when opening spells tab
+          if (targetId === 'tab-spells') updateSpellCasterDropdown();
+        });
+      });
+
+      // Panel Collapsing
+      const leftPanel = document.getElementById('left-panel');
+      const rightPanel = document.getElementById('right-panel');
+      const btnCollapseLeft = document.getElementById('btn-collapse-left');
+      const btnCollapseRight = document.getElementById('btn-collapse-right');
+      const toggleLeftBtn = document.getElementById('toggle-left-btn');
+      const toggleRightBtn = document.getElementById('toggle-right-btn');
+
+      btnCollapseLeft.addEventListener('click', () => {
+        leftPanel.classList.add('panel-collapsed-left');
+        toggleLeftBtn.style.display = 'block';
+      });
+      toggleLeftBtn.addEventListener('click', () => {
+        leftPanel.classList.remove('panel-collapsed-left');
+        toggleLeftBtn.style.display = 'none';
+      });
+
+      btnCollapseRight.addEventListener('click', () => {
+        rightPanel.classList.add('panel-collapsed-right');
+        toggleRightBtn.style.display = 'block';
+      });
+      toggleRightBtn.addEventListener('click', () => {
+        rightPanel.classList.remove('panel-collapsed-right');
+        toggleRightBtn.style.display = 'none';
+      });
+
+      // Toolbar Buttons
+      document.getElementById('btn-reset-r').addEventListener('click', () => lab.resetArena());
+      const btnPause = document.getElementById('btn-pause-p');
+      btnPause.addEventListener('click', () => {
+        const paused = lab.togglePause();
+        btnPause.classList.toggle('active', paused);
+        btnPause.textContent = paused ? '▶ Resume [P]' : '⏸ Pause [P]';
+      });
+      document.getElementById('btn-step-n').addEventListener('click', () => lab.stepFrame());
+
+      // Speed Buttons
+      document.querySelectorAll('.btn-speed').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.btn-speed').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          lab.setTimeScale(parseFloat(btn.getAttribute('data-speed')));
+        });
+      });
+
+      // Visualizers Toggles
+      const btnWireframes = document.getElementById('btn-wireframes');
+      btnWireframes.addEventListener('click', () => {
+        const on = lab.toggleWireframes();
+        btnWireframes.classList.toggle('active', on);
+      });
+      const btnHitboxes = document.getElementById('btn-hitboxes');
+      btnHitboxes.addEventListener('click', () => {
+        const on = lab.toggleHitboxes();
+        btnHitboxes.classList.toggle('active', on);
+      });
+      const btnDebugText = document.getElementById('btn-debug-text');
+      btnDebugText.addEventListener('click', () => {
+        const on = lab.toggleDebugText();
+        btnDebugText.classList.toggle('active', on);
+      });
+
+      // TAB 1: Arena Scenario Handlers
+      const arenaHeroSelect = document.getElementById('arena-hero-select');
+      const arenaWeaponSelect = document.getElementById('arena-weapon-select');
+      const arenaShieldSelect = document.getElementById('arena-shield-select');
+      const arenaGradeSelect = document.getElementById('arena-grade-select');
+      const rowShieldSelect = document.getElementById('row-shield-select');
+      const shieldArchersNotice = document.getElementById('shield-archers-notice');
+
+      const sliderHp = document.getElementById('slider-hp');
+      const sliderStamina = document.getElementById('slider-stamina');
+      const sliderMana = document.getElementById('slider-mana');
+      const sliderPoise = document.getElementById('slider-poise');
+      const sliderQuiver = document.getElementById('slider-quiver');
+      const valHp = document.getElementById('val-hp');
+      const valStamina = document.getElementById('val-stamina');
+      const valMana = document.getElementById('val-mana');
+      const valPoise = document.getElementById('val-poise');
+      const valQuiver = document.getElementById('val-quiver');
+
+      sliderHp.addEventListener('input', () => { valHp.textContent = sliderHp.value; });
+      sliderStamina.addEventListener('input', () => { valStamina.textContent = sliderStamina.value; });
+      sliderMana.addEventListener('input', () => { valMana.textContent = sliderMana.value; });
+      sliderPoise.addEventListener('input', () => { valPoise.textContent = sliderPoise.value; });
+      if (sliderQuiver) {
+        sliderQuiver.addEventListener('input', () => {
+          valQuiver.textContent = sliderQuiver.value;
+          if (lab.activeHero) {
+            lab.activeHero.arrows = parseInt(sliderQuiver.value, 10);
+            lab.activeHero.maxArrows = Math.max(lab.activeHero.arrows, lab.activeHero.maxArrows);
+          }
+        });
+      }
+
+      const sliderMageLevel = document.getElementById('slider-mage-level');
+      const inputMageLevel = document.getElementById('input-mage-level');
+      const btnUnlockAllSpells = document.getElementById('btn-unlock-all-spells');
+
+      function setLabMageLevel(val) {
+        const lvl = Math.max(1, Math.min(20, parseInt(val, 10) || 1));
+        if (sliderMageLevel) sliderMageLevel.value = lvl;
+        if (inputMageLevel) inputMageLevel.value = lvl;
+        if (lab.activeHero && typeof lab.activeHero.setMageLevel === 'function') {
+          lab.activeHero.setMageLevel(lvl);
+        }
+      }
+
+      if (sliderMageLevel) {
+        sliderMageLevel.addEventListener('input', () => {
+          setLabMageLevel(sliderMageLevel.value);
+        });
+      }
+      if (inputMageLevel) {
+        inputMageLevel.addEventListener('input', () => {
+          setLabMageLevel(inputMageLevel.value);
+        });
+      }
+      if (btnUnlockAllSpells) {
+        btnUnlockAllSpells.addEventListener('click', () => {
+          setLabMageLevel(12);
+        });
+      }
+
+      function updateWeaponShieldVisibility(weapon) {
+        if (weapon === 'bow') {
+          if (rowShieldSelect) rowShieldSelect.style.display = 'none';
+          if (shieldArchersNotice) shieldArchersNotice.style.display = 'block';
+          if (arenaShieldSelect) arenaShieldSelect.value = 'none';
+          lab.weapons.setShield('none');
+        } else {
+          if (rowShieldSelect) rowShieldSelect.style.display = 'flex';
+          if (shieldArchersNotice) shieldArchersNotice.style.display = 'none';
+        }
+      }
+
+      arenaWeaponSelect.addEventListener('change', () => {
+        const weapon = arenaWeaponSelect.value;
+        updateWeaponShieldVisibility(weapon);
+        lab.weapons.setWeapon(weapon);
+      });
+
+      arenaHeroSelect.addEventListener('change', () => {
+        const key = arenaHeroSelect.value;
+        const defaults = {
+          han: { wep: 'sword', hp: 120, sta: 100, mana: 100, poise: 100 },
+          jenna: { wep: 'bow', hp: 95, sta: 110, mana: 80, poise: 50 },
+          aaron: { wep: 'spear', hp: 150, sta: 90, mana: 60, poise: 120 },
+          velkist: { wep: 'greatsword', hp: 140, sta: 120, mana: 50, poise: 110 },
+          eolka: { wep: 'staff', hp: 85, sta: 80, mana: 150, poise: 60 },
+        }[key];
+        if (defaults) {
+          arenaWeaponSelect.value = defaults.wep;
+          updateWeaponShieldVisibility(defaults.wep);
+          sliderHp.value = defaults.hp; valHp.textContent = defaults.hp;
+          sliderStamina.value = defaults.sta; valStamina.textContent = defaults.sta;
+          sliderMana.value = defaults.mana; valMana.textContent = defaults.mana;
+          sliderPoise.value = defaults.poise; valPoise.textContent = defaults.poise;
+        }
+      });
+
+      document.getElementById('btn-apply-hero').addEventListener('click', () => {
+        const wep = arenaWeaponSelect.value;
+        const shd = wep === 'bow' ? null : (arenaShieldSelect.value === 'none' ? null : arenaShieldSelect.value);
+        lab.setPlayerHero(
+          arenaHeroSelect.value,
+          wep,
+          shd,
+          arenaGradeSelect.value,
+          parseInt(sliderHp.value, 10),
+          parseInt(sliderStamina.value, 10),
+          parseInt(sliderMana.value, 10),
+          parseInt(sliderPoise.value, 10)
+        );
+        if (lab.activeHero && sliderQuiver) {
+          lab.activeHero.arrows = parseInt(sliderQuiver.value, 10);
+          lab.activeHero.maxArrows = Math.max(20, lab.activeHero.arrows);
+        }
+      });
+
+      // Spawner Handlers
+      const sliderSpawnCount = document.getElementById('slider-spawn-count');
+      const valSpawnCount = document.getElementById('val-spawn-count');
+      sliderSpawnCount.addEventListener('input', () => { valSpawnCount.textContent = sliderSpawnCount.value; });
+
+      document.getElementById('btn-spawn-batch').addEventListener('click', () => {
+        lab.addBatchCombatants({
+          typeKey: document.getElementById('spawn-type-select').value,
+          team: document.getElementById('spawn-team-select').value,
+          pattern: document.getElementById('spawn-pattern-select').value,
+          count: parseInt(sliderSpawnCount.value, 10),
+          grade: arenaGradeSelect.value,
+        });
+      });
+      document.getElementById('btn-clear-scenario').addEventListener('click', () => lab.clearScenario());
+
+      // TAB 2: Weapons Tab Handlers
+      document.querySelectorAll('#grid-weapons button').forEach(b => {
+        b.addEventListener('click', () => {
+          document.querySelectorAll('#grid-weapons button').forEach(btn => btn.classList.remove('active'));
+          b.classList.add('active');
+          const weapon = b.getAttribute('data-weapon');
+          lab.weapons.setWeapon(weapon);
+          arenaWeaponSelect.value = weapon;
+          updateWeaponShieldVisibility(weapon);
+        });
+      });
+
+      document.querySelectorAll('#grid-shields button').forEach(b => {
+        b.addEventListener('click', () => {
+          if (arenaWeaponSelect.value === 'bow') return;
+          document.querySelectorAll('#grid-shields button').forEach(btn => btn.classList.remove('active'));
+          b.classList.add('active');
+          const shield = b.getAttribute('data-shield');
+          lab.weapons.setShield(shield);
+          arenaShieldSelect.value = shield;
+        });
+      });
+
+      document.querySelectorAll('#grid-grades button').forEach(b => {
+        b.addEventListener('click', () => {
+          document.querySelectorAll('#grid-grades button').forEach(btn => btn.classList.remove('active'));
+          b.classList.add('active');
+          const grade = b.getAttribute('data-grade');
+          lab.weapons.setGrade(grade);
+          arenaGradeSelect.value = grade;
+        });
+      });
+
+      document.querySelectorAll('.btn-pose').forEach(b => {
+        b.addEventListener('click', () => {
+          lab.weapons.playPose(b.getAttribute('data-pose'));
+        });
+      });
+
+      const btnComboLoop = document.getElementById('btn-combo-loop');
+      btnComboLoop.addEventListener('click', () => {
+        lab.weapons.isComboLoop = !lab.weapons.isComboLoop;
+        btnComboLoop.classList.toggle('active', lab.weapons.isComboLoop);
+        btnComboLoop.textContent = lab.weapons.isComboLoop ? 'Combo Loop: ON' : 'Combo Loop: OFF';
+      });
+
+      const sliderAnimSpeed = document.getElementById('slider-anim-speed');
+      const valAnimSpeed = document.getElementById('val-anim-speed');
+      sliderAnimSpeed.addEventListener('input', () => {
+        valAnimSpeed.textContent = `${sliderAnimSpeed.value}x`;
+        lab.weapons.setSpeed(parseFloat(sliderAnimSpeed.value));
+      });
+
+      document.getElementById('btn-test-bow-fire').addEventListener('click', () => {
+        lab.weapons.fireBowTest(lab.groundAimPoint);
+      });
+
+      // TAB 3: Spells Tab Handlers
+      const spellCasterSelect = document.getElementById('spell-caster-select');
+      function updateSpellCasterDropdown() {
+        spellCasterSelect.innerHTML = '';
+        for (const c of lab.combatants) {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = `${c.name} (${c.team})`;
+          if (c === lab.activeHero) opt.selected = true;
+          spellCasterSelect.appendChild(opt);
+        }
+      }
+
+      document.querySelectorAll('.btn-cast').forEach(b => {
+        b.addEventListener('click', () => {
+          const spellId = b.getAttribute('data-spell');
+          const casterId = parseInt(spellCasterSelect.value, 10);
+          const caster = lab.combatants.find(c => c.id === casterId) || lab.activeHero;
+          lab.spells.castSpell(spellId, caster, lab.groundAimPoint);
+        });
+      });
+
+      const sliderSpellMana = document.getElementById('slider-spell-mana');
+      const valSpellMana = document.getElementById('val-spell-mana');
+      sliderSpellMana.addEventListener('input', () => {
+        valSpellMana.textContent = `${sliderSpellMana.value}`;
+        lab.spells.manaOverride = parseInt(sliderSpellMana.value, 10);
+      });
+
+      const sliderSpellCd = document.getElementById('slider-spell-cd');
+      const valSpellCd = document.getElementById('val-spell-cd');
+      sliderSpellCd.addEventListener('input', () => {
+        valSpellCd.textContent = `${sliderSpellCd.value}s`;
+        lab.spells.cooldownOverride = parseFloat(sliderSpellCd.value);
+      });
+
+      const btnToggleShapes = document.getElementById('btn-toggle-shapes');
+      btnToggleShapes.addEventListener('click', () => {
+        const on = !lab.spells.showShapeDebug;
+        lab.spells.setShapeDebugVisible(on);
+        btnToggleShapes.classList.toggle('active', on);
+        btnToggleShapes.textContent = on ? 'Shape Debug Drawing: ON' : 'Shape Debug Drawing: OFF';
+      });
+
+      // TAB 4: Enemies Tab Handlers
+      document.getElementById('btn-spawn-cursor').addEventListener('click', () => {
+        const type = document.getElementById('cursor-enemy-type').value;
+        lab.cheats.spawnEnemyAtCursor(type);
+      });
+      document.getElementById('btn-all-attack').addEventListener('click', () => {
+        lab.cheats.triggerAllEnemiesAttack();
+      });
+      document.getElementById('btn-kill-all').addEventListener('click', () => {
+        lab.cheats.killAllEnemies();
+      });
+
+      // TAB 5: Squad Tab Handlers
+      document.querySelectorAll('.btn-squad-skill').forEach(b => {
+        b.addEventListener('click', () => {
+          const slot = parseInt(b.getAttribute('data-slot'), 10);
+          lab.squadController.triggerSquadSkill(slot, lab.groundAimPoint);
+        });
+      });
+
+      // TAB 6: Stats Tab Handlers
+      document.getElementById('btn-reset-stats').addEventListener('click', () => lab.stats.reset());
+      document.getElementById('btn-export-stats').addEventListener('click', () => lab.stats.exportJSON());
+
+      // Right Panel Cheats Handlers
+      const btnCheatGod = document.getElementById('btn-cheat-god');
+      btnCheatGod.addEventListener('click', () => {
+        const on = lab.cheats.toggleGodMode();
+        btnCheatGod.classList.toggle('active', on);
+        btnCheatGod.textContent = on ? 'God Mode: ON' : 'God Mode: OFF';
+      });
+
+      const btnCheatStamina = document.getElementById('btn-cheat-stamina');
+      btnCheatStamina.addEventListener('click', () => {
+        const on = lab.cheats.toggleInfiniteStamina();
+        btnCheatStamina.classList.toggle('active', on);
+        btnCheatStamina.textContent = on ? 'Inf Stamina: ON' : 'Inf Stamina: OFF';
+      });
+
+      const btnCheatMana = document.getElementById('btn-cheat-mana');
+      btnCheatMana.addEventListener('click', () => {
+        const on = lab.cheats.toggleInfiniteMana();
+        btnCheatMana.classList.toggle('active', on);
+        btnCheatMana.textContent = on ? 'Inf Mana: ON' : 'Inf Mana: OFF';
+      });
+
+      const btnCheatCd = document.getElementById('btn-cheat-cd');
+      btnCheatCd.addEventListener('click', () => {
+        const on = lab.cheats.toggleNoCooldowns();
+        btnCheatCd.classList.toggle('active', on);
+        btnCheatCd.textContent = on ? 'No CDs: ON' : 'No CDs: OFF';
+      });
+
+      document.getElementById('btn-heal-all').addEventListener('click', () => {
+        lab.cheats.healAll();
+      });
+
+      // Scenario Storage Handlers
+      const setupNameInput = document.getElementById('setup-name-input');
+      const savedSetupsSelect = document.getElementById('saved-setups-select');
+
+      function refreshSetupsList() {
+        const setups = DevStorage.listSetups();
+        savedSetupsSelect.innerHTML = '<option value="">-- Load Saved Setup --</option>';
+        for (const s of setups) {
+          const opt = document.createElement('option');
+          opt.value = s;
+          opt.textContent = s;
+          savedSetupsSelect.appendChild(opt);
+        }
+      }
+      refreshSetupsList();
+
+      document.getElementById('btn-save-setup').addEventListener('click', () => {
+        const name = setupNameInput.value.trim();
+        if (!name) {
+          alert('Please enter a setup name.');
+          return;
+        }
+        const data = {
+          hero: {
+            heroKey: lab.currentHeroKey,
+            weaponKind: lab.weapons.currentWeapon,
+            shieldKind: lab.weapons.currentShield,
+            grade: lab.weapons.currentGrade,
+            hp: lab.activeHero.maxHp,
+            stamina: lab.activeHero.maxStamina,
+            mana: lab.activeHero.maxMana,
+            poise: lab.activeHero.maxPoise,
+          },
+          combatantsCount: lab.combatants.length,
+        };
+        DevStorage.saveSetup(name, data);
+        refreshSetupsList();
+        savedSetupsSelect.value = name;
+        lab.damageTextPool.spawn(`SAVED "${name}"`, lab.activeHero.position, '#38bdf8', false);
+      });
+
+      document.getElementById('btn-load-setup').addEventListener('click', () => {
+        const name = savedSetupsSelect.value;
+        if (!name) return;
+        const setup = DevStorage.loadSetup(name);
+        if (setup && setup.hero) {
+          lab.setPlayerHero(
+            setup.hero.heroKey,
+            setup.hero.weaponKind,
+            setup.hero.shieldKind,
+            setup.hero.grade,
+            setup.hero.hp,
+            setup.hero.stamina,
+            setup.hero.mana,
+            setup.hero.poise
+          );
+          setupNameInput.value = name;
+          lab.damageTextPool.spawn(`LOADED "${name}"`, lab.activeHero.position, '#4ade80', false);
+        }
+      });
+
+      document.getElementById('btn-delete-setup').addEventListener('click', () => {
+        const name = savedSetupsSelect.value || setupNameInput.value.trim();
+        if (!name) return;
+        DevStorage.deleteSetup(name);
+        refreshSetupsList();
+        setupNameInput.value = '';
+      });
+
+      document.getElementById('btn-export-setup').addEventListener('click', () => {
+        const name = savedSetupsSelect.value || setupNameInput.value.trim() || 'devlab_setup';
+        const setup = DevStorage.loadSetup(name) || {
+          name,
+          hero: {
+            heroKey: lab.currentHeroKey,
+            weaponKind: lab.weapons.currentWeapon,
+            shieldKind: lab.weapons.currentShield,
+            grade: lab.weapons.currentGrade,
+            hp: lab.activeHero.maxHp,
+            stamina: lab.activeHero.maxStamina,
+            mana: lab.activeHero.maxMana,
+            poise: lab.activeHero.maxPoise,
+          }
+        };
+        DevStorage.exportJSON(setup);
+      });
+
+      const fileImportSetup = document.getElementById('file-import-setup');
+      fileImportSetup.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          try {
+            const data = await DevStorage.importJSON(file);
+            refreshSetupsList();
+            savedSetupsSelect.value = data.name;
+            setupNameInput.value = data.name;
+            lab.damageTextPool.spawn(`IMPORTED "${data.name}"`, lab.activeHero.position, '#38bdf8', false);
+          } catch (err) {
+            alert(`Import failed: ${err.message}`);
+          }
+        }
+      });
+
+      // Bottom Fire Mage Spell Bar Click Handlers
+      document.querySelectorAll('#spell-bar .spell-slot').forEach(slot => {
+        slot.addEventListener('click', () => {
+          const spellId = slot.getAttribute('data-spell');
+          if (lab.activeHero && !lab.activeHero.isDead) {
+            lab.activeHero.castSpell(spellId, lab.groundAimPoint);
+          }
+        });
+      });
+
+      // Spell Info Tooltip Handlers
+      const spellTooltip = document.getElementById('spell-tooltip');
+      const stName = document.getElementById('st-name');
+      const stCost = document.getElementById('st-cost');
+      const stCast = document.getElementById('st-cast');
+      const stCd = document.getElementById('st-cd');
+      const stDmg = document.getElementById('st-dmg');
+      const stDesc = document.getElementById('st-desc');
+
+      document.querySelectorAll('#spell-bar .spell-slot').forEach(slot => {
+        slot.addEventListener('mouseenter', () => {
+          const spellId = slot.getAttribute('data-spell');
+          const spell = FIRE_SPELLS[spellId];
+          if (!spell || !spellTooltip) return;
+
+          stName.textContent = `${spell.name} [${spell.key}]`;
+          stCost.textContent = spell.isUltimate ? `${Math.round((spell.manaCostRatio || 0.70) * 100)}% Max MP` : `${spell.manaCost} MP`;
+          stCast.textContent = `${spell.castTime}s`;
+          stCd.textContent = `${spell.cooldown}s`;
+          const dmgStr = spell.isChanneled
+            ? `x${spell.damageMultPerTick}/tick`
+            : (spell.dartCount ? `3x x${spell.damageMult}` : `x${spell.damageMult}`);
+          stDmg.textContent = dmgStr;
+          stDesc.textContent = spell.description;
+
+          const rect = slot.getBoundingClientRect();
+          spellTooltip.style.left = `${Math.max(10, rect.left + rect.width / 2 - 130)}px`;
+          spellTooltip.style.bottom = `${window.innerHeight - rect.top + 10}px`;
+          spellTooltip.style.display = 'block';
+        });
+
+        slot.addEventListener('mouseleave', () => {
+          if (spellTooltip) spellTooltip.style.display = 'none';
+        });
+      });
+
+      // Spell Showcase Video Capture Button
+      const btnShowcase = document.getElementById('btn-spell-showcase');
+      if (btnShowcase) {
+        btnShowcase.addEventListener('click', () => {
+          lab.runSpellShowcase();
+        });
+      }
+
+      // F3 Debug Panel Event Handlers
+      const btnCloseMageDbg = document.getElementById('btn-close-mage-debug');
+      if (btnCloseMageDbg) {
+        btnCloseMageDbg.addEventListener('click', () => {
+          document.getElementById('mage-debug-panel').style.display = 'none';
+        });
+      }
+
+      document.querySelectorAll('.btn-set-lvl').forEach(b => {
+        b.addEventListener('click', () => {
+          const lvl = parseInt(b.getAttribute('data-lvl'), 10);
+          if (lab.activeHero && !lab.activeHero.isDead) {
+            lab.activeHero.setMageLevel(lvl);
+            lab.damageTextPool.spawn(`MAGE LEVEL: ${lvl}`, lab.activeHero.position, '#38bdf8', true);
+          }
+        });
+      });
+
+      const btnDbgRefillMana = document.getElementById('btn-dbg-refill-mana');
+      if (btnDbgRefillMana) {
+        btnDbgRefillMana.addEventListener('click', () => {
+          if (lab.activeHero) {
+            lab.activeHero.mana = lab.activeHero.maxMana;
+            lab.damageTextPool.spawn('MANA REFILLED', lab.activeHero.position, '#38bdf8', true);
+          }
+        });
+      }
+
+      const btnDbgRefillPotions = document.getElementById('btn-dbg-refill-potions');
+      if (btnDbgRefillPotions) {
+        btnDbgRefillPotions.addEventListener('click', () => {
+          if (lab.activeHero) {
+            lab.activeHero.manaPotions = 3;
+            lab.activeHero.manaPotionCooldown = 0;
+            lab.damageTextPool.spawn('+3 POTIONS REFILLED', lab.activeHero.position, '#38bdf8', true);
+          }
+        });
+      }
+
+      const btnDbgSpawnDummies = document.getElementById('btn-dbg-spawn-dummies');
+      if (btnDbgSpawnDummies) {
+        btnDbgSpawnDummies.addEventListener('click', () => {
+          lab.addBatchCombatants({ typeKey: 'dummy', count: 3, team: 'enemy', pattern: 'line' });
+          lab.damageTextPool.spawn('SPAWNED 3 DUMMY TARGETS', lab.activeHero.position, '#facc15', true);
+        });
+      }
+
+      document.querySelectorAll('.btn-dbg-cast').forEach(b => {
+        b.addEventListener('click', () => {
+          const spellId = b.getAttribute('data-spell');
+          if (lab.activeHero && !lab.activeHero.isDead) {
+            lab.activeHero.castSpell(spellId, lab.groundAimPoint);
+          }
+        });
+      });
+
+      // Controls guide toggle
+      const guideLabel = document.getElementById('toggle-guide-label');
+      const controlsGuide = document.getElementById('controls-guide');
+      guideLabel.addEventListener('click', () => {
+        const hidden = controlsGuide.style.display === 'none';
+        controlsGuide.style.display = hidden ? 'block' : 'none';
+        guideLabel.textContent = hidden ? 'Controls Reference ▼' : 'Controls Reference ▶';
+      });
+    </script>
+  </body>
+</html>

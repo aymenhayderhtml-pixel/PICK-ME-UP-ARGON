@@ -1,4 +1,6 @@
 import { getSkill } from '../data/skills.js';
+import { getAllowedWeaponTypes as resolveAllowedWeaponTypes, getHeroLoadout } from './loadout.js';
+import { emitEquipmentChanged } from './equipmentEvents.js';
 
 export const MAX_INVENTORY_CAPACITY = 40;
 
@@ -23,9 +25,9 @@ export function canHeroEquipItem(hero, item) {
   // 2. Offhand items (e.g. Shields)
   if (item.slot === 'offhand') {
     if (item.weaponType === 'shield') {
-      const wType = (hero.equipment?.weapon?.weaponType || hero.weapon || '').toLowerCase();
+      const loadout = getHeroLoadout(hero);
       // Two-handed weapons prevent shields
-      if (wType.includes('greatsword') || wType.includes('bow') || wType.includes('staff')) {
+      if (loadout.weaponType === 'greatsword' || loadout.weaponType === 'bow' || loadout.weaponType === 'staff') {
         return { canEquip: false, reason: 'Cannot equip shield with two-handed weapon' };
       }
       return { canEquip: true };
@@ -50,36 +52,12 @@ export function canHeroEquipItem(hero, item) {
   return { canEquip: false, reason: 'Incompatible slot' };
 }
 
+/**
+ * The weapon types a hero may equip. Delegates to the loadout source of truth
+ * so the class always wins over a hardcoded per-hero default.
+ */
 export function getAllowedWeaponTypes(hero) {
-  if (!hero) return ['sword', 'mace'];
-  const heroId = hero.id || '';
-  const heroClass = (hero.class || '').toLowerCase();
-  const heroWeapon = (hero.weapon || '').toLowerCase();
-
-  if (heroId === 'hero_han') return ['sword', 'mace'];
-  if (heroId === 'hero_jenna') return ['bow', 'dagger'];
-  if (heroId === 'hero_aaron') return ['spear'];
-  if (heroId === 'hero_velkist') return ['greatsword', 'sword'];
-  if (heroId === 'hero_eolka') return ['staff'];
-  if (heroId === 'hero_sirris') return ['sword', 'shield', 'mace'];
-  if (heroId === 'hero_catio') return ['hammer', 'mace', 'sword', 'dagger'];
-
-  // By class matching
-  if (heroClass.includes('vanguard') || heroClass.includes('tank')) return ['sword', 'spear', 'mace'];
-  if (heroClass.includes('scout') || heroClass.includes('ranger') || heroClass.includes('archer')) return ['bow', 'dagger'];
-  if (heroClass.includes('berserk')) return ['greatsword', 'sword', 'mace'];
-  if (heroClass.includes('mage') || heroClass.includes('wizard')) return ['staff'];
-  if (heroClass.includes('healer') || heroClass.includes('cleric')) return ['staff', 'mace'];
-  if (heroClass.includes('artisan')) return ['hammer', 'mace', 'sword', 'dagger'];
-
-  // Fallback to hero.weapon string
-  if (heroWeapon.includes('spear')) return ['spear'];
-  if (heroWeapon.includes('bow')) return ['bow', 'dagger'];
-  if (heroWeapon.includes('dagger')) return ['dagger', 'bow'];
-  if (heroWeapon.includes('greatsword')) return ['greatsword'];
-  if (heroWeapon.includes('staff') || heroWeapon.includes('wand')) return ['staff'];
-  if (heroWeapon.includes('mace') || heroWeapon.includes('hammer')) return ['mace', 'hammer'];
-  return ['sword', 'mace'];
+  return resolveAllowedWeaponTypes(hero);
 }
 
 const GRADE_ORDER = { 'S+': 700, S: 600, A: 500, B: 400, C: 300, D: 200, E: 100 };
@@ -201,6 +179,7 @@ export function equipItem(hero, item, inventory) {
   }
 
   hero.equipment[slot] = item;
+  emitEquipmentChanged(hero, slot);
   return { success: true, oldItem, equipped: item };
 }
 
@@ -217,6 +196,7 @@ export function unequipItem(hero, slot, inventory) {
 
   hero.equipment[slot] = null;
   inventory.push(item);
+  emitEquipmentChanged(hero, slot);
   return { success: true, item };
 }
 

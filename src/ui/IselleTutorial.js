@@ -31,6 +31,10 @@ export class IselleTutorial {
         text: `MASTER ${masterName}, command Han and your squad to conquer all 100 floors.`,
       },
       {
+        topic: 'COMBAT CONTROLS',
+        text: `In the Tower: RIGHT CLICK: ATTACK (3-hit combo) and LEFT CLICK (HOLD): BLOCK with your shield. F for shield bash, Q to roll.`,
+      },
+      {
         topic: 'SYNTHESIS',
         text: `MASTER ${masterName}, absorb weaker heroes to empower your finest champions.`,
       },

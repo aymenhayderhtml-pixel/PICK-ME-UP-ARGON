@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gameState } from '../core/GameState.js';
 
 function testSegmentColliders(x0, z0, dirX, dirZ, maxDist2D, colliders) {
   let closestDist = maxDist2D;
@@ -82,24 +83,38 @@ export class ThirdPersonCamera {
     this.target = target;
     this.yaw = 0;
     this.pitch = 0.3;
-    this.distance = 6;
+    this.distance = 6.0;
     this.sensitivity = 0.002;
     this.colliders = [];
     this.raycaster = new THREE.Raycaster();
     this.currentDistance = this.distance;
     this.groundClearance = 1.2;
 
+    // Follow smoothing state
+    this.currentLookAt = new THREE.Vector3();
+    this.lookAheadOffset = new THREE.Vector3();
+    this.isInitialized = false;
+
+    // Auto-turn state
+    this.arrowKeyCooldown = 0;
+    this.isColliding = false;
+
+    // Aim Mode state
+    this.isAiming = false;
+    this.currentRightOffset = 0.0;
+    this.currentUpOffset = 0.0;
+
     // Camera shake state
     this.shakeStrength = 0;
     this.shakeDuration = 0;
 
-    // Mouse wheel zooms between 4 and 10 units
+    // Mouse wheel zoom
     if (typeof window !== 'undefined') {
       window.addEventListener(
         'wheel',
         (e) => {
           const zoomDelta = Math.sign(e.deltaY) * 0.7;
-          this.distance = Math.max(4.0, Math.min(10.0, this.distance + zoomDelta));
+          this.distance = Math.max(3.5, Math.min(10.0, this.distance + zoomDelta));
         },
         { passive: true }
       );
@@ -117,49 +132,221 @@ export class ThirdPersonCamera {
     this.shakeDuration = Math.max(this.shakeDuration, duration);
   }
 
-  handleMouse(mouseDelta) {
-    // Moving the mouse must NOT rotate the camera.
+  handleMouse(dx, dy) {
+    let mx = 0, my = 0;
+    if (typeof dx === 'object' && dx !== null) {
+      mx = dx.x || 0;
+      my = dx.y || 0;
+    } else {
+      mx = dx || 0;
+      my = dy || 0;
+    }
+    const sens = this.sensitivity || 0.0025;
+    this.yaw -= mx * sens;
+    this.pitch = Math.max(-0.65, Math.min(0.65, this.pitch + my * sens));
+  }
+
+  setAimMode(isAiming) {
+    this.isAiming = Boolean(isAiming);
+  }
+
+  getAimDirection(originWorldPos) {
+    const targetPoint = new THREE.Vector3();
+    this.camera.getWorldDirection(targetPoint);
+    targetPoint.multiplyScalar(40.0).add(this.camera.position);
+
+    const aimDir = new THREE.Vector3().subVectors(targetPoint, originWorldPos).normalize();
+    return aimDir;
   }
 
   getYaw() {
     return this.yaw;
   }
 
+  getFollowTimeConstant() {
+    const speed = gameState?.settings?.camera?.followSpeed || 'tight';
+    if (speed === 'normal') return 0.12;
+    if (speed === 'loose') return 0.25;
+    return 0.06; // 'tight' default
+  }
+
+  getBaseDistance() {
+    const distPreset = gameState?.settings?.camera?.distance || 'normal';
+    if (distPreset === 'near') return 4.5;
+    if (distPreset === 'far') return 8.5;
+    return 6.0; // 'normal' default
+  }
+
+  isCommandWheelOpen() {
+    if (typeof document === 'undefined') return false;
+    const wheel = document.getElementById('pm-command-wheel') || document.getElementById('command-wheel');
+    return Boolean(wheel && wheel.style.display !== 'none' && wheel.style.opacity !== '0');
+  }
+
   update(delta, input = null) {
+    if (delta <= 0) delta = 0.016;
+
+    // Sync camera preset distance if not manually wheel-zoomed
+    const basePreset = this.getBaseDistance();
+    if (this._lastPreset !== basePreset) {
+      this._lastPreset = basePreset;
+      this.distance = basePreset;
+    }
+
     // Arrow keys control camera yaw & pitch
+    let arrowUsed = false;
     if (input && typeof input.isDown === 'function') {
       if (input.isDown('ArrowLeft')) {
         this.yaw += 1.8 * delta;
+        arrowUsed = true;
       }
       if (input.isDown('ArrowRight')) {
         this.yaw -= 1.8 * delta;
+        arrowUsed = true;
       }
       if (input.isDown('ArrowUp')) {
         this.pitch = Math.min(1.0, this.pitch + 1.8 * delta);
+        arrowUsed = true;
       }
       if (input.isDown('ArrowDown')) {
         this.pitch = Math.max(-0.3, this.pitch - 1.8 * delta);
+        arrowUsed = true;
+      }
+    }
+
+    if (arrowUsed) {
+      this.arrowKeyCooldown = 1.5;
+    } else if (this.arrowKeyCooldown > 0) {
+      this.arrowKeyCooldown = Math.max(0, this.arrowKeyCooldown - delta);
+    }
+
+    // Mouse Look (Aiming or Mouse Drag or Pointer Lock)
+    if (input && typeof input.consumeMouseDelta === 'function') {
+      const mDelta = input.consumeMouseDelta();
+      if (mDelta && (mDelta.x !== 0 || mDelta.y !== 0)) {
+        const isDragging = (typeof input.isMouseButtonDown === 'function' && (input.isMouseButtonDown(0) || input.isMouseButtonDown(1) || input.isMouseButtonDown(2)));
+        const isPointerLocked = typeof document !== 'undefined' && Boolean(document.pointerLockElement);
+        if (this.isAiming || isDragging || isPointerLocked) {
+          this.handleMouse(mDelta.x, mDelta.y);
+          this.arrowKeyCooldown = 1.0;
+        }
       }
     }
 
     if (!this.target) return;
 
+    // Target position
     const targetPos = this.target.position;
-    const lookAtPos = new THREE.Vector3(
-      targetPos.x,
+    const charFacing = this.target.rotation ? this.target.rotation.y : 0;
+
+    // Auto-turn logic (disabled while aiming)
+    const autoTurnSetting = gameState?.settings?.camera?.autoTurn ?? true;
+    const isWheelOpen = this.isCommandWheelOpen();
+
+    if (!this.isAiming && autoTurnSetting && !isWheelOpen && !this.isColliding && this.arrowKeyCooldown <= 0 && input && typeof input.isDown === 'function') {
+      const hasForward = input.isDown('KeyW');
+      const hasBackward = input.isDown('KeyS');
+      const hasLeft = input.isDown('KeyA');
+      const hasRight = input.isDown('KeyD');
+
+      if (hasForward || hasBackward) {
+        // Behind the character is charFacing - Math.PI
+        let behindAngle = charFacing - Math.PI;
+        let angleDiff = behindAngle - this.yaw;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+
+        const thresholdRad = 15 * (Math.PI / 180); // 15 degrees
+        if (Math.abs(angleDiff) > thresholdRad) {
+          const normAngle = Math.min(1.0, Math.abs(angleDiff) / (Math.PI * 0.75));
+          const eased = Math.sin(normAngle * Math.PI * 0.5);
+          const turnRate = 2.2 * Math.max(0.2, eased);
+          const step = Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), turnRate * delta);
+          this.yaw += step;
+        }
+      } else if (hasLeft || hasRight) {
+        // Pure strafe turns camera at slower rate (0.8 rad/s)
+        const strafeRate = 0.8 * delta;
+        if (hasLeft) {
+          this.yaw += strafeRate;
+        } else if (hasRight) {
+          this.yaw -= strafeRate;
+        }
+      }
+    }
+
+    // Keep yaw normalized in [-PI, PI]
+    while (this.yaw < -Math.PI) this.yaw += Math.PI * 2;
+    while (this.yaw > Math.PI) this.yaw -= Math.PI * 2;
+
+    // Look-ahead: shift target 0.6m in movement direction while running
+    const isRunning = input ? (input.isDown('ShiftLeft') || input.isDown('ShiftRight')) : false;
+    const isMoving = input ? (input.isDown('KeyW') || input.isDown('KeyS') || input.isDown('KeyA') || input.isDown('KeyD')) : false;
+    const desiredLookAhead = new THREE.Vector3();
+    if (!this.isAiming && isRunning && isMoving) {
+      const fwdX = Math.sin(charFacing);
+      const fwdZ = Math.cos(charFacing);
+      desiredLookAhead.set(fwdX * 0.6, 0, fwdZ * 0.6);
+    }
+    this.lookAheadOffset.lerp(desiredLookAhead, Math.min(1.0, 8.0 * delta));
+
+    // Desired lookAt position
+    const desiredLookAt = new THREE.Vector3(
+      targetPos.x + this.lookAheadOffset.x,
       targetPos.y + 1.5,
-      targetPos.z
+      targetPos.z + this.lookAheadOffset.z
     );
 
-    const horizontalDistance = this.distance * Math.cos(this.pitch);
-    const offsetX = Math.sin(this.yaw) * horizontalDistance;
-    const offsetY = Math.sin(this.pitch) * this.distance;
-    const offsetZ = Math.cos(this.yaw) * horizontalDistance;
+    if (!this.isInitialized) {
+      this.currentLookAt.copy(desiredLookAt);
+      this.isInitialized = true;
+    } else {
+      // (a) Critically damped spring / exponential smoothing
+      // Horizontal time constant (tight 0.06s, normal 0.12s, loose 0.25s)
+      const tauH = this.isAiming ? 0.04 : this.getFollowTimeConstant();
+      const alphaH = 1.0 - Math.exp(-delta / Math.max(0.01, tauH));
+      // Vertical time constant (0.18s) so stairs do not jerk the view
+      const alphaV = 1.0 - Math.exp(-delta / (this.isAiming ? 0.06 : 0.18));
+
+      this.currentLookAt.x += (desiredLookAt.x - this.currentLookAt.x) * alphaH;
+      this.currentLookAt.z += (desiredLookAt.z - this.currentLookAt.z) * alphaH;
+      this.currentLookAt.y += (desiredLookAt.y - this.currentLookAt.y) * alphaV;
+
+      // Horizontal lag clamp: must never lag behind sprinting character by > 1.2 units
+      const lagX = desiredLookAt.x - this.currentLookAt.x;
+      const lagZ = desiredLookAt.z - this.currentLookAt.z;
+      const lagDist = Math.hypot(lagX, lagZ);
+      if (lagDist > 1.2) {
+        this.currentLookAt.x = desiredLookAt.x - (lagX / lagDist) * 1.2;
+        this.currentLookAt.z = desiredLookAt.z - (lagZ / lagDist) * 1.2;
+      }
+    }
+
+    // Aim Mode shoulder offset & distance smoothing
+    let targetDistance = this.distance;
+    if (this.isAiming) {
+      targetDistance = 2.4;
+      this.currentRightOffset = THREE.MathUtils.lerp(this.currentRightOffset, 0.55, Math.min(1.0, 10.0 * delta));
+      this.currentUpOffset = THREE.MathUtils.lerp(this.currentUpOffset, 0.35, Math.min(1.0, 10.0 * delta));
+    } else {
+      this.currentRightOffset = THREE.MathUtils.lerp(this.currentRightOffset, 0.0, Math.min(1.0, 8.0 * delta));
+      this.currentUpOffset = THREE.MathUtils.lerp(this.currentUpOffset, 0.0, Math.min(1.0, 8.0 * delta));
+    }
+
+    const lookAtPos = this.currentLookAt.clone();
+    lookAtPos.x += Math.cos(this.yaw) * (this.currentRightOffset * 0.5);
+    lookAtPos.z -= Math.sin(this.yaw) * (this.currentRightOffset * 0.5);
+    lookAtPos.y += this.currentUpOffset * 0.5;
+
+    const effDist = this.isAiming ? targetDistance : this.distance;
+    const horizontalDistance = effDist * Math.cos(this.pitch);
+    const offsetX = Math.sin(this.yaw) * horizontalDistance + Math.cos(this.yaw) * this.currentRightOffset;
+    const offsetY = Math.sin(this.pitch) * effDist + this.currentUpOffset;
+    const offsetZ = Math.cos(this.yaw) * horizontalDistance - Math.sin(this.yaw) * this.currentRightOffset;
 
     const fullCamOffset = new THREE.Vector3(offsetX, offsetY, offsetZ);
-    let targetDistance = this.distance;
 
-    // Camera collision: analytical 2D segment test against collider circles/boxes, or mesh raycasting fallback
+    // Camera collision detection
     if (this.colliders && this.colliders.length > 0) {
       if (this.colliders[0] && (this.colliders[0].type === 'circle' || this.colliders[0].type === 'box')) {
         const cosPitch = Math.max(0.1, Math.cos(this.pitch));
@@ -182,7 +369,9 @@ export class ThirdPersonCamera {
       }
     }
 
-    // Smooth distance adjustment with lerp 12 * delta
+    this.isColliding = targetDistance < this.distance - 0.25;
+
+    // Smooth distance adjustment
     this.currentDistance = THREE.MathUtils.lerp(
       this.currentDistance ?? this.distance,
       targetDistance,
@@ -200,10 +389,10 @@ export class ThirdPersonCamera {
       lookAtPos.z + actualOffsetZ
     );
 
-    const lerpFactor = Math.min(1, 10 * delta);
+    const lerpFactor = Math.min(1, 14 * delta);
     this.camera.position.lerp(desiredPosition, lerpFactor);
 
-    // Camera avoids the ground
+    // Camera avoids ground
     if (typeof this.getGroundY === 'function') {
       const groundY = this.getGroundY(this.camera.position.x, this.camera.position.z);
       const clearance = this.groundClearance ?? 1.2;
@@ -212,7 +401,7 @@ export class ThirdPersonCamera {
       }
     }
 
-    // Apply camera shake if active
+    // Camera shake
     if (this.shakeDuration > 0) {
       this.shakeDuration -= delta;
       const shakeX = (Math.random() - 0.5) * 2 * this.shakeStrength;

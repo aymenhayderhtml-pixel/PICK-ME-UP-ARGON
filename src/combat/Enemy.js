@@ -170,6 +170,67 @@ export class Enemy {
     }
 
     this.mesh.position.set(x, 0, z);
+
+    this.capsuleRadius = this.stats.size ? (0.35 * this.stats.size) : 0.35;
+    this.capsuleHeight = this.stats.size ? (1.55 * this.stats.size) : 1.55;
+    this.team = 'enemy';
+    this.id = `enemy_${Math.random().toString(36).substring(2, 9)}`;
+    this.statusEffects = new Map([
+      ['burn', { active: false, duration: 0, tickInterval: 0.5, tickTimer: 0, potency: 6, tickDamage: 3 }],
+    ]);
+  }
+
+  get position() {
+    return this.mesh ? this.mesh.position : (this._pos || (this._pos = new THREE.Vector3()));
+  }
+
+  get isDead() {
+    return this.dead || this.isDying || this.hp <= 0;
+  }
+
+  applyStatusEffect(type, conf = {}) {
+    let eff = this.statusEffects.get(type);
+    if (!eff) {
+      eff = { active: false, duration: 0, tickInterval: 0.5, tickTimer: 0, tickDamage: 3, potency: 1.0 };
+      this.statusEffects.set(type, eff);
+    }
+    eff.active = true;
+    eff.duration = typeof conf === 'number' ? conf : (conf.duration ?? 3.0);
+    if (typeof conf === 'object') {
+      if (conf.potency !== undefined) eff.potency = conf.potency;
+      if (conf.tickDamage !== undefined) eff.tickDamage = conf.tickDamage;
+      if (conf.tickInterval !== undefined) eff.tickInterval = conf.tickInterval;
+    }
+    eff.tickTimer = 0;
+    if (this.rig && this.rig.setTint && type === 'burn') {
+      this.rig.setTint(0xff6600, 0.7);
+    }
+  }
+
+  receiveAttack(hitPayload) {
+    if (this.dead || this.isDying) return null;
+    const dmg = hitPayload?.damage ?? hitPayload?.rawDamage ?? 0;
+    this.takeDamage(dmg, hitPayload?.isFinisher);
+
+    if (hitPayload?.statusEffect) {
+      this.applyStatusEffect(hitPayload.statusEffect.type, hitPayload.statusEffect);
+    }
+
+    if (hitPayload?.knockbackSpeed && !this.isBoss) {
+      const fromPos = hitPayload.attackerPosition || (hitPayload.attacker ? hitPayload.attacker.position : null);
+      let kx = 0;
+      let kz = 1;
+      if (fromPos) {
+        kx = this.position.x - fromPos.x;
+        kz = this.position.z - fromPos.z;
+        const len = Math.hypot(kx, kz) || 1;
+        kx /= len;
+        kz /= len;
+      }
+      this.applyKnockback(kx, kz, hitPayload.knockbackSpeed);
+    }
+
+    return { damage: dmg, killed: this.dead };
   }
 
   buildModel() {
@@ -424,6 +485,30 @@ export class Enemy {
       }
     }
 
+    // Status effects (burn DoT)
+    const burn = this.statusEffects?.get('burn');
+    if (burn && burn.active && !this.dead) {
+      burn.duration -= delta;
+      burn.tickTimer += delta;
+      if (burn.tickTimer >= (burn.tickInterval || 0.5)) {
+        burn.tickTimer = 0;
+        const bDmg = burn.tickDamage || 3;
+        this.hp -= bDmg;
+        this.flashTimer = 0.1;
+        if (this.rig) this.rig.setTint(0xff6600, 0.8);
+        const onDmg = context?.onDamageNumber || this.onDamageNumber;
+        if (onDmg) onDmg(bDmg, this.position, 'burn');
+        if (this.hp <= 0) {
+          this.hp = 0;
+          this.die();
+        }
+      }
+      if (burn.duration <= 0) {
+        burn.active = false;
+        if (this.rig) this.rig.setTint(null, 0);
+      }
+    }
+
     // Corpse decay & removal after 6 seconds
     if (this.dead) {
       this.deathElapsed = (this.deathElapsed || 0) + delta;
@@ -536,7 +621,7 @@ export class Enemy {
     const distToPlayer = Math.hypot(pPos.x - this.mesh.position.x, pPos.z - this.mesh.position.z);
 
     // Stealth talent reduction on aggro range: 4% per stealth level
-    const stealthReduction = 1 - (context.stealthLevel || 0) * 0.04;
+    const stealthReduction = 1 - (context?.stealthLevel || 0) * 0.04;
     const effectiveDetectionRange = this.detectionRange * stealthReduction;
 
     if (this.typeKey === 'PRAIRIE_WOLF') {

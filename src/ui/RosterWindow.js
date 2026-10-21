@@ -5,6 +5,11 @@ import { showSystemMessage } from './Hud.js';
 import { pickLine } from '../data/iselle.js';
 import { EquipmentWindow } from './EquipmentWindow.js';
 import { getDisplayStats, formatStatDisplay, getHeroThreeGroups, getGrowthRate } from '../core/Stats.js';
+import {
+  createEmotionBarsSection,
+  createSkillsAndCombiningSection,
+  createActivityHistorySection,
+} from './RosterEmotionPanel.js';
 import { autoEquipHero } from '../core/Inventory.js';
 
 function getMotivationTagHtml(motivation) {
@@ -19,11 +24,12 @@ function getMotivationTagHtml(motivation) {
 }
 
 export class RosterWindow extends SystemWindow {
-  constructor(onOpenSynthesis, onNewGameReset, onAwakenCallback = null) {
+  constructor(onOpenSynthesis, onNewGameReset, onAwakenCallback = null, onShowReport = null) {
     super('HERO ROSTER & STATUS');
     this.onOpenSynthesis = onOpenSynthesis;
     this.onNewGameReset = onNewGameReset;
     this.onAwakenCallback = onAwakenCallback;
+    this.onShowReport = onShowReport;
 
     this.container.style.width = '880px';
     this.container.style.maxWidth = '95vw';
@@ -93,6 +99,22 @@ export class RosterWindow extends SystemWindow {
     this.tabsContainer.appendChild(this.activeTabBtn);
     this.tabsContainer.appendChild(this.equipmentTabBtn);
     this.tabsContainer.appendChild(this.fallenTabBtn);
+
+    // Iselle's Report: the latest login report, viewable at any time.
+    this.reportBtn = document.createElement('button');
+    this.reportBtn.textContent = "ISELLE'S REPORT";
+    this.reportBtn.className = 'mm-btn mm-btn-gold';
+    this.reportBtn.style.padding = '6px 12px';
+    this.reportBtn.style.fontFamily = 'monospace, sans-serif';
+    this.reportBtn.style.fontSize = '12px';
+    this.reportBtn.style.fontWeight = 'bold';
+    this.reportBtn.style.cursor = 'pointer';
+    this.reportBtn.style.borderRadius = '4px';
+    this.reportBtn.style.marginLeft = 'auto';
+    this.reportBtn.addEventListener('click', () => {
+      if (this.onShowReport) this.onShowReport();
+    });
+    this.topBar.appendChild(this.reportBtn);
 
     // 2. Main Content Split View
     this.mainSplit = document.createElement('div');
@@ -405,6 +427,24 @@ export class RosterWindow extends SystemWindow {
     });
     sortBar.appendChild(autoEquipActiveBtn);
 
+    // Set the selected hero as the one the player controls in the world.
+    const leaderBtn = document.createElement('button');
+    const isLeader = gameState.controlledHeroId === this.selectedHeroId;
+    leaderBtn.textContent = isLeader ? '✓ LEADER' : 'SET AS LEADER';
+    leaderBtn.className = isLeader ? 'mm-btn mm-btn-gold' : 'mm-btn';
+    leaderBtn.style.padding = '3px 8px';
+    leaderBtn.style.fontSize = '11px';
+    leaderBtn.style.fontWeight = 'bold';
+    leaderBtn.title = 'Control this hero in the dungeon: model, weapon, controls and HUD follow them';
+    leaderBtn.addEventListener('click', () => {
+      const curHero = gameState.heroes.find((h) => h.id === this.selectedHeroId) || gameState.heroes[0];
+      if (curHero && gameState.setControlledHero(curHero.id)) {
+        this.render();
+        showSystemMessage(`[${curHero.name} is now the hero you control.]`);
+      }
+    });
+    sortBar.appendChild(leaderBtn);
+
     leftPanel.appendChild(sortBar);
 
     // Sorted Hero List
@@ -471,12 +511,15 @@ export class RosterWindow extends SystemWindow {
       const panicTag = isPanicProne
         ? '<span style="color:var(--danger); font-weight:bold; margin-left:4px; font-size:10px; border:1px solid var(--danger); padding:0 3px; border-radius:2px;" title="Low Composure: prone to battle panic">[PANIC-PRONE]</span>'
         : '';
+      const leaderTag = h.isSquadLeader
+        ? '<span style="color:#ffd36b; font-weight:bold; margin-left:4px; font-size:10px; border:1px solid #ffd36b; padding:0 3px; border-radius:2px;" title="Squad Leader">[LEADER]</span>'
+        : '';
       const nameRow = document.createElement('div');
       nameRow.style.display = 'flex';
       nameRow.style.justifyContent = 'space-between';
       nameRow.style.alignItems = 'center';
       nameRow.innerHTML = `
-        <span style="${nameStyle}">${h.name}${coopHtml}${panicTag}</span>
+        <span style="${nameStyle}">${h.name}${coopHtml}${panicTag}${leaderTag}</span>
         ${starsHtml}
       `;
       item.appendChild(nameRow);
@@ -837,6 +880,11 @@ export class RosterWindow extends SystemWindow {
         skillsContainer.appendChild(skRow);
       });
       rightPanel.appendChild(skillsContainer);
+
+      // --- Emotion, training and activity panels (Phase 6) -----------------
+      rightPanel.appendChild(createEmotionBarsSection(selHero));
+      rightPanel.appendChild(createSkillsAndCombiningSection(selHero));
+      rightPanel.appendChild(createActivityHistorySection(selHero));
 
       // Top 3 Bonds List
       const bondsWrap = document.createElement('div');

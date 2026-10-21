@@ -150,6 +150,7 @@
     <div id="stats-overlay">
       <div id="stats-fps">FPS: -- | Calls: -- | Triangles: --</div>
       <div id="stats-info" style="margin-top: 5px; color: #facc15; font-weight: bold; font-size: 13px;">Item: sword [E] | Mode: Single</div>
+      <div id="stats-grip-debug" style="display:none; margin-top: 5px; color: #4ade80; font-weight: bold; font-size: 12px;">Palm-to-Grip Dist: 0.0000m (PASS &lt; 0.02)</div>
     </div>
 
     <div id="ui-panel">
@@ -196,14 +197,34 @@
         <div class="section-title">Hero Poses</div>
         <div class="btn-grid" id="pose-buttons">
           <button class="active" data-pose="idle">idle</button>
+          <button data-pose="walk">walk</button>
+          <button data-pose="run">run</button>
+          <button data-pose="block">block</button>
           <button data-pose="attack1">attack1</button>
           <button data-pose="attack2">attack2</button>
           <button data-pose="attack3">attack3</button>
-          <button data-pose="block">block</button>
+          <button data-pose="comboLoop" style="color: #38bdf8; font-weight: bold;">comboLoop</button>
+          <button data-pose="trainWeapon" style="color: #facc15; font-weight: bold;">trainAuto</button>
           <button data-pose="trainSword">trainSword</button>
+          <button data-pose="trainGreatsword">trainGreat</button>
           <button data-pose="trainSpear">trainSpear</button>
+          <button data-pose="trainDagger">trainDagger</button>
           <button data-pose="trainBow">trainBow</button>
+          <button data-pose="trainStaff">trainStaff</button>
+          <button data-pose="staffIdle" style="color: #fb923c; font-weight: bold;">staffIdle</button>
+          <button data-pose="staffWalk" style="color: #fb923c;">staffWalk</button>
+          <button data-pose="staffRun" style="color: #fb923c;">staffRun</button>
+          <button data-pose="staffCast" style="color: #f87171; font-weight: bold;">staffCast</button>
+          <button data-pose="staffUltimate" style="color: #facc15; font-weight: bold;">staffUlt</button>
+          <button data-pose="trainMace">trainMace</button>
+          <button data-pose="trainClub">trainClub</button>
+          <button data-pose="trainPickaxe">trainPick</button>
           <button data-pose="mine">mine</button>
+        </div>
+        <div style="display: flex; gap: 4px; margin-top: 4px;">
+          <button id="btn-cam-front" style="flex: 1; background: #1e3a5f;">Cam: Front</button>
+          <button id="btn-cam-side" style="flex: 1; background: #1e3a5f;">Cam: Side</button>
+          <button id="btn-cam-back" style="flex: 1; background: #1e3a5f;">Cam: Back</button>
         </div>
         <button id="btn-hero-replay" style="margin-top: 4px; background: #0369a1; font-weight: bold;">↺ Replay Pose</button>
       </div>
@@ -241,9 +262,29 @@
           <button id="btn-anchors" style="flex: 1;">Show Anchors: OFF</button>
         </div>
         <div style="display: flex; gap: 6px;">
+          <button id="btn-grip-debug" style="flex: 1; background: #064e3b; color: #a7f3d0; border-color: #059669;">Grip Debug: OFF</button>
           <button id="btn-turntable" class="active" style="flex: 1;">Turntable: ON</button>
-          <button id="btn-screenshot" style="flex: 1; background: #166534;">📷 Screenshot</button>
         </div>
+        <div style="display: flex; gap: 6px;">
+          <button id="btn-screenshot" style="width: 100%; background: #166534;">📷 Screenshot</button>
+        </div>
+      </div>
+
+      <!-- Archery Engine Debug Panel -->
+      <div class="panel-section" id="archery-panel">
+        <div class="section-title">Archery Engine Debug</div>
+        <div class="btn-grid" style="grid-template-columns: repeat(3, 1fr);">
+          <button data-pose="aimReady">Aim Ready</button>
+          <button data-pose="reach">Reach</button>
+          <button data-pose="nock">Nock</button>
+          <button data-pose="raise">Raise</button>
+          <button data-pose="fullDraw">Full Draw</button>
+          <button data-pose="release">Release</button>
+          <button data-pose="vibrate">Vibrate</button>
+          <button id="btn-slowmo">Slow-Mo: OFF</button>
+          <button id="btn-aim-cam">Aim Cam: OFF</button>
+        </div>
+        <button id="btn-fire-arrow" style="margin-top: 4px; background: #b91c1c; font-weight: bold; color: #fff;">🏹 Fire Test Arrow</button>
       </div>
     </div>
 

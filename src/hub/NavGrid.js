@@ -9,7 +9,7 @@ const GRID_SIZE = Math.round((GRID_MAX - GRID_MIN) / CELL_SIZE) + 1; // 105
 const ROAD_SEGMENTS = [
   { x1: 14, z1: -8, x2: 20, z2: 26, w: 5.5 },  // Town Square -> Landing Area
   { x1: 14, z1: -8, x2: 26, z2: 4, w: 5.0 },   // Town Square -> Summoning Room
-  { x1: 14, z1: -8, x2: 27, z2: -27, w: 5.5 }, // Town Square -> Space-Time Rift
+  { x1: 14, z1: -8, x2: 30.6, z2: -30.6, w: 5.5 }, // Town Square -> Space-Time Rift
   { x1: 14, z1: -8, x2: 0, z2: -32, w: 5.0 },  // Town Square -> Synthesis Chamber
   { x1: 14, z1: -8, x2: -6, z2: -20, w: 5.0 }, // Town Square -> Armory
   { x1: 14, z1: -8, x2: -26, z2: -4, w: 5.5 }, // Town Square -> Residences
@@ -91,8 +91,8 @@ export class NavGrid {
 
         // Outside or on inner face of wall
         if (distToSide >= wallInnerApothem) {
-          // Space-Time Rift corridor exemption at (27, -27)
-          const isRiftCorridor = Math.hypot(wx - 27, wz - (-27)) <= 3.2;
+          // Space-Time Rift corridor exemption at (31, -31)
+          const isRiftCorridor = Math.hypot(wx - 31, wz - (-31)) <= 3.5;
           if (!isRiftCorridor) {
             this.setBlocked(gx, gz, true);
             continue;
@@ -116,10 +116,6 @@ export class NavGrid {
     // Clear Summoning Room pedestal center and stair corridor descending SW to Landing Area (20, 26)
     this.clearCircle(30, 4, 4.0); // Inside room courtyard
     this.clearBox(18, 25, 10, 26); // Stairway down to Landing Area
-
-    // Space-Time Rift: (27, -27), width 6, depth 3
-    this.blockBox(23.5, 30.5, -30.0, -25.5);
-    this.clearBox(25.5, 28.5, -28.5, -25.0); // Archway corridor
 
     // Synthesis Chamber: center (0, -32), radius 8
     this.blockCircle(0, -32, 8.2);
@@ -151,6 +147,9 @@ export class NavGrid {
     // Clear training stands and practice area in front of dummies
     this.clearBox(-30.0, -17.0, 13.5, 17.2);
     this.clearBox(-30.0, -17.0, 19.2, 22.2);
+    // Clear the sparring ring: the empty eastern strip of the training yard
+    // (around -18.7, 23.3) so heroes can walk into the ring and spar.
+    this.clearBox(-21.0, -16.0, 21.0, 25.5);
 
     // Mess Hall row: (8, 38), 6 connected houses
     this.blockBox(-4.0, 20.0, 35.5, 41.0);
@@ -179,7 +178,7 @@ export class NavGrid {
         const distToSide = dist * Math.cos(normAngle);
 
         if (distToSide >= wallInnerApothem) {
-          const isRiftCorridor = Math.hypot(wx - 27, wz - (-27)) <= 3.5;
+          const isRiftCorridor = Math.hypot(wx - 31, wz - (-31)) <= 3.5;
           if (!isRiftCorridor) {
             this.setBlocked(gx, gz, true);
             continue;
@@ -594,8 +593,8 @@ export class NavGrid {
       case 'tower_gate':
         return [
           new THREE.Vector3(24, this.getGroundY(24, -24), -24),
-          new THREE.Vector3(26, this.getGroundY(26, -26), -26),
-          new THREE.Vector3(27, this.getGroundY(27, -27), -27),
+          new THREE.Vector3(28, this.getGroundY(28, -28), -28),
+          new THREE.Vector3(30.6, this.getGroundY(30.6, -30.6), -30.6),
         ];
       default:
         return [];

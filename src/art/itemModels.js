@@ -35,7 +35,7 @@ export function mapItemToModel(item) {
   // Determine category & slot
   const slot = item.slot || (item.weaponType === 'shield' ? 'offhand' : (item.armorType ? 'armor' : 'weapon'));
   const name = (item.name || item.templateId || item.id || '').toLowerCase();
-  const rawType = (item.weaponType || item.type || '').toLowerCase();
+  const rawType = (item.weaponType || item.type || item.kind || '').toLowerCase();
 
   // 1. Armor category
   if (slot === 'armor' || name.includes('armor') || item.defense && !item.damageMult && !item.blockMult) {
@@ -79,7 +79,7 @@ export function mapItemToModel(item) {
   }
 
   // 3. Weapon category
-  let kind = 'sword';
+  let kind = null;
   if (rawType === 'greatsword' || name.includes('greatsword')) {
     kind = 'greatsword';
   } else if (rawType === 'spear' || name.includes('spear')) {
@@ -88,18 +88,19 @@ export function mapItemToModel(item) {
     kind = 'dagger';
   } else if (rawType === 'bow' || name.includes('bow')) {
     kind = 'bow';
-  } else if (rawType === 'staff' || name.includes('staff')) {
+  } else if (rawType === 'staff' || rawType === 'wand' || rawType === 'scepter' || name.includes('staff') || name.includes('wand') || name.includes('scepter')) {
     kind = 'staff';
-  } else if (rawType === 'mace' || name.includes('mace') || name.includes('morning_star') || name.includes('morning star')) {
+  } else if (rawType === 'mace' || rawType === 'hammer' || name.includes('mace') || name.includes('morning_star') || name.includes('morning star') || name.includes('hammer')) {
     kind = 'mace';
   } else if (rawType === 'club' || name.includes('club')) {
     kind = 'club';
   } else if (rawType === 'pickaxe' || name.includes('pickaxe')) {
     kind = 'pickaxe';
-  } else {
-    // Default to sword
+  } else if (rawType === 'sword' || name.includes('sword')) {
     kind = 'sword';
   }
+  // Unknown weapon types resolve to no model at all (empty hands) instead of a
+  // hardcoded default sword.
 
   return {
     category: 'weapon',

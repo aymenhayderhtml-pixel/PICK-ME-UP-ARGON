@@ -1,0 +1,18 @@
+# Workflow taste
+- Works in explicit stages: asks for code research and a written spec first, and states "Do NOT implement anything yet" until the plan is approved. Confidence: 0.8
+- Delegates planning to an external AI planner that cannot see the repo: the agent authors one self-contained prompt embedding real code facts (file paths, function names + signatures, data structure fields/types, short code excerpts), then the planner's reply is pasted back for implementation. Confidence: 0.85
+- Requires the planner prompt to be split into explicitly ordered, labeled parts (role/rules, code facts, game context, design spec, required output) with per-part content rules. Confidence: 0.75
+- Requires research to report "NOT FOUND" for facts that do not exist instead of inventing them, and to quote real code rather than paraphrase. Confidence: 0.75
+- Prefers read-only research subagents for code exploration: quote real code with paths/line numbers, never modify files. Confidence: 0.55
+- Requires implementation plans to be phased, each phase small enough to finish and test alone, and each phase to specify files to create/edit, function names + signatures, data structures, config values, edge cases, and npm test scripts with expected results. Confidence: 0.8
+- Wants every tunable number (emotion ranges, thresholds, multipliers, caps) in a central config file, presented as tables, never hardcoded in logic. Confidence: 0.8
+- Requires a single shared code path for live gameplay and offline/catch-up simulation, with a seeded RNG so runs are deterministic and reproducible in tests. Confidence: 0.8
+- States design constraints as explicit formulas and thresholds up front (ratios, floors, caps) and expects them proven by a numeric test (e.g. simulate N days, report the numbers). Confidence: 0.7
+- Requires backward compatibility: new save fields need defaults plus a migration path for old saves, and existing systems (combat, weapon code) must not be broken. Confidence: 0.75
+- Enumerates out-of-scope features explicitly and expects them marked "future" and excluded from the plan instead of silently dropped. Confidence: 0.7
+- Expects a regression test to be added to the existing headless test script (e.g. `scripts/test_integration.mjs`) for each fixed live-game integration gap — exercising the real legacy entity mix and asserting the shared system's full API surface exists. Confidence: 0.6
+- Expects a crash report to state whether the bug came from the current work or from pre-existing/untracked work, and to name the file/line evidence used to decide. Confidence: 0.6
+- When a prompt is written to a file for copy-paste, expects the whole prompt wrapped in one fenced block (4-backtick outer fence when it contains nested code excerpts) so nested fences survive, and a fence-balance check run after writing. Confidence: 0.6
+- Hands the external planner's reply back as a file in the repo (e.g. `docs/ARGON.md`) and expects the agent to locate and read that file rather than receive the plan pasted into chat. Confidence: 0.55
+- Requires deterministic tests: any code path that rolls randomness must take an injected RNG or have `Math.random` pinned inside the test, so a suite never flakes between runs. Confidence: 0.55
+- Expects the whole test suite to be run repeatedly (e.g. 3 consecutive passes) before declaring the work done, to prove the results are stable and not flaky. Confidence: 0.5

@@ -4,6 +4,7 @@ import { createHeroModel } from './hero.js';
 import { createWeaponModel, createShieldModel } from './weapons.js';
 import { mapItemToModel } from './itemModels.js';
 import { SlashTrail } from '../fx/SlashTrail.js';
+import { getAttackSpec } from './weaponAnimations.js';
 
 let _hasReportedHeroOrigin = false;
 
@@ -17,6 +18,14 @@ export class HeroRig {
     // Attach reference to group so systems like CameraFade can access this rig
     this.group._heroRig = this;
     this.group.userData.heroRig = this;
+
+    this.weaponKind = null;
+    this.shieldKind = null;
+    this.hitStopTimer = 0;
+    if (this.model.userData) {
+      this.model.userData.equippedWeaponKind = this.weaponKind;
+      this.model.userData.equippedShieldKind = this.shieldKind;
+    }
 
     // Report and correct idle bounding box min y once
     if (!_hasReportedHeroOrigin && typeof this.model.getBounds === 'function') {
@@ -94,13 +103,27 @@ export class HeroRig {
     }
   }
 
+  triggerHitStop(duration = 0.05) {
+    this.hitStopTimer = Math.max(this.hitStopTimer, duration);
+  }
+
   /**
    * Updates animations, poses, weapon states, and slash trails.
    * @param {number} dt Delta time in seconds
    * @param {object} state { moving, speed, sprinting, action, actionTime, mood, camera, isCasting }
    */
   update(dt, state = {}) {
-    const delta = dt || 0;
+    let delta = dt || 0;
+    if (this.hitStopTimer > 0) {
+      this.hitStopTimer -= delta;
+      delta = 0;
+      if (this.model.parts && this.model.parts.root) {
+        this.model.parts.root.position.x = (Math.random() - 0.5) * 0.02;
+      }
+    } else if (this.model.parts && this.model.parts.root && this.model.parts.root.position.x !== 0) {
+      this.model.parts.root.position.x = 0;
+    }
+
     this.clock += delta;
     this._lastPassedState = state;
 
@@ -175,7 +198,16 @@ export class HeroRig {
       }
     }
 
-    this.model.setPose(pose, t, intensity);
+    this.model.setPose(pose, t, intensity, {
+      weaponKind: this.weaponKind,
+      shieldKind: this.shieldKind,
+      dt: delta,
+      moving: state.moving,
+      bowDraw: state.bowDraw,
+      arrowVisible: state.arrowVisible,
+      isTremor: state.isTremor,
+      ...(state.poseOptions || {})
+    });
     this.currentPose = pose;
 
     // 4. Blend transforms during crossfade using Euler rotations to avoid Quaternion desync
@@ -224,8 +256,11 @@ export class HeroRig {
     // 1. Manage Temporary Practice / Tool weapons (mine, trainSword, trainSpear, trainBow, trainDagger, trainMagic)
     this.updateTempWeapons(pose, t);
 
-    // 2. Drive Bow Draw
-    this.updateBowDraw(pose, t);
+    // 2. Drive Bow Draw & Shield Mutual Exclusion
+    this.updateBowDraw(pose, t, state);
+    if (this.shieldModel && this.weaponMapped?.kind === 'bow') {
+      this.shieldModel.group.visible = false;
+    }
 
     // 3. Drive Staff / Magic Empower
     this.updateMagicEmpower(pose, state);
@@ -273,11 +308,17 @@ export class HeroRig {
 
     // Training poses
     const trainMap = {
+      trainWeapon: { kind: this.weaponKind || 'sword', grade: 'E', socket: this.weaponKind === 'bow' ? 'handL' : 'handR' },
       trainSword: { kind: 'sword', grade: 'E', socket: 'handR' },
+      trainGreatsword: { kind: 'greatsword', grade: 'E', socket: 'handR' },
       trainSpear: { kind: 'spear', grade: 'E', socket: 'handR' },
       trainBow: { kind: 'bow', grade: 'E', socket: 'handL' },
       trainDagger: { kind: 'dagger', grade: 'E', socket: 'handR' },
-      trainMagic: { kind: 'staff', grade: 'E', socket: 'handR' }
+      trainStaff: { kind: 'staff', grade: 'E', socket: 'staffHand' },
+      trainMace: { kind: 'mace', grade: 'E', socket: 'handR' },
+      trainClub: { kind: 'club', grade: 'E', socket: 'handR' },
+      trainPickaxe: { kind: 'pickaxe', grade: 'E', socket: 'handR' },
+      trainMagic: { kind: 'staff', grade: 'E', socket: 'staffHand' }
     };
 
     if (trainMap[pose]) {
@@ -292,7 +333,9 @@ export class HeroRig {
 
           this.tempWeaponModel = createWeaponModel(needed.kind, { grade: needed.grade });
           this.tempWeaponType = pose;
-          const targetSocket = needed.socket === 'handL' ? this.model.sockets.handL : this.model.sockets.handR;
+          const targetSocket = needed.socket === 'staffHand'
+            ? (this.model.sockets.staffHand || this.model.sockets.handR)
+            : (needed.socket === 'handL' ? this.model.sockets.handL : this.model.sockets.handR);
           targetSocket.add(this.tempWeaponModel.group);
           this.tempWeaponModel.setOpacity(this.currentOpacity);
           if (this.currentTint) this.tempWeaponModel.setTint(this.currentTint, this.currentTintAmount);
@@ -321,50 +364,99 @@ export class HeroRig {
     }
   }
 
-  updateBowDraw(pose, t) {
+  updateBowDraw(pose, t, state = {}) {
     const isBowEquipped = this.weaponMapped && this.weaponMapped.kind === 'bow';
     const isBowTemp = this.tempWeaponType === 'trainBow';
     const bowModel = isBowTemp ? this.tempWeaponModel : (isBowEquipped ? this.weaponModel : null);
 
     if (!bowModel) return;
 
+    // Read bowState written by evaluateWeaponPose or state
+    const bState = this.model?.group?.userData?.bowState ||
+                   this.model?.parts?.root?.userData?.bowState ||
+                   this.model?.userData?.bowState ||
+                   state?.bowState;
+    if (bState) {
+      bowModel.setDraw(bState.drawAmount, bState.arrowVisible, bState.vibTime);
+      return;
+    }
+
+    if (state.bowDraw !== undefined) {
+      const isArrowVis = state.arrowVisible !== undefined ? Boolean(state.arrowVisible) : (state.bowDraw > 0.01);
+      const vib = state.vibTime !== undefined ? state.vibTime : -1;
+      bowModel.setDraw(state.bowDraw, isArrowVis, vib);
+      return;
+    }
+
     if (pose === 'trainBow') {
-      // 1.2s training loop: 0..0.4s draw, 0.4..0.45s release, 0.45..1.2s rest
-      const u = ((t % 1.2) + 1.2) % 1.2;
+      const u = ((t % 1.60) + 1.60) % 1.60;
       let draw = 0;
-      if (u < 0.40) {
-        draw = u / 0.40;
-      } else if (u < 0.45) {
-        draw = 1.0 - (u - 0.40) / 0.05;
+      let arrow = true;
+      let vib = -1;
+      if (u < 0.15) {
+        draw = 0;
+        arrow = false;
+      } else if (u < 0.35) {
+        draw = 0;
+        arrow = true;
+      } else if (u < 0.60) {
+        draw = ((u - 0.35) / 0.25) * 0.10;
+        arrow = true;
+      } else if (u < 1.05) {
+        draw = 0.10 + ((u - 0.60) / 0.45) * 0.90;
+        arrow = true;
+      } else if (u < 1.20) {
+        draw = 1.0;
+        arrow = true;
+      } else if (u < 1.45) {
+        draw = 0;
+        arrow = false;
+        vib = u - 1.20;
       } else {
         draw = 0;
+        arrow = false;
       }
-      bowModel.setDraw(draw);
+      bowModel.setDraw(draw, arrow, vib);
     } else if (pose === 'shoot') {
-      // One-shot shoot pose: 0..0.4s draw, release at 0.45s
       let draw = 0;
-      if (t < 0.40) {
-        draw = t / 0.40;
-      } else if (t < 0.45) {
-        draw = 1.0 - (t - 0.40) / 0.05;
+      let arrow = true;
+      let vib = -1;
+      if (t < 0.35) {
+        draw = t / 0.35;
+        arrow = true;
+      } else if (t < 0.40) {
+        draw = 1.0;
+        arrow = true;
+      } else if (t < 0.60) {
+        draw = 0;
+        arrow = false;
+        vib = t - 0.40;
       } else {
         draw = 0;
+        arrow = false;
       }
-      bowModel.setDraw(draw);
+      bowModel.setDraw(draw, arrow, vib);
     } else {
-      bowModel.setDraw(0);
+      bowModel.setDraw(0, false, -1);
     }
   }
 
-  updateMagicEmpower(pose, state) {
+  updateMagicEmpower(pose, state = {}) {
     const isStaffEquipped = this.weaponMapped && this.weaponMapped.kind === 'staff';
-    const isStaffTemp = this.tempWeaponType === 'trainMagic';
+    const isStaffTemp = this.tempWeaponType === 'trainMagic' || this.tempWeaponType === 'trainStaff';
     const staffModel = isStaffTemp ? this.tempWeaponModel : (isStaffEquipped ? this.weaponModel : null);
 
     if (!staffModel) return;
 
-    const isEmpowered = pose === 'trainMagic' || state.isCasting || this.castEmpowerTimer > 0;
+    const isEmpowered = pose === 'trainMagic' || pose === 'cast' || pose === 'ultimateChannel' || state.isCasting || this.castEmpowerTimer > 0;
     staffModel.setEmpowered(isEmpowered);
+
+    if (typeof staffModel.setOrbGlow === 'function') {
+      const spellColor = state.spellColor !== undefined ? state.spellColor : (state.activeSpell?.colorPrimary ?? 0xff5511);
+      const manaRatio = state.manaRatio !== undefined ? Math.max(0.15, Math.min(1.0, state.manaRatio)) : 1.0;
+      const intensity = (isEmpowered ? 1.6 : 0.8) * manaRatio;
+      staffModel.setOrbGlow(spellColor, intensity);
+    }
   }
 
   triggerSpellCast() {
@@ -386,17 +478,28 @@ export class HeroRig {
       else return;
     }
 
-    const isAttacking = pose === 'attack1' || pose === 'attack2' || pose === 'attack3';
+    const isAttacking = pose === 'attack1' || pose === 'attack2' || pose === 'attack3' || pose === 'comboLoop';
     let inActiveWindow = false;
 
-    if (pose === 'attack1' || pose === 'attack2') {
-      // 0.08 to 0.32 s
-      const modT = ((t % 0.5) + 0.5) % 0.5;
-      inActiveWindow = modT >= 0.08 && modT <= 0.32;
-    } else if (pose === 'attack3') {
-      // 0.10 to 0.40 s
-      const modT = ((t % 0.5) + 0.5) % 0.5;
-      inActiveWindow = modT >= 0.10 && modT <= 0.40;
+    if (pose === 'attack1' || pose === 'attack2' || pose === 'attack3') {
+      inActiveWindow = this.isInTrailWindow(pose, t);
+    } else if (pose === 'comboLoop') {
+      const a1 = getAttackSpec(this.weaponKind, 'attack1');
+      const a2 = getAttackSpec(this.weaponKind, 'attack2');
+      const a3 = getAttackSpec(this.weaponKind, 'attack3');
+      if (a1 && a2 && a3) {
+        const total = a1.duration + a2.duration + a3.duration + 0.35;
+        const modT = ((t % total) + total) % total;
+        if (modT < a1.duration) {
+          inActiveWindow = modT >= a1.trailWindow[0] && modT <= a1.trailWindow[1];
+        } else if (modT < a1.duration + a2.duration) {
+          const subT = modT - a1.duration;
+          inActiveWindow = subT >= a2.trailWindow[0] && subT <= a2.trailWindow[1];
+        } else if (modT < a1.duration + a2.duration + a3.duration) {
+          const subT = modT - a1.duration - a2.duration;
+          inActiveWindow = subT >= a3.trailWindow[0] && subT <= a3.trailWindow[1];
+        }
+      }
     }
 
     if (isAttacking && inActiveWindow && this.weaponModel && this.weaponModel.group.visible) {
@@ -417,15 +520,20 @@ export class HeroRig {
     const rawWeapon = items.weapon;
     const mappedWeapon = mapItemToModel(rawWeapon);
 
-    if (!mappedWeapon || (rawWeapon && rawWeapon.durability !== undefined && rawWeapon.durability <= 0)) {
+    if (!mappedWeapon || mappedWeapon.category !== 'weapon' || !mappedWeapon.kind ||
+        (rawWeapon && rawWeapon.durability !== undefined && rawWeapon.durability <= 0)) {
       if (this.weaponModel) {
         if (this.weaponModel.group.parent) this.weaponModel.group.parent.remove(this.weaponModel.group);
         this.weaponModel.dispose();
         this.weaponModel = null;
         this.weaponMapped = null;
       }
+      this.weaponKind = null;
+      if (this.model.userData) this.model.userData.equippedWeaponKind = null;
       if (this.slashTrail) this.slashTrail.setWeaponModel(null);
     } else {
+      this.weaponKind = mappedWeapon.kind;
+      if (this.model.userData) this.model.userData.equippedWeaponKind = mappedWeapon.kind;
       const isSame = this.weaponModel && this.weaponMapped &&
         this.weaponMapped.kind === mappedWeapon.kind &&
         this.weaponMapped.grade === mappedWeapon.grade;
@@ -446,13 +554,15 @@ export class HeroRig {
           wear: mappedWeapon.wear
         });
 
-        // Bow attaches to sockets.handL; others attach to sockets.handR
-        const socket = mappedWeapon.kind === 'bow' ? this.model.sockets.handL : this.model.sockets.handR;
+        // Staff attaches to sockets.staffHand (at palm anchor); Bow to handL; others to handR
+        const socket = mappedWeapon.kind === 'staff'
+          ? (this.model.sockets.staffHand || this.model.sockets.handR)
+          : (mappedWeapon.kind === 'bow' ? this.model.sockets.handL : this.model.sockets.handR);
         socket.add(this.weaponModel.group);
 
-        this.weaponModel.setOpacity(this.currentOpacity);
-        if (this.currentTint) this.weaponModel.setTint(this.currentTint, this.currentTintAmount);
-        if (mappedWeapon.grade === 'S' || mappedWeapon.grade === 'S+') {
+        if (typeof this.weaponModel.setOpacity === 'function') this.weaponModel.setOpacity(this.currentOpacity);
+        if (this.currentTint && typeof this.weaponModel.setTint === 'function') this.weaponModel.setTint(this.currentTint, this.currentTintAmount);
+        if ((mappedWeapon.grade === 'S' || mappedWeapon.grade === 'S+') && typeof this.weaponModel.setGlow === 'function') {
           this.weaponModel.setGlow(1.0);
         }
 
@@ -466,14 +576,19 @@ export class HeroRig {
     const rawOffhand = items.offhand;
     const mappedShield = mapItemToModel(rawOffhand);
 
-    if (!mappedShield || (rawOffhand && rawOffhand.durability !== undefined && rawOffhand.durability <= 0)) {
+    if (!mappedShield || mappedShield.category !== 'shield' || !mappedShield.kind ||
+        (rawOffhand && rawOffhand.durability !== undefined && rawOffhand.durability <= 0)) {
       if (this.shieldModel) {
         if (this.shieldModel.group.parent) this.shieldModel.group.parent.remove(this.shieldModel.group);
         this.shieldModel.dispose();
         this.shieldModel = null;
         this.shieldMapped = null;
       }
+      this.shieldKind = null;
+      if (this.model.userData) this.model.userData.equippedShieldKind = null;
     } else {
+      this.shieldKind = mappedShield.kind;
+      if (this.model.userData) this.model.userData.equippedShieldKind = mappedShield.kind;
       const isSame = this.shieldModel && this.shieldMapped &&
         this.shieldMapped.kind === mappedShield.kind &&
         this.shieldMapped.grade === mappedShield.grade;
@@ -579,11 +694,50 @@ export class HeroRig {
     return this.group.getWorldPosition(target).add(new THREE.Vector3(0, 1.55, 0));
   }
 
+  getActiveAttackSpec(pose = this.currentPose) {
+    if (!pose || !pose.startsWith('attack')) return null;
+    return getAttackSpec(this.weaponKind, pose);
+  }
+
+  isInHitWindow(pose = this.currentPose, t = 0) {
+    const spec = this.getActiveAttackSpec(pose);
+    if (!spec || !spec.hitWindow) return false;
+    const [start, end] = spec.hitWindow;
+    const modT = ((t % spec.duration) + spec.duration) % spec.duration;
+    return modT >= start && modT <= end;
+  }
+
+  isInTrailWindow(pose = this.currentPose, t = 0) {
+    const spec = this.getActiveAttackSpec(pose);
+    if (!spec || !spec.trailWindow) return false;
+    const [start, end] = spec.trailWindow;
+    const modT = ((t % spec.duration) + spec.duration) % spec.duration;
+    return modT >= start && modT <= end;
+  }
+
+  getWeaponEdgeBaseWorldPosition(target = new THREE.Vector3()) {
+    this.group.updateMatrixWorld(true);
+    const active = this.tempWeaponModel || this.weaponModel;
+    if (active && active.anchors && active.anchors.edgeBase) {
+      return active.anchors.edgeBase.getWorldPosition(target);
+    }
+    if (active && active.anchors && active.anchors.grip) {
+      return active.anchors.grip.getWorldPosition(target);
+    }
+    const socket = this.weaponKind === 'bow' ? this.model.sockets.handL : this.model.sockets.handR;
+    return socket.getWorldPosition(target);
+  }
+
   getWeaponTipWorldPosition(target = new THREE.Vector3()) {
     this.group.updateMatrixWorld(true);
     const active = this.tempWeaponModel || this.weaponModel;
-    if (active && active.anchors && active.anchors.tip) {
-      return active.anchors.tip.getWorldPosition(target);
+    if (active && active.anchors) {
+      if (active.anchors.arrowShelf) {
+        return active.anchors.arrowShelf.getWorldPosition(target);
+      }
+      if (active.anchors.tip) {
+        return active.anchors.tip.getWorldPosition(target);
+      }
     }
     return this.model.sockets.handR.getWorldPosition(target);
   }

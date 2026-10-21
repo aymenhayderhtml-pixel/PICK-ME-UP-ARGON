@@ -86,6 +86,56 @@ export class AccountCreationScreen {
     input.style.boxSizing = 'border-box';
     formBox.appendChild(input);
 
+    // Class Selection: Vanguard (Sword+Shield), Mage (Staff+Fire), Archer (Bow+Quiver)
+    const classContainer = document.createElement('div');
+    classContainer.style.display = 'flex';
+    classContainer.style.gap = '8px';
+    classContainer.style.width = '100%';
+    classContainer.style.justifyContent = 'center';
+
+    let selectedClass = gameState.playerClass || 'Vanguard';
+    const classes = [
+      { id: 'Vanguard', label: '⚔️ Vanguard', desc: 'Sword & Shield' },
+      { id: 'Mage', label: '🔥 Mage', desc: 'Staff & Fire Spells' },
+      { id: 'Archer', label: '🏹 Archer', desc: 'Bow & Quiver' },
+    ];
+    const classButtons = [];
+
+    classes.forEach(c => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mm-btn';
+      btn.textContent = c.label;
+      btn.title = c.desc;
+      btn.style.flex = '1';
+      btn.style.padding = '8px 4px';
+      btn.style.fontSize = '11px';
+      btn.style.fontWeight = 'bold';
+      btn.style.cursor = 'pointer';
+
+      const updateStyle = () => {
+        if (selectedClass === c.id) {
+          btn.style.backgroundColor = 'var(--frame-inner, #2563eb)';
+          btn.style.borderColor = 'var(--frame, #ffd700)';
+          btn.style.color = '#ffffff';
+        } else {
+          btn.style.backgroundColor = 'rgba(20, 25, 35, 0.7)';
+          btn.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+          btn.style.color = '#aaaaaa';
+        }
+      };
+      updateStyle();
+
+      btn.addEventListener('click', () => {
+        selectedClass = c.id;
+        classButtons.forEach(b => b.update());
+      });
+      btn.update = updateStyle;
+      classButtons.push(btn);
+      classContainer.appendChild(btn);
+    });
+    formBox.appendChild(classContainer);
+
     const errorMsg = document.createElement('div');
     errorMsg.style.color = 'var(--danger)';
     errorMsg.style.fontSize = '12px';
@@ -111,6 +161,9 @@ export class AccountCreationScreen {
       }
 
       gameState.masterName = val;
+      if (typeof gameState.setPlayerClass === 'function') {
+        gameState.setPlayerClass(selectedClass);
+      }
       gameState.saveToLocalStorage();
 
       this.overlay.style.opacity = '0';

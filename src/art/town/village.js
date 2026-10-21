@@ -18,7 +18,7 @@ const COTTAGE_SPECS = [
 const ROAD_SPECS = [
   { id: 'road_square_landing', x1: 14.0, z1: -8.0, x2: 20.0, z2: 26.0, w: 4.8 },
   { id: 'road_square_summoning', x1: 14.0, z1: -8.0, x2: 26.0, z2: 4.0, w: 4.5 },
-  { id: 'road_square_rift', x1: 14.0, z1: -8.0, x2: 27.0, z2: -27.0, w: 5.0 },
+  { id: 'road_square_rift', x1: 14.0, z1: -8.0, x2: 30.6, z2: -30.6, w: 5.0 },
   { id: 'road_square_synthesis', x1: 14.0, z1: -8.0, x2: 0.0, z2: -32.0, w: 4.5 },
   { id: 'road_square_armory', x1: 14.0, z1: -8.0, x2: -6.0, z2: -20.0, w: 4.2 },
   { id: 'road_square_residences', x1: 14.0, z1: -8.0, x2: -26.0, z2: -4.0, w: 5.0 },
@@ -49,7 +49,7 @@ const LANDMARK_EXCLUSIONS = [
   { x: 20.0, z: 26.0, r: 14.2 },  // Landing Area terrace
   { x: 30.0, z: 4.0, r: 12.4 },   // Summoning Room terrace
   { x: 14.0, z: -8.0, r: 12.0 },  // Town Square
-  { x: 27.0, z: -27.0, r: 8.4 },  // Space-Time Rift
+  { x: 32.53, z: -32.53, r: 6.5 },  // Space-Time Rift
   { x: 0.0, z: -32.0, r: 10.4 },  // Synthesis Chamber
   { x: -6.0, z: -20.0, r: 8.4 },  // Armory
   { x: -24.0, z: 20.0, r: 13.4 }, // Training Grounds
@@ -61,7 +61,7 @@ const DOOR_CORRIDORS = [
   { x1: 20.0, z1: 26.0, x2: 20.0, z2: 13.0, r: 3.2 },
   { x1: 30.0, z1: 4.0, x2: 23.5, z2: 11.5, r: 3.2 },
   { x1: 23.5, z1: 11.5, x2: 19.5, z2: 20.0, r: 3.2 },
-  { x1: 27.0, z1: -27.0, x2: 27.0, z2: -23.0, r: 3.2 },
+  { x1: 31.8, z1: -31.8, x2: 28.5, z2: -28.5, r: 3.2 },
   { x1: 0.0, z1: -32.0, x2: 0.0, z2: -20.0, r: 3.2 },
   { x1: -6.0, z1: -20.0, x2: -6.0, z2: -14.0, r: 3.2 },
   { x1: -24.0, z1: 20.0, x2: -18.0, z2: 18.0, r: 3.2 },

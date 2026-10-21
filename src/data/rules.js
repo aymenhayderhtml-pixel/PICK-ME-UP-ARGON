@@ -1,9 +1,22 @@
+import { EMOTION_CONFIG } from './emotions.config.js';
+
 export const LEVEL_CAP_PER_STAR = 10;
 export const MAX_STAR = 7;
 export const NATURAL_MAX_STAR = 6;
 export const PARTY_SIZE = 5;
 
 export const STAT_KEYS = ['str', 'agi', 'vit', 'int', 'wil'];
+
+/**
+ * Growth multiplier for a star rank. Stars are only a starting point: the gap
+ * stays deliberately small (1.0 at 1 star up to 1.5 at 7 stars) so a 1-star
+ * hero who trains can overtake a 3-star hero who never trains.
+ */
+export function getStarMultiplier(star) {
+  const key = Math.max(1, Math.min(MAX_STAR, Math.round(star || 1)));
+  return EMOTION_CONFIG.STAR_MULTIPLIERS[key] ?? 1.0;
+}
+
 
 // XP needed to advance to level + 1: 10 * level^1.5 rounded
 export function getXpForLevel(level) {

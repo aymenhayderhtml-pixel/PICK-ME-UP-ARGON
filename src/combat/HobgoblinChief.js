@@ -216,6 +216,7 @@ export class HobgoblinChief extends Boss {
   update(delta, player, dungeon, camera, projectilesManager) {
     this.player = player;
     this.dungeon = dungeon;
+    this.updateStatusEffects(delta);
 
     // Death collapse and dissolve
     if (this.dead) {

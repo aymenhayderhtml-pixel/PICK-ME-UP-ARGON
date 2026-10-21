@@ -12,7 +12,12 @@ import { spawnSparks } from '../combat/Combat.js';
 import { addSkillExp, rollStatFromSkill } from '../data/skills.js';
 import { HeroRig } from '../art/HeroRig.js';
 import { generateLook } from '../art/looks.js';
+import { getHeroLoadout } from '../core/loadout.js';
+import { onEquipmentChanged } from '../core/equipmentEvents.js';
 import { PunishmentEffect } from './PunishmentEffect.js';
+import { TRAINING_CONFIG } from '../data/training.config.js';
+
+const LIVE_ACTION_XP_PER_HIT = TRAINING_CONFIG.LIVE_ACTION_XP_PER_HIT;
 
 const DORM_DOOR = new THREE.Vector3(-18, 0, -4);
 const DUMMY_STANDS = [
@@ -188,6 +193,11 @@ export class HubHeroNPC {
     this.trainingExpTimer = 0;
     this.trainingStatTimer = 0;
 
+    // Daily activity system (emotion / training slice)
+    this.dailyActivity = 'idle';
+    this.trainingZone = null;      // 'dummy' | 'archery' | 'magic' | 'spar'
+    this.trainingTargetPos = null; // THREE.Vector3 of the dummy / target being hit
+
     // Pulsating severe stress aura (stress >= 80)
     const auraGeo = new THREE.SphereGeometry(0.85, 12, 12);
     const auraMat = new THREE.MeshBasicMaterial({
@@ -217,17 +227,27 @@ export class HubHeroNPC {
   }
 
   buildModel() {
+    // Rebuilding must not leave the previous rig behind in the scene graph.
+    if (this.rig) {
+      this.mesh.remove(this.rig.group);
+      this.rig.dispose();
+      this.rig = null;
+    }
+
     const look = this.heroData.look || generateLook(this.heroData);
     this.rig = new HeroRig(look);
     this.mesh.add(this.rig.group);
     this.mesh._heroRig = this.rig;
     this.mesh.userData.heroRig = this.rig;
 
-    const eq = this.heroData.equipment || {};
+    // Only what the hero actually carries: no sword by default, and a shield
+    // only when a shield item sits in the offhand slot.
+    const loadout = getHeroLoadout(this.heroData);
+    this.loadout = loadout;
     this.rig.equip({
-      weapon: eq.weapon,
-      offhand: eq.offhand,
-      armor: eq.armor,
+      weapon: loadout.weaponType === 'none' ? null : loadout.weapon,
+      offhand: loadout.offhandType === 'none' ? null : loadout.offhand,
+      armor: loadout.armor,
     });
   }
 
@@ -503,6 +523,111 @@ export class HubHeroNPC {
     this.pickNewTarget();
   }
 
+  /**
+   * Executes the activity the daily decision engine chose for this hero.
+   *
+   * The hero walks to the matching training zone and plays the existing
+   * training pose. `usedSlots` is a shared Set of occupied slot keys so two
+   * heroes never share the same dummy.
+   */
+  executeDailyActivity(activity, trainingZones, anchors, sparringController = null, usedSlots = null) {
+    this.dailyActivity = activity || 'idle';
+    const zones = trainingZones || {};
+
+    switch (this.dailyActivity) {
+      case 'train_dummy':
+      case 'train_archery':
+      case 'train_magic': {
+        const zoneKey =
+          this.dailyActivity === 'train_dummy'
+            ? 'wooden_dummies'
+            : this.dailyActivity === 'train_archery'
+              ? 'archery_targets'
+              : 'fire_targets';
+        const zone = zones[zoneKey];
+        if (!zone || !zone.slots || zone.slots.length === 0) return false;
+
+        // Find a free slot in this zone.
+        let slot = null;
+        for (const candidate of zone.slots) {
+          const key = `${zoneKey}:${candidate.stand.x},${candidate.stand.z}`;
+          if (!usedSlots || !usedSlots.has(key)) {
+            slot = candidate;
+            if (usedSlots) usedSlots.add(key);
+            break;
+          }
+        }
+        if (!slot) return false;
+
+        this.trainingZone =
+          this.dailyActivity === 'train_dummy'
+            ? 'dummy'
+            : this.dailyActivity === 'train_archery'
+              ? 'archery'
+              : 'magic';
+        this.trainingSkill = {
+          id:
+            this.dailyActivity === 'train_dummy'
+              ? 'basic_swordsmanship'
+              : this.dailyActivity === 'train_archery'
+                ? 'basic_archery'
+                : 'basic_fire_magic',
+          name: 'Training',
+          level: 1,
+          exp: 0,
+        };
+        this.trainingDuration = 0;
+        this.trainingExpTimer = 0;
+        this.trainingStatTimer = 0;
+        this.trainingTargetPos = new THREE.Vector3(slot.target.x, slot.target.y, slot.target.z);
+
+        this.setDestination(slot.stand.x, slot.stand.z, () => {
+          this.state = 'training';
+          this.mesh.rotation.y = Math.atan2(
+            slot.target.x - this.mesh.position.x,
+            slot.target.z - this.mesh.position.z
+          );
+        });
+        return true;
+      }
+
+      case 'spar': {
+        if (!sparringController) return false;
+        // Find a partner who is not already sparring.
+        const others = (this.heroesManager && this.heroesManager.npcs) || [];
+        const partner = others.find(
+          (o) => o !== this && o.state !== 'training' && o.heroData && o.heroData.alive
+        );
+        if (!partner) return false;
+        sparringController.startSpar(this, partner, true);
+        this.trainingZone = 'spar';
+        return true;
+      }
+
+      case 'eat': {
+        // Walk to the Cafeteria door and wait there.
+        const door = anchors && anchors.door_mess_hall;
+        const target = door ? { x: door.x, z: door.z + 1.5 } : { x: 8, z: 34.5 };
+        this.setDestination(target.x, target.z, () => {
+          this.state = 'idle';
+          this.timer = 6;
+        });
+        return true;
+      }
+
+      case 'rest': {
+        this.goToDormitory();
+        return true;
+      }
+
+      default: {
+        // Do nothing: wander a little.
+        this.pickNewTarget();
+        return true;
+      }
+    }
+  }
+
   triggerStressSuicide() {
     if (this.isDyingFromStress) return;
     this.isDyingFromStress = true;
@@ -566,11 +691,22 @@ export class HubHeroNPC {
     const enforceGround = () => {
       if (getGroundY && this.mesh.visible) {
         const gy = getGroundY(this.mesh.position.x, this.mesh.position.z);
-        if (this.mesh.position.y < gy - 0.1) {
-          console.warn(`[HubHero] ${this.heroData.name} y (${this.mesh.position.y.toFixed(2)}) is below getGroundY - 0.1 (${(gy - 0.1).toFixed(2)})`);
-        }
         // Smooth entity height with a short lerp (factor 18 * dt) so stair steps do not jitter
         this.mesh.position.y += (gy - this.mesh.position.y) * Math.min(1.0, 18 * delta);
+
+        // The walk height map has sharp stair edges, so a hero crossing a step
+        // dips under the ground for a few frames. Only report a hero that
+        // stays under the ground, and only once per excursion.
+        if (this.mesh.position.y < gy - 0.1) {
+          this._belowGroundTimer = (this._belowGroundTimer || 0) + delta;
+          if (this._belowGroundTimer >= 0.25 && !this._belowGroundWarned) {
+            this._belowGroundWarned = true;
+            console.warn(`[HubHero] ${this.heroData.name} y (${this.mesh.position.y.toFixed(2)}) is below getGroundY - 0.1 (${(gy - 0.1).toFixed(2)}) for ${this._belowGroundTimer.toFixed(2)}s`);
+          }
+        } else {
+          this._belowGroundTimer = 0;
+          this._belowGroundWarned = false;
+        }
       }
     };
 
@@ -693,12 +829,15 @@ export class HubHeroNPC {
 
       this.updateRigPose(delta, { action: trainPose, actionTime: this.animTime, mood: 'neutral' }, camera, hanPos);
 
-      // Every 5s: +24 skill EXP (x1.5 for diligent) & +3 fatigue
+      // Every 5s: skill EXP (x1.5 for diligent) & +3 fatigue
       if (this.trainingExpTimer >= 5.0) {
         this.trainingExpTimer -= 5.0;
         const tgLevel = (gameState.facilities?.training?.level) || 1;
         const isDiligent = this.heroData.motivation === 'diligent';
-        const expGain = Math.round(24 * (1 + (tgLevel - 1) * 0.10) * (isDiligent ? 1.5 : 1.0));
+        // Live action XP: the per-strike value of the zone times the number of
+        // strikes in a 5 second window. All numbers live in the config.
+        const perHit = LIVE_ACTION_XP_PER_HIT[this.trainingZone] ?? LIVE_ACTION_XP_PER_HIT.dummy;
+        const expGain = Math.round(perHit * 5 * (1 + (tgLevel - 1) * 0.10) * (isDiligent ? 1.5 : 1.0));
         this.heroData.fatigue = Math.min(100, (this.heroData.fatigue || 0) + 3);
 
         if (this.trainingSkill) {
@@ -710,10 +849,15 @@ export class HubHeroNPC {
           gameState.trainingSlots[this.trainingSlot].expGained = (gameState.trainingSlots[this.trainingSlot].expGained || 0) + expGain;
         }
 
-        const dummyZ = 18.0;
-        const dummyX = [-26.4, -24.0, -21.6][this.trainingSlot] || this.mesh.position.x;
-        const dummyY = (getGroundY ? getGroundY(dummyX, dummyZ) : 0) + 1.0;
-        spawnSparks(this.scene, new THREE.Vector3(dummyX, dummyY, dummyZ), 0xffaa44, 4);
+        // Sparks fly off whatever the hero is hitting.
+        if (this.trainingTargetPos) {
+          spawnSparks(this.scene, this.trainingTargetPos, 0xffaa44, 4);
+        } else {
+          const dummyZ = 18.0;
+          const dummyX = [-26.4, -24.0, -21.6][this.trainingSlot] || this.mesh.position.x;
+          const dummyY = (getGroundY ? getGroundY(dummyX, dummyZ) : 0) + 1.0;
+          spawnSparks(this.scene, new THREE.Vector3(dummyX, dummyY, dummyZ), 0xffaa44, 4);
+        }
       }
 
       // Every 45s: 35% chance to gain core stat multiplied by potential
@@ -904,6 +1048,15 @@ export class HubHeroesManager {
     this.navGrid = navGrid;
     this.npcs = [];
     this.coTrainingTimers = {};
+
+    // Town avatars show the hero's own gear: rebuild them when it changes.
+    this._unsubscribeEquipment = onEquipmentChanged((hero) => {
+      for (const npc of this.npcs) {
+        if (!hero || npc.heroData?.id === hero.id) {
+          npc.buildModel();
+        }
+      }
+    });
   }
 
   get spawnedHeroes() {
@@ -924,6 +1077,7 @@ export class HubHeroesManager {
     for (const h of heroesList) {
       if (h.alive && h.id !== 'hero_han') {
         const npc = new HubHeroNPC(h, this.scene, (npcObj) => this.handleRuleBreak(npcObj), getGroundY, grid);
+        npc.heroesManager = this;
         this.npcs.push(npc);
       }
     }
@@ -931,8 +1085,21 @@ export class HubHeroesManager {
 
   spawnNewSummonHero(heroData, getGroundY = null) {
     const npc = new HubHeroNPC(heroData, this.scene, (npcObj) => this.handleRuleBreak(npcObj), getGroundY, this.navGrid, true);
+    npc.heroesManager = this;
     this.npcs.push(npc);
     return npc;
+  }
+
+  /**
+   * Sends every hero to the activity the daily decision engine chose for them.
+   * Called once per game day by HubScene.
+   */
+  assignDailyActivities(trainingZones, anchors, sparringController = null) {
+    const usedSlots = new Set();
+    for (const npc of this.npcs) {
+      const activity = (npc.heroData && npc.heroData.currentActivity) || 'idle';
+      npc.executeDailyActivity(activity, trainingZones, anchors, sparringController, usedSlots);
+    }
   }
 
   handleRuleBreak(npc) {
@@ -975,6 +1142,20 @@ export class HubHeroesManager {
     } else {
       this.executeHero(npc);
     }
+  }
+
+  /**
+   * Warns a rule-breaking hero. The tutorial scripts this as the demonstration
+   * of the rule, so the hero's own offence counter is left untouched: after
+   * the tutorial the first violation still warns and the second executes.
+   */
+  triggerPunishmentOnNpc(npc, onComplete = null) {
+    if (npc && !npc.isBeingPunished) {
+      npc.showAngryBubble(2.5);
+      showSystemMessage(`[WARNING: ${npc.heroData.name} broke the rules! Further violations will be punished by execution.]`);
+    }
+    // The callback always runs so a scripted tutorial step can never stall.
+    if (onComplete) onComplete();
   }
 
   executeHero(npc, onComplete = null) {

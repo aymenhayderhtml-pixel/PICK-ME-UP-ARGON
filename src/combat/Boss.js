@@ -23,6 +23,53 @@ export class Boss {
     this.pinTimer = 0;
     this.vulnerableTimer = 0;
     this.stunTimer = 0;
+
+    this.capsuleRadius = 0.8;
+    this.capsuleHeight = 2.8;
+    this.team = 'enemy';
+    this.id = 'boss_enemy';
+    this.statusEffects = new Map([
+      ['burn', { active: false, duration: 0, tickInterval: 0.5, tickTimer: 0, potency: 6, tickDamage: 3 }],
+    ]);
+  }
+
+  get position() {
+    return this.mesh ? this.mesh.position : (this._pos || (this._pos = new THREE.Vector3()));
+  }
+
+  get isDead() {
+    return this.dead || this.isDying || this.hp <= 0;
+  }
+
+  applyStatusEffect(type, conf = {}) {
+    let eff = this.statusEffects.get(type);
+    if (!eff) {
+      eff = { active: false, duration: 0, tickInterval: 0.5, tickTimer: 0, tickDamage: 3, potency: 1.0 };
+      this.statusEffects.set(type, eff);
+    }
+    eff.active = true;
+    eff.duration = typeof conf === 'number' ? conf : (conf.duration ?? 3.0);
+    if (typeof conf === 'object') {
+      if (conf.potency !== undefined) eff.potency = conf.potency;
+      if (conf.tickDamage !== undefined) eff.tickDamage = conf.tickDamage;
+      if (conf.tickInterval !== undefined) eff.tickInterval = conf.tickInterval;
+    }
+    eff.tickTimer = 0;
+    if (this.rig && this.rig.setTint && type === 'burn') {
+      this.rig.setTint(0xff6600, 0.7);
+    }
+  }
+
+  receiveAttack(hitPayload) {
+    if (this.dead || this.isInvulnerable) return null;
+    const dmg = hitPayload?.damage ?? hitPayload?.rawDamage ?? 0;
+    const actualDmg = this.takeDamage(dmg, hitPayload?.isFinisher, hitPayload?.attackerPosition);
+
+    if (hitPayload?.statusEffect) {
+      this.applyStatusEffect(hitPayload.statusEffect.type, hitPayload.statusEffect);
+    }
+
+    return { damage: actualDmg, killed: this.dead };
   }
 
   takeDamage(amount, isFinisher = false, attackerPos = null) {
@@ -81,6 +128,39 @@ export class Boss {
 
   onDamaged(finalDamage) {
     // Override in subclass
+  }
+
+  updateStatusEffects(delta, context = null) {
+    const burn = this.statusEffects?.get('burn');
+    if (burn && burn.active && !this.dead) {
+      burn.duration -= delta;
+      burn.tickTimer += delta;
+      if (burn.tickTimer >= (burn.tickInterval || 0.5)) {
+        burn.tickTimer = 0;
+        const bDmg = burn.tickDamage || 3;
+        this.hp = Math.max(0, this.hp - bDmg);
+        if (this.rig && this.rig.setTint) {
+          this.rig.setTint(0xff6600, 0.8);
+          setTimeout(() => {
+            if (this.rig && !this.dead) this.rig.setTint(null, 0);
+          }, 100);
+        }
+        const onDmg = context?.onDamageNumber;
+        if (onDmg) onDmg(bDmg, this.position, 'burn');
+        if (this.hp <= 0) {
+          this.hp = 0;
+          this.die();
+        }
+      }
+      if (burn.duration <= 0) {
+        burn.active = false;
+        if (this.rig && this.rig.setTint) this.rig.setTint(null, 0);
+      }
+    }
+  }
+
+  update(delta, ...args) {
+    this.updateStatusEffects(delta);
   }
 
   die() {

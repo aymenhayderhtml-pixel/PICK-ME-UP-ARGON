@@ -32,6 +32,7 @@
 - [x] T023 fix 5 user issues
 - [x] T024 rebuild hub as walled island town from the manhua
 - [x] T025 manhua systems pass (day cycle, meals & discontent, hero reports, intimacy & bonds, hidden talents, stat potential, three groups, tarot cards)
+- [x] T026 deploy equipment notice: LATER dismisses for the session and Enter no longer re-shows it (DeployWindow.js)
 
 ## ART PLAN
 - [x] A01 contract and test viewer
@@ -57,6 +58,8 @@
 - [x] A05d wire the assembled town into HubScene, NavGrid and minimap
 - [x] A05e town iteration passes (Argon patches)
 - [x] A05f ground contact, locomotion and spawn height fixes + live diagnostic overlay
+- [x] A05i mouse controls, building floors walk height, underground guard & camera upgrade
+- [x] A05j clean up Space-Time Rift portal artifacts, stone path extension, sky geometry fix & minimap sync
 - [x] A06 floor layout, contract, assembler and viewer
 - [x] A06a farm floor art (Argon)
 - [ ] A06b forest floor art (Argon)
@@ -67,5 +70,16 @@
 - [x] A02b Prairie Wolf enemy model (Argon prompt docs/ARGON_PROMPT_02b_wolf.md)
 - [x] A06g wire floor 2 art and wolf into the game
 - [x] G01 initialize and push repository to GitHub (PICK-ME-UP-ARGON)
+- [x] T027 fix TowerScene floor 1 freeze caused by missing input.isLmbDown in player block check
+- [x] A03c data-driven per-weapon animation system (all 9 weapons, 4 shields, 2-bone IK solver, dynamic trail/hit windows, hit-stop, and art-weapon-test viewer)
+- [x] A03d weapon animation V2 visual QA, coordinate alignment, 2H IK, and visual verification (all 9 weapons >= 8.0/10, video + 308 screenshots)
+- [x] A03e realistic archery & aiming engine (Slices 1-5: limb flexion, harmonic vibration, side-on stances, ballistic ArrowPool, over-the-shoulder aim cam, dynamic golden reticle, soft auto-aim snapshot, headshot crits, docs/BOW_QA.md scorecard 9.4/10)
+- [x] C01 Universal Combat Engine Phase 1: Shared Combatant core, StateMachine, HitPipeline swept-capsules, DamageResolver, and isolated combat-test.html sandbox
+- [x] C02 Universal Combat Engine Phase 2: Staff & Magic Subsystem, 6 Spells, Pooled Primitive VFX, Status Effects, Autonomous Mage AI, 4-Slot Squad Skill Controller (docs/COMBAT_P2_QA.md scorecard 9.5/10)
+- [x] C02.5 Universal Combat Engine Phase 2.5: Visual fix pass for combat-test.html (weapons in palms, 1.55m accurate wireframes, 36m circular arena, Reset & Auto-Respawn flow, team ground decals, overhead HUD badges, collapsible panels, corrected 1-4 / Q-G hotkeys; docs/COMBAT_P2_5_QA.md scorecard 10/10)
+- [x] C03 Unified Developer Lab (dev.html): 36m circular arena, 6 tabs (Arena, Weapons, Spells, Enemies, Squad, Stats), cheats suite, live Canvas HP/Stamina/Poise graph, scenario save/load/export, bow aim testing, docs/DEVLAB_PLAN.md and docs/DEVLAB_QA.md scorecard 8.9/10
+- [x] C03.5 Dev Lab Fix Pass: LMB light/heavy attack fixes, wall-clock timing, on-screen debug line, main game Player.js audit, OTS bow aiming + reticle, quiver & 0.4s dagger swap, arena arrow pickup & key X toggle, CPU tick timer, overhead tag limit/offsets, slider value alignment, docs/DEVLAB_FIXES.md scorecard 9.2/10
+- [x] C03.6 Dev Lab Aiming & Cleanup Polish: Fixed floating residual bow on character switch/clear via full rig and back socket disposal, implemented smooth screen/camera aiming with slow sensitivity (0.0022) and zoomed FOV (34°), verified with test_aim_and_clear.mjs and browser screenshots
+- [x] C03.7 Dev Lab Bow String Draw IK & Melee Sector Hit Zone: Straight-line string pull to cheek anchor with two-bone IK and high elbow pole, reactive setDraw limb flexion, thin crosshair draw bar, 8-weapon ground sector hit zones with target radius padding, and 25°/0.08s attack magnetism with forward step stopping 0.6m away.
 
 

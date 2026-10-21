@@ -6,7 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:spells": "node scripts/test_spells.mjs",
+    "test:integration": "node scripts/test_integration.mjs",
+    "test:loadout": "node scripts/test_loadout.mjs",
+    "test:phase1": "node scripts/test_phase1_migration.mjs",
+    "test:phase2": "node scripts/test_phase2_emotions.mjs",
+    "test:phase3": "node scripts/test_phase3_training_30days.mjs",
+    "test:phase4": "node scripts/test_phase4_login_report.mjs",
+    "test:phase5": "node scripts/test_phase5_town_training.mjs",
+    "test:phase6": "node scripts/test_phase6_ui_and_integration.mjs"
   },
   "devDependencies": {
     "vite": "^8.3.0"

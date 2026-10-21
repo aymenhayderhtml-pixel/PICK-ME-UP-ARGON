@@ -15,6 +15,7 @@ import { ProjectilesManager } from '../combat/Projectiles.js';
 import { ItemsManager, ITEM_TEMPLATES } from '../combat/Items.js';
 import { Hud, showSystemMessage, showNotices, clearSystemMessages, isAnySystemWindowOpen } from '../ui/Hud.js';
 import { gameState } from '../core/GameState.js';
+import { onEquipmentChanged } from '../core/equipmentEvents.js';
 import { Ally } from '../combat/Ally.js';
 import { SquadAI } from '../combat/SquadAI.js';
 import { COMMANDS, getCommandByKey } from '../combat/Commands.js';
@@ -24,6 +25,13 @@ import { RewardWindow } from '../ui/RewardWindow.js';
 import { HERO_TEMPLATES } from '../data/heroes.js';
 import { updateHumanoidCameraFade } from '../core/CameraFade.js';
 import { ArrivalDome } from '../fx/ArrivalDome.js';
+import { SpellVFXPool } from '../combat/SpellVFXPool.js';
+import { SpellSystem } from '../combat/SpellSystem.js';
+
+let _towerAimPlane = null;
+let _towerRaycaster = null;
+let _towerAimTarget = null;
+let _towerCamFwd = null;
 
 // Floor lighting presets, applied exactly like the hub does it (background,
 // fog, ACES tone mapping, one ambient, one hemisphere, one directional, no
@@ -125,6 +133,16 @@ export class TowerScene {
 
     this.squadAI = new SquadAI(this.scene);
     this.partyPanel = new PartyPanel(this.hud.container);
+
+    // Squad members show their own equipped weapon: rebuild their models as
+    // soon as gear changes in the Equipment screen.
+    this._unsubscribeEquipment = onEquipmentChanged((hero) => {
+      for (const ally of (this.squadAI?.allies || [])) {
+        if (!hero || ally.hero?.id === hero.id) {
+          ally.applyLoadout();
+        }
+      }
+    });
     this.commandWheel = new CommandWheel((cmd) => {
       this.handleCommandSelect(cmd);
     });
@@ -157,6 +175,20 @@ export class TowerScene {
     this.hud.onToggleAuto = () => this.toggleAutoMode();
 
     this.player.onParryText = (text, pos) => this.hud.showParryText(pos);
+
+    // Fire Mage Spell VFX and System
+    this.vfxPool = new SpellVFXPool(this.scene);
+    this.spellSystem = new SpellSystem(this.scene, this.vfxPool, this.enemyManager.enemies);
+    this.player.spellSystem = this.spellSystem;
+    this.spellSystem.onScreenShake = (strength) => {
+      if (this.thirdPersonCamera && typeof this.thirdPersonCamera.shake === 'function') {
+        this.thirdPersonCamera.shake(strength, 0.18);
+      }
+    };
+    this.hud.onCastSpell = (spellId) => {
+      const aimPos = this.getAimGroundPosition();
+      this.player.castSpell(spellId, aimPos);
+    };
 
     this.boss = null;
     this.bossIntroPlayed = false;
@@ -230,6 +262,10 @@ export class TowerScene {
     this.enemyManager.clear(this.scene);
     if (this.itemsManager) this.itemsManager.clear(this.scene);
     this.hud.clearFloating();
+    if (this.spellSystem) {
+      this.spellSystem.clear();
+      this.spellSystem.combatants = [this.player, ...this.enemyManager.enemies];
+    }
 
     if (this.forestFloor) {
       this.scene.remove(this.forestFloor.group);
@@ -744,10 +780,10 @@ export class TowerScene {
   }
 
   setupInputs() {
-    window.addEventListener('mousedown', (e) => {
-      if (!this.isActive || isAnySystemWindowOpen()) return;
-      if (e.target && e.target.closest && e.target.closest('#command-wheel, .system-window, button, #hotkey-hint-bar')) return;
-      if (e.button === 0) {
+    if (this.input && typeof this.input.onAction === 'function') {
+      this.input.onAction('attack', () => {
+        if (!this.isActive || isAnySystemWindowOpen()) return;
+        if (this.commandWheel && this.commandWheel.isOpen) return;
         if (this.player.isBlocking) {
           this.player.performShieldBash(this.enemyManager.enemies, this.thirdPersonCamera, (dmg, pos, isFinisher) => {
             this.hud.showDamageNumber(dmg, pos, isFinisher);
@@ -757,8 +793,8 @@ export class TowerScene {
             this.hud.showDamageNumber(dmg, pos, isFinisher);
           });
         }
-      }
-    });
+      });
+    }
 
     window.addEventListener('keydown', (e) => {
       if (!this.isActive) return;
@@ -813,9 +849,30 @@ export class TowerScene {
           this.itemsManager.pickupItem(nearby, this.player, this.scene);
         }
       } else if (e.code === 'KeyQ') {
+        if (this.player.loadout?.attackMode === 'spell') {
+          this.player.useManaPotion();
+        } else {
+          this.player.startRoll(this.input, this.thirdPersonCamera.getYaw());
+        }
+      } else if (e.code === 'Space') {
         this.player.startRoll(this.input, this.thirdPersonCamera.getYaw());
       } else if (e.code === 'KeyX') {
         this.toggleAutoMode();
+      } else if (['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'KeyR'].includes(e.code) && this.player.loadout?.attackMode === 'spell') {
+        const spellMap = {
+          Digit1: 'emberBolt',
+          Digit2: 'fireDartVolley',
+          Digit3: 'fireball',
+          Digit4: 'flameWall',
+          Digit5: 'infernoBeam',
+          Digit6: 'fireNova',
+          KeyR: 'solarCataclysm',
+        };
+        const spellId = spellMap[e.code];
+        if (spellId) {
+          const aimPos = this.getAimGroundPosition();
+          this.player.castSpell(spellId, aimPos);
+        }
       } else if (e.code === 'F2') {
         const inputVal = window.prompt(
           '[DEBUG] Enter floor number to set currentFloor (1-100):',
@@ -857,6 +914,20 @@ export class TowerScene {
         const pPos = this.player.mesh.position;
         const spawnPos = new THREE.Vector3(pPos.x, 0, pPos.z - 5.0);
         this.enemyManager.spawnLeader(this.scene, spawnPos, this.currentFloorNumber);
+      } else if (e.code === 'KeyB') {
+        const hero = this.player.getHero();
+        if (hero) {
+          hero.equipment = hero.equipment || { weapon: null, offhand: null, armor: null };
+          hero.equipment.weapon = {
+            ...ITEM_TEMPLATES.HUNTING_BOW,
+            id: 'item_debug_bow',
+            durability: 60,
+            maxDurability: 60,
+          };
+          hero.equipment.offhand = null;
+          this.player.syncLoadout();
+        }
+        showSystemMessage('[Equipped Hunting Recurve Bow (C-Grade)]');
       } else if (e.code === 'KeyH') {
         if (this.sceneManager) {
           this.sceneManager.switchTo('hub');
@@ -878,6 +949,21 @@ export class TowerScene {
         }
       }
     });
+  }
+
+  getAimGroundPosition() {
+    if (!_towerAimPlane) {
+      _towerAimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      _towerRaycaster = new THREE.Raycaster();
+      _towerAimTarget = new THREE.Vector3();
+      _towerCamFwd = new THREE.Vector3();
+    }
+    _towerRaycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
+    const hit = _towerRaycaster.ray.intersectPlane(_towerAimPlane, _towerAimTarget);
+    if (hit) return _towerAimTarget;
+    this.camera.getWorldDirection(_towerCamFwd);
+    _towerAimTarget.copy(this.player.mesh.position).addScaledVector(_towerCamFwd, 15);
+    return _towerAimTarget;
   }
 
   handleCommandSelect(cmd) {
@@ -1048,14 +1134,14 @@ export class TowerScene {
       this.partyPanel.show();
     }
 
-    // Load Han's equipment from GameState so durability persists
-    const han = gameState.heroes.find((h) => h.id === 'hero_han');
-    if (han && han.equipment) {
-      if (han.equipment.weapon) {
-        this.player.equipWeapon(han.equipment.weapon);
+    // Load the controlled hero's equipment from GameState so durability persists
+    const controlled = this.player.getHero();
+    if (controlled && controlled.equipment) {
+      if (controlled.equipment.weapon) {
+        this.player.equipWeapon(controlled.equipment.weapon);
       }
-      if (han.equipment.offhand) {
-        this.player.equipShield(han.equipment.offhand);
+      if (controlled.equipment.offhand) {
+        this.player.equipShield(controlled.equipment.offhand);
       }
     }
     this.player.refreshStats();
@@ -1455,11 +1541,24 @@ export class TowerScene {
     // Update Player & Collision through ForestFloor isWalkable
     const cameraYaw = this.thirdPersonCamera.getYaw();
     const effectiveInput = {
-      isDown: (k) => (!windowOpen ? this.input.isDown(k) : false),
-      isRmbDown: () => (!windowOpen && this.input.isRmbDown && this.input.isRmbDown()) || autoBlock,
-      consumeMouseDelta: () => ({ x: 0, y: 0 }),
+      isDown: (k) => (!windowOpen && typeof this.input.isDown === 'function' ? this.input.isDown(k) : false),
+      isActionDown: (action) => {
+        if (action === 'block' && autoBlock) return true;
+        return !windowOpen && typeof this.input.isActionDown === 'function' && this.input.isActionDown(action);
+      },
+      isRmbDown: () => (!windowOpen && typeof this.input.isRmbDown === 'function' && this.input.isRmbDown()),
+      isLmbDown: () => (!windowOpen && typeof this.input.isLmbDown === 'function' && this.input.isLmbDown()) || (autoBlock && this.input.getActionButton?.('block') === 0),
+      consumeMouseDelta: () => (!windowOpen && typeof this.input.consumeMouseDelta === 'function' ? this.input.consumeMouseDelta() : { x: 0, y: 0 }),
     };
-    this.player.update(effectiveDelta, effectiveInput, cameraYaw, this.forestFloor, this.thirdPersonCamera);
+    this.player.update(
+      effectiveDelta,
+      effectiveInput,
+      cameraYaw,
+      this.forestFloor,
+      this.thirdPersonCamera,
+      this.enemyManager.enemies,
+      (dmg, pos, isFinisher) => this.hud.showDamageNumber(dmg, pos, isFinisher)
+    );
 
     // Update Squad AI
     if (this.squadAI) {
@@ -1640,6 +1739,17 @@ export class TowerScene {
           if (enemy.mesh) updateHumanoidCameraFade(enemy.mesh, this.camera.position, effectiveDelta);
         }
       }
+    }
+
+    // Update Spell System & VFX Pool
+    if (this.spellSystem) {
+      const activeCombatants = [this.player, ...this.enemyManager.enemies];
+      if (this.boss && !this.boss.dead) activeCombatants.push(this.boss);
+      this.spellSystem.combatants = activeCombatants;
+      this.spellSystem.update(effectiveDelta, effectiveDelta);
+    }
+    if (this.vfxPool) {
+      this.vfxPool.update(effectiveDelta, this.camera);
     }
 
     // Update HUD

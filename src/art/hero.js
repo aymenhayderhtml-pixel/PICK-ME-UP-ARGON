@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { evaluateWeaponPose } from './weaponAnimations.js';
 
 export const HERO_POSES = [
-  'idle', 'walk', 'run', 'attack1', 'attack2', 'attack3',
+  'idle', 'walk', 'run', 'attack1', 'attack2', 'attack3', 'comboLoop',
   'block', 'roll', 'hit', 'panic', 'afraid', 'death',
-  'trainSword', 'trainSpear', 'trainBow', 'trainDagger', 'trainMagic',
+  'trainWeapon', 'trainSword', 'trainGreatsword', 'trainSpear', 'trainDagger',
+  'trainBow', 'trainStaff', 'trainMace', 'trainClub', 'trainPickaxe', 'trainMagic',
   'mine', 'talk', 'cheer'
 ];
 
@@ -649,13 +651,16 @@ export function createHeroModel(opts = {}) {
   const faceStyle = opts.faceStyle ?? pick(rng, ['neutral', 'stern', 'young', 'old', 'fierce']);
 
   const hairStyles = ['spiky', 'short', 'long', 'braid', 'ponytail', 'bowl', 'bald', 'messy'];
-  const hairStyle = opts.hair?.style ?? pick(rng, hairStyles);
-  const hairColor = opts.hair?.color !== undefined ? opts.hair.color : pickMutedColor(rng, HAIR_PALETTE, 0.45, 0.05, 0.75);
+  const hairStyle = opts.hair?.style ?? (typeof opts.hair === 'string' ? opts.hair : pick(rng, hairStyles));
+  const hairColor = opts.hair?.color !== undefined
+    ? opts.hair.color
+    : (typeof opts.hair === 'number' ? opts.hair : pickMutedColor(rng, HAIR_PALETTE, 0.45, 0.05, 0.75));
   const facialHair = opts.facialHair ?? (faceStyle === 'old' ? 'beard' : pick(rng, ['none', 'none', 'stubble', 'mustache', 'beard']));
 
   const outfitOpts = opts.outfit || {};
-  const topType = outfitOpts.top ?? pick(rng, ['shirt', 'shirtRolled', 'tunic', 'vest', 'robe']);
-  const topColor = outfitOpts.topColor !== undefined ? outfitOpts.topColor : pickMutedColor(rng, TOP_PALETTE, 0.30, 0.20, 0.92);
+  const armorColor = typeof opts.armor === 'number' ? opts.armor : (opts.armor?.color);
+  const topType = outfitOpts.top ?? (opts.armor ? 'vest' : pick(rng, ['shirt', 'shirtRolled', 'tunic', 'vest', 'robe']));
+  const topColor = outfitOpts.topColor !== undefined ? outfitOpts.topColor : (armorColor !== undefined ? armorColor : pickMutedColor(rng, TOP_PALETTE, 0.30, 0.20, 0.92));
   const vestColor = outfitOpts.vestColor !== undefined ? outfitOpts.vestColor : pickMutedColor(rng, VEST_PALETTE, 0.28, 0.12, 0.55);
   const bottomType = outfitOpts.bottom ?? 'trousers';
   const bottomColor = outfitOpts.bottomColor !== undefined ? outfitOpts.bottomColor : pickMutedColor(rng, BOTTOM_PALETTE, 0.25, 0.08, 0.45);
@@ -664,6 +669,16 @@ export function createHeroModel(opts = {}) {
   let outlineVisible = opts.outline !== undefined ? Boolean(opts.outline) : true;
 
   const group = new THREE.Group();
+  group.userData.equippedWeaponKind = opts.weaponKind || 'sword';
+  group.userData.equippedShieldKind = opts.shieldKind || null;
+  group.userData.animBlender = {
+    lastAction: null,
+    lastWeapon: null,
+    blendElapsed: 1.0,
+    blendDuration: 0.09,
+    snapshot: null,
+    current: null
+  };
   const root = new THREE.Group();
   root.scale.setScalar(heightScale);
   group.add(root);
@@ -743,13 +758,17 @@ export function createHeroModel(opts = {}) {
   const sockets = {
     handR: new THREE.Group(),
     handL: new THREE.Group(),
+    staffHand: new THREE.Group(),
     back: new THREE.Group(),
     hip: new THREE.Group(),
     head: new THREE.Group()
   };
-  sockets.handR.position.set(0, -0.03, 0.015);
+  sockets.handR.position.set(0, -0.022, 0.005);
   handR.add(sockets.handR);
-  sockets.handL.position.set(0, -0.03, 0.015);
+  sockets.staffHand.name = 'socket_staffHand';
+  sockets.staffHand.position.set(0, -0.022, 0.005);
+  handR.add(sockets.staffHand);
+  sockets.handL.position.set(0, -0.022, 0.005);
   handL.add(sockets.handL);
   sockets.back.position.set(0, 0.12, -0.11 * build.sz);
   chest.add(sockets.back);
@@ -830,23 +849,31 @@ export function createHeroModel(opts = {}) {
   addPartMesh(shoulderL, upperArmGeo, topMat, [build.arm, 1, build.arm], true);
   addPartMesh(shoulderR, upperArmGeo, topMat, [build.arm, 1, build.arm], true);
 
-  // Forearms + Compact Hands merged per forearm
-  const forearmAndHandGeo = getCachedGeo('forearm_hand_v2', () => {
+  // Forearms attached to elbow pivots
+  const forearmGeo = getCachedGeo('forearm_v2', () => {
     const fa = makeTaperedLimb(0.21, 0.036, 0.031, 0.023, 8, true);
+    fa.computeVertexNormals();
+    return fa;
+  });
+  addPartMesh(elbowL, forearmGeo, skinMat, [build.arm, 1, build.arm], false);
+  addPartMesh(elbowR, forearmGeo, skinMat, [build.arm, 1, build.arm], false);
+
+  // Compact Hands (palm + thumb) attached to hand joints with sockets
+  const handMeshGeo = getCachedGeo('hand_palm_v2', () => {
     const palm = xform(new THREE.SphereGeometry(0.023, 6, 5), {
-      pos: [0, -0.232, 0],
+      pos: [0, -0.022, 0],
       scale: [0.62, 1.18, 0.82]
     });
     const thumb = xform(new THREE.ConeGeometry(0.009, 0.024, 4), {
-      pos: [0, -0.224, 0.018],
+      pos: [0, -0.014, 0.018],
       rot: [2.2, 0, 0]
     });
-    const m = mergeGeometries([fa, palm, thumb]);
+    const m = mergeGeometries([palm, thumb]);
     m.computeVertexNormals();
     return m;
   });
-  addPartMesh(elbowL, forearmAndHandGeo, skinMat, [build.arm, 1, build.arm], false);
-  addPartMesh(elbowR, forearmAndHandGeo, skinMat, [build.arm, 1, build.arm], false);
+  addPartMesh(handL, handMeshGeo, skinMat, [build.arm, 1, build.arm], false);
+  addPartMesh(handR, handMeshGeo, skinMat, [build.arm, 1, build.arm], false);
 
   // Thighs
   const thighGeo = getCachedGeo('thigh_v2', () => makeTaperedLimb(0.40, 0.068, 0.056, 0.044, 8, true));
@@ -915,6 +942,12 @@ export function createHeroModel(opts = {}) {
     const mShL = addPartMesh(shoulderL, pauldronsGeo, aMat, [1, 1, 1], false);
     const mShR = addPartMesh(shoulderR, pauldronsGeo, aMat, [1, 1, 1], false);
     armorMeshes.push(mChest, mShL, mShR);
+  }
+
+  if (opts.armor) {
+    const aType = typeof opts.armor === 'string' ? opts.armor : (opts.armor?.type || 'plate');
+    const aColor = typeof opts.armor === 'number' ? opts.armor : (opts.armor?.color ?? 0x7c8288);
+    setArmor({ type: aType, color: aColor });
   }
 
   function ensureClonedMaterials() {
@@ -998,137 +1031,43 @@ export function createHeroModel(opts = {}) {
     shoulderR.rotation.z = -0.08;
   }
 
-  function setPose(name, t = 0, intensity = 1) {
+  function setPose(name, t = 0, intensity = 1, context = null) {
     resetPose();
     const k = Math.max(0, intensity);
 
+    const weaponKind = context?.weaponKind || group.userData.equippedWeaponKind || 'sword';
+    const shieldKind = context?.shieldKind !== undefined ? context.shieldKind : (group.userData.equippedShieldKind || null);
+
+    const WEAPON_AWARE_POSES = new Set([
+      'idle', 'walk', 'run', 'attack1', 'attack2', 'attack3', 'comboLoop',
+      'block', 'mine', 'trainWeapon', 'trainSword', 'trainGreatsword', 'trainSpear',
+      'trainDagger', 'trainBow', 'trainStaff', 'trainMace', 'trainClub', 'trainPickaxe', 'trainMagic',
+      'aimReady', 'reach', 'nock', 'raise', 'fullDraw', 'release', 'vibrate', 'aim', 'shoot',
+      'cast', 'ultimateChannel', 'spellCast', 'staffCast'
+    ]);
+
+    if (WEAPON_AWARE_POSES.has(name)) {
+      evaluateWeaponPose(parts, sockets, {
+        name,
+        t,
+        intensity: k,
+        weaponKind,
+        shieldKind,
+        dt: context?.dt || 0.016,
+        moving: context?.moving,
+        bowDraw: context?.bowDraw,
+        arrowVisible: context?.arrowVisible,
+        vibTime: context?.vibTime,
+        isTremor: context?.isTremor,
+        overdraw: context?.overdraw
+      });
+      if (parts.root.userData.bowState) {
+        group.userData.bowState = parts.root.userData.bowState;
+      }
+      return;
+    }
+
     switch (name) {
-      case 'idle': {
-        const b = Math.sin(t * 2.2);
-        hips.position.y = 0.88 + b * 0.008 * k;
-        chest.rotation.x = b * 0.028 * k;
-        shoulderL.rotation.x = Math.sin(t * 1.6) * 0.04 * k;
-        shoulderR.rotation.x = -Math.sin(t * 1.6) * 0.04 * k;
-        elbowL.rotation.x = -0.16;
-        elbowR.rotation.x = -0.16;
-        head.rotation.y = Math.sin(t * 0.9) * 0.05 * k;
-        break;
-      }
-      case 'walk': {
-        const w = t * 6.5 * Math.max(0.4, k);
-        const s = Math.sin(w);
-        const c = Math.cos(w);
-        hips.position.y = 0.88 - Math.abs(c) * 0.028 * k;
-        hips.rotation.y = s * 0.14 * k;
-        torso.rotation.x = 0.06 * k;
-        chest.rotation.y = -s * 0.16 * k;
-        hipL.rotation.x = s * 0.56 * k;
-        hipR.rotation.x = -s * 0.56 * k;
-        kneeL.rotation.x = Math.max(0, -c) * 0.68 * k;
-        kneeR.rotation.x = Math.max(0, c) * 0.68 * k;
-        shoulderL.rotation.x = -s * 0.46 * k;
-        shoulderR.rotation.x = s * 0.46 * k;
-        elbowL.rotation.x = -0.25 - Math.max(0, -s) * 0.25 * k;
-        elbowR.rotation.x = -0.25 - Math.max(0, s) * 0.25 * k;
-        break;
-      }
-      case 'run': {
-        const w = t * 11.0 * Math.max(0.4, k);
-        const s = Math.sin(w);
-        const c = Math.cos(w);
-        hips.position.y = 0.85 + Math.abs(s) * 0.045 * k;
-        hips.rotation.y = s * 0.22 * k;
-        torso.rotation.x = 0.22 * k;
-        chest.rotation.y = -s * 0.26 * k;
-        head.rotation.x = -0.15 * k;
-        hipL.rotation.x = s * 0.95 * k;
-        hipR.rotation.x = -s * 0.95 * k;
-        kneeL.rotation.x = (0.2 + Math.max(0, -c) * 0.95) * k;
-        kneeR.rotation.x = (0.2 + Math.max(0, c) * 0.95) * k;
-        shoulderL.rotation.x = -s * 0.88 * k;
-        shoulderR.rotation.x = s * 0.88 * k;
-        elbowL.rotation.x = -0.85;
-        elbowR.rotation.x = -0.85;
-        break;
-      }
-      case 'attack1':
-      case 'attack2':
-      case 'attack3': {
-        const p = t > 0.5 ? (t % 0.65) : Math.max(0, t);
-        let phase = 0;
-        let lunge = 0;
-        if (p < 0.10) {
-          const u = p / 0.10;
-          phase = -u;
-          lunge = u * 0.35;
-        } else if (p < 0.20) {
-          const u = (p - 0.10) / 0.10;
-          phase = -1 + u * 2.0;
-          lunge = 0.35 + u * 0.65;
-        } else if (p < 0.50) {
-          const u = (p - 0.20) / 0.30;
-          const ease = 1 - u * u * (3 - 2 * u);
-          phase = ease;
-          lunge = ease;
-        }
-
-        hips.position.z = lunge * 0.14 * k;
-        hips.position.y = 0.88 - lunge * 0.08 * k;
-        hipL.rotation.x = -lunge * 0.52 * k;
-        kneeL.rotation.x = lunge * 0.62 * k;
-        hipR.rotation.x = lunge * 0.45 * k;
-        kneeR.rotation.x = lunge * 0.25 * k;
-
-        if (name === 'attack1') {
-          hips.rotation.y = phase * 0.32 * k;
-          torso.rotation.y = phase * 0.48 * k;
-          torso.rotation.x = lunge * 0.22 * k;
-          shoulderR.rotation.x = (-1.35 + phase * 1.15) * k;
-          shoulderR.rotation.y = (-0.55 + phase * 1.15) * k;
-          shoulderR.rotation.z = (-0.65 + phase * 0.85) * k;
-          elbowR.rotation.x = (-0.55 + Math.max(0, phase) * 0.35) * k;
-          shoulderL.rotation.x = -0.35 * lunge * k;
-          elbowL.rotation.x = -0.55 * lunge * k;
-        } else if (name === 'attack2') {
-          hips.rotation.y = -phase * 0.35 * k;
-          torso.rotation.y = -phase * 0.52 * k;
-          torso.rotation.x = lunge * 0.18 * k;
-          shoulderR.rotation.x = (-1.15 + Math.abs(phase) * 0.25) * k;
-          shoulderR.rotation.y = (0.75 - phase * 1.35) * k;
-          shoulderR.rotation.z = (-0.25 - phase * 0.70) * k;
-          elbowR.rotation.x = (-0.45 + Math.max(0, phase) * 0.30) * k;
-          shoulderL.rotation.x = -0.45 * lunge * k;
-          shoulderL.rotation.z = 0.45 * lunge * k;
-        } else {
-          torso.rotation.x = (phase * 0.48) * k;
-          chest.rotation.x = (phase * 0.25) * k;
-          const armSwing = (-1.85 + (phase + 1) * 1.15) * k;
-          shoulderR.rotation.x = armSwing;
-          shoulderL.rotation.x = armSwing;
-          shoulderR.rotation.y = 0.32 * lunge * k;
-          shoulderL.rotation.y = -0.32 * lunge * k;
-          shoulderR.rotation.z = 0.22 * lunge * k;
-          shoulderL.rotation.z = -0.22 * lunge * k;
-          elbowR.rotation.x = -0.35 * k;
-          elbowL.rotation.x = -0.35 * k;
-        }
-        break;
-      }
-      case 'block': {
-        hips.position.y = 0.82;
-        torso.rotation.x = 0.12 * k;
-        torso.rotation.y = -0.38 * k;
-        shoulderL.rotation.x = -1.15 * k;
-        shoulderL.rotation.y = 0.55 * k;
-        elbowL.rotation.x = -1.05 * k;
-        shoulderR.rotation.x = -0.45 * k;
-        elbowR.rotation.x = -0.75 * k;
-        hipL.rotation.x = -0.32 * k;
-        kneeL.rotation.x = 0.42 * k;
-        hipR.rotation.x = 0.26 * k;
-        kneeR.rotation.x = 0.30 * k;
-        break;
-      }
       case 'roll': {
         const raw = t > 0.4 ? (t % 0.55) : Math.max(0, t);
         const u = Math.min(1, raw / 0.4);
@@ -1217,54 +1156,6 @@ export function createHeroModel(opts = {}) {
         }
         break;
       }
-      case 'trainSword':
-      case 'trainSpear':
-      case 'trainBow':
-      case 'trainDagger':
-      case 'trainMagic': {
-        const u = ((t % 1.2) + 1.2) % 1.2 / 1.2;
-        const pulse = Math.sin(u * Math.PI * 2);
-        hips.position.y = 0.84;
-        hipL.rotation.x = -0.25;
-        hipR.rotation.x = 0.25;
-        kneeL.rotation.x = 0.35;
-        if (name === 'trainSword') {
-          torso.rotation.y = pulse * 0.42 * k;
-          shoulderR.rotation.x = -1.1 + pulse * 1.1 * k;
-          elbowR.rotation.x = -0.4;
-        } else if (name === 'trainSpear') {
-          torso.rotation.y = -0.4 + pulse * 0.38 * k;
-          shoulderR.rotation.x = -0.8 + pulse * 0.75 * k;
-          shoulderL.rotation.x = -0.9 + pulse * 0.4 * k;
-        } else if (name === 'trainBow') {
-          torso.rotation.y = -0.65;
-          shoulderL.rotation.x = -1.45;
-          shoulderR.rotation.x = -1.45;
-          elbowR.rotation.x = -0.4 - Math.max(0, pulse) * 0.95 * k;
-        } else if (name === 'trainDagger') {
-          const fast = Math.sin(u * Math.PI * 4);
-          torso.rotation.y = fast * 0.38 * k;
-          shoulderR.rotation.x = -0.9 + fast * 0.8 * k;
-          shoulderL.rotation.x = -0.9 - fast * 0.8 * k;
-        } else {
-          hips.position.y = 0.88 + pulse * 0.03 * k;
-          shoulderL.rotation.x = -1.3 + pulse * 0.25 * k;
-          shoulderR.rotation.x = -1.3 + pulse * 0.25 * k;
-          shoulderL.rotation.z = 0.35;
-          shoulderR.rotation.z = -0.35;
-        }
-        break;
-      }
-      case 'mine': {
-        const u = ((t % 1.0) + 1.0) % 1.0;
-        const strike = u < 0.45 ? -Math.sin((u / 0.45) * Math.PI * 0.5) : Math.cos(((u - 0.45) / 0.55) * Math.PI);
-        torso.rotation.x = (0.25 + strike * 0.45) * k;
-        shoulderL.rotation.x = (-1.4 + strike * 1.2) * k;
-        shoulderR.rotation.x = (-1.4 + strike * 1.2) * k;
-        elbowL.rotation.x = -0.45;
-        elbowR.rotation.x = -0.45;
-        break;
-      }
       case 'talk': {
         const w = t * 4.5;
         head.rotation.x = Math.sin(w) * 0.08 * k;
@@ -1307,6 +1198,7 @@ export function createHeroModel(opts = {}) {
     group,
     parts,
     sockets,
+    userData: group.userData,
     setPose,
     setExpression,
     setArmor,

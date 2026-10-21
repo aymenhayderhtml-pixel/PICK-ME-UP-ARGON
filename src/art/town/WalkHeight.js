@@ -13,7 +13,7 @@ const buildingFloors = [
   { id: 'summoning_room', type: 'circle', cx: 30.0, cz: 4.0, radius: 10.4, floorY: 1.625, maxWalkY: 1.75 },
   { id: 'synthesis_chamber', type: 'circle', cx: 0.0, cz: -32.0, radius: 12.0, floorY: 0.81, maxWalkY: 0.90 },
   { id: 'armory', type: 'box', cx: -6.0, cz: -20.0, hw: 6.0, hd: 8.0, floorY: 0.81, maxWalkY: 0.85 },
-  { id: 'space_time_rift', type: 'box', cx: 27.0, cz: -29.0, hw: 4.5, hd: 7.0, floorY: 0.88, maxWalkY: 0.95 },
+  { id: 'space_time_rift', type: 'box', cx: 32.5, cz: -32.5, hw: 4.5, hd: 4.5, floorY: 0.0, maxWalkY: 0.85 },
   { id: 'training_grounds', type: 'box', cx: -24.0, cz: 20.0, hw: 12.0, hd: 12.0, floorY: 0.10, maxWalkY: 0.20 },
   { id: 'cottage_1', type: 'box', cx: -32.5, cz: -15.5, hw: 5.5, hd: 7.0, floorY: 0.40, maxWalkY: 0.45 },
   { id: 'mess_hall_row', type: 'box', cx: 8.0, cz: 40.0, hw: 14.0, hd: 7.0, floorY: 1.575, maxWalkY: 1.65 },
@@ -32,6 +32,16 @@ function getBuildingSpec(x, z) {
 }
 
 function getBuildingFloorY(x, z) {
+  // Summoning Room stair ramp
+  const srVx = x - 23.5, srVz = z - 11.5;
+  const srAlong = srVx * (-0.655) + srVz * 0.756;
+  if (srAlong >= 0 && srAlong <= 4.0) {
+    const srPerp = Math.abs(srVx * 0.756 + srVz * 0.655);
+    if (srPerp <= 2.3) {
+      return 1.625 - (srAlong / 4.0) * 1.425;
+    }
+  }
+
   const spec = getBuildingSpec(x, z);
   return spec ? spec.floorY : null;
 }
@@ -249,6 +259,7 @@ export function buildWalkHeightMap(townGroup, getGroundY, bounds = {}, spacing =
       mergedHits.push({ y: baseGy, normalY: 1.0 });
     }
 
+    const maxFloor = getMaxWalkY(x, z);
     for (let i = 0; i < mergedHits.length; i++) {
       const hit = mergedHits[i];
       let ceilY = Infinity;
@@ -259,7 +270,7 @@ export function buildWalkHeightMap(townGroup, getGroundY, bounds = {}, spacing =
         }
       }
       hit.clearance = ceilY === Infinity ? Infinity : ceilY - hit.y;
-      hit.isValid = hit.normalY >= 0.6 && hit.y <= MAX_FLOOR_Y && hit.clearance >= 1.5;
+      hit.isValid = hit.normalY >= 0.6 && hit.y <= maxFloor && hit.clearance >= 1.5;
     }
 
     let chosenY = (bfY !== null) ? bfY : baseGy;
@@ -373,7 +384,13 @@ export function buildWalkHeightMap(townGroup, getGroundY, bounds = {}, spacing =
 
     const y0 = y00 + (y10 - y00) * fx;
     const y1 = y01 + (y11 - y01) * fx;
-    return y0 + (y1 - y0) * fz;
+    const bilinearY = y0 + (y1 - y0) * fz;
+
+    const directY = directRaycast(x, z);
+    if (Math.abs(bilinearY - directY) > 0.04) {
+      return directY;
+    }
+    return bilinearY;
   }
 
   function dispose() {

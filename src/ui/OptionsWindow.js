@@ -10,7 +10,7 @@ export class OptionsWindow extends SystemWindow {
     this.onFpsToggle = options.onFpsToggle || (() => {});
     this.onVolumeChange = options.onVolumeChange || (() => {});
 
-    this.container.style.width = '480px';
+    this.container.style.width = '520px';
     this.container.style.maxWidth = '92vw';
 
     this.content = document.createElement('div');
@@ -28,8 +28,10 @@ export class OptionsWindow extends SystemWindow {
   buildUI() {
     this.content.innerHTML = '';
     const settings = gameState.settings || { quality: 'medium', resolutionScale: 1, showFps: false };
+    if (!settings.controls) settings.controls = { attackButton: 'right', blockButton: 'left' };
+    if (!settings.camera) settings.camera = { followSpeed: 'tight', autoTurn: true, distance: 'normal' };
 
-    // 1. Quality Setting
+    // 1. Graphics Quality Setting
     const qRow = document.createElement('div');
     qRow.style.display = 'flex';
     qRow.style.flexDirection = 'column';
@@ -76,58 +78,182 @@ export class OptionsWindow extends SystemWindow {
     qRow.appendChild(qBtnGroup);
     this.content.appendChild(qRow);
 
-    // 2. Resolution Scale Setting
-    const resRow = document.createElement('div');
-    resRow.style.display = 'flex';
-    resRow.style.flexDirection = 'column';
-    resRow.style.gap = '6px';
+    // 2. Camera Settings Section
+    const camSec = document.createElement('div');
+    camSec.style.display = 'flex';
+    camSec.style.flexDirection = 'column';
+    camSec.style.gap = '8px';
 
-    const resLabel = document.createElement('div');
-    resLabel.textContent = 'RESOLUTION SCALE';
-    resLabel.style.fontWeight = 'bold';
-    resLabel.style.color = 'var(--frame, #ffd36b)';
-    resLabel.style.letterSpacing = '1px';
-    resRow.appendChild(resLabel);
+    const camLabel = document.createElement('div');
+    camLabel.textContent = 'CAMERA SETTINGS';
+    camLabel.style.fontWeight = 'bold';
+    camLabel.style.color = 'var(--frame, #ffd36b)';
+    camLabel.style.letterSpacing = '1px';
+    camSec.appendChild(camLabel);
 
-    const resBtnGroup = document.createElement('div');
-    resBtnGroup.style.display = 'flex';
-    resBtnGroup.style.gap = '8px';
+    // Follow Speed: Tight, Normal, Loose
+    const spdBox = document.createElement('div');
+    spdBox.style.display = 'flex';
+    spdBox.style.alignItems = 'center';
+    spdBox.style.justifyContent = 'space-between';
 
-    const resScales = [
-      { id: 1, label: '100% (NATIVE)' },
-      { id: 0.75, label: '75% (PERFORMANCE)' }
+    const spdTitle = document.createElement('span');
+    spdTitle.textContent = 'Follow Speed:';
+    spdTitle.style.fontSize = '12px';
+    spdBox.appendChild(spdTitle);
+
+    const spdGroup = document.createElement('div');
+    spdGroup.style.display = 'flex';
+    spdGroup.style.gap = '6px';
+    const speeds = [
+      { id: 'tight', label: 'TIGHT' },
+      { id: 'normal', label: 'NORMAL' },
+      { id: 'loose', label: 'LOOSE' }
     ];
-    this.resBtns = {};
+    this.camSpeedBtns = {};
+    speeds.forEach((sp) => {
+      const b = document.createElement('button');
+      b.textContent = sp.label;
+      b.style.padding = '4px 10px';
+      b.style.fontSize = '11px';
+      b.style.cursor = 'pointer';
+      b.style.borderRadius = '4px';
+      b.style.border = '1px solid var(--frame-inner, #4a3e66)';
+      const isSel = (settings.camera.followSpeed || 'tight') === sp.id;
+      b.style.backgroundColor = isSel ? 'rgba(111, 224, 240, 0.25)' : 'rgba(20, 15, 30, 0.7)';
+      b.style.color = isSel ? '#6fe0f0' : '#cccccc';
 
-    resScales.forEach((rs) => {
-      const btn = document.createElement('button');
-      btn.textContent = rs.label;
-      btn.style.flex = '1';
-      btn.style.padding = '8px 12px';
-      btn.style.fontFamily = 'monospace';
-      btn.style.fontSize = '12px';
-      btn.style.cursor = 'pointer';
-      btn.style.border = '1px solid var(--frame-inner, #4a3e66)';
-      btn.style.borderRadius = '4px';
-      const isSel = Math.abs(settings.resolutionScale - rs.id) < 0.05;
-      btn.style.backgroundColor = isSel ? 'rgba(111, 224, 240, 0.25)' : 'rgba(20, 15, 30, 0.7)';
-      btn.style.color = isSel ? '#6fe0f0' : '#cccccc';
-      btn.style.boxShadow = isSel ? '0 0 8px rgba(111, 224, 240, 0.4)' : 'none';
-
-      btn.addEventListener('click', () => {
-        settings.resolutionScale = rs.id;
+      b.addEventListener('click', () => {
+        settings.camera.followSpeed = sp.id;
         gameState.saveToLocalStorage();
-        this.updateResBtnStyles();
-        this.onResolutionChange(rs.id);
+        this.updateCamSpeedBtnStyles();
       });
-
-      this.resBtns[rs.id] = btn;
-      resBtnGroup.appendChild(btn);
+      this.camSpeedBtns[sp.id] = b;
+      spdGroup.appendChild(b);
     });
-    resRow.appendChild(resBtnGroup);
-    this.content.appendChild(resRow);
+    spdBox.appendChild(spdGroup);
+    camSec.appendChild(spdBox);
 
-    // 3. FPS Overlay & Audio Controls
+    // Camera Distance: Near, Normal, Far
+    const distBox = document.createElement('div');
+    distBox.style.display = 'flex';
+    distBox.style.alignItems = 'center';
+    distBox.style.justifyContent = 'space-between';
+
+    const distTitle = document.createElement('span');
+    distTitle.textContent = 'Camera Distance:';
+    distTitle.style.fontSize = '12px';
+    distBox.appendChild(distTitle);
+
+    const distGroup = document.createElement('div');
+    distGroup.style.display = 'flex';
+    distGroup.style.gap = '6px';
+    const dists = [
+      { id: 'near', label: 'NEAR' },
+      { id: 'normal', label: 'NORMAL' },
+      { id: 'far', label: 'FAR' }
+    ];
+    this.camDistBtns = {};
+    dists.forEach((d) => {
+      const b = document.createElement('button');
+      b.textContent = d.label;
+      b.style.padding = '4px 10px';
+      b.style.fontSize = '11px';
+      b.style.cursor = 'pointer';
+      b.style.borderRadius = '4px';
+      b.style.border = '1px solid var(--frame-inner, #4a3e66)';
+      const isSel = (settings.camera.distance || 'normal') === d.id;
+      b.style.backgroundColor = isSel ? 'rgba(111, 224, 240, 0.25)' : 'rgba(20, 15, 30, 0.7)';
+      b.style.color = isSel ? '#6fe0f0' : '#cccccc';
+
+      b.addEventListener('click', () => {
+        settings.camera.distance = d.id;
+        gameState.saveToLocalStorage();
+        this.updateCamDistBtnStyles();
+      });
+      this.camDistBtns[d.id] = b;
+      distGroup.appendChild(b);
+    });
+    distBox.appendChild(distGroup);
+    camSec.appendChild(distBox);
+
+    // Auto-turn behind character checkbox
+    const autoTurnBox = document.createElement('div');
+    autoTurnBox.style.display = 'flex';
+    autoTurnBox.style.alignItems = 'center';
+    autoTurnBox.style.gap = '8px';
+
+    const autoTurnCheck = document.createElement('input');
+    autoTurnCheck.type = 'checkbox';
+    autoTurnCheck.id = 'opt-auto-turn';
+    autoTurnCheck.checked = settings.camera.autoTurn ?? true;
+    autoTurnCheck.style.cursor = 'pointer';
+    autoTurnCheck.addEventListener('change', (e) => {
+      settings.camera.autoTurn = e.target.checked;
+      gameState.saveToLocalStorage();
+    });
+
+    const autoTurnLbl = document.createElement('label');
+    autoTurnLbl.htmlFor = 'opt-auto-turn';
+    autoTurnLbl.textContent = 'Auto-turn camera behind character';
+    autoTurnLbl.style.cursor = 'pointer';
+    autoTurnLbl.style.fontSize = '12px';
+    autoTurnLbl.style.fontWeight = 'bold';
+    autoTurnBox.appendChild(autoTurnCheck);
+    autoTurnBox.appendChild(autoTurnLbl);
+    camSec.appendChild(autoTurnBox);
+
+    this.content.appendChild(camSec);
+
+    // 3. Controls Toggle (Swap attack and block buttons)
+    const ctrlSec = document.createElement('div');
+    ctrlSec.style.display = 'flex';
+    ctrlSec.style.flexDirection = 'column';
+    ctrlSec.style.gap = '6px';
+
+    const ctrlLabel = document.createElement('div');
+    ctrlLabel.textContent = 'COMBAT CONTROLS';
+    ctrlLabel.style.fontWeight = 'bold';
+    ctrlLabel.style.color = 'var(--frame, #ffd36b)';
+    ctrlLabel.style.letterSpacing = '1px';
+    ctrlSec.appendChild(ctrlLabel);
+
+    const swapBox = document.createElement('div');
+    swapBox.style.display = 'flex';
+    swapBox.style.alignItems = 'center';
+    swapBox.style.gap = '8px';
+
+    const swapCheck = document.createElement('input');
+    swapCheck.type = 'checkbox';
+    swapCheck.id = 'opt-swap-buttons';
+    // Checked if attack is left and block is right (swapped from default)
+    swapCheck.checked = settings.controls.attackButton === 'left' && settings.controls.blockButton === 'right';
+    swapCheck.style.cursor = 'pointer';
+    swapCheck.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        settings.controls.attackButton = 'left';
+        settings.controls.blockButton = 'right';
+      } else {
+        settings.controls.attackButton = 'right';
+        settings.controls.blockButton = 'left';
+      }
+      gameState.saveToLocalStorage();
+      this.updateControlsKeyList();
+    });
+
+    const swapLbl = document.createElement('label');
+    swapLbl.htmlFor = 'opt-swap-buttons';
+    swapLbl.textContent = 'Swap attack and block buttons (Left = Attack, Right = Block)';
+    swapLbl.style.cursor = 'pointer';
+    swapLbl.style.fontSize = '12px';
+    swapLbl.style.fontWeight = 'bold';
+    swapBox.appendChild(swapCheck);
+    swapBox.appendChild(swapLbl);
+    ctrlSec.appendChild(swapBox);
+
+    this.content.appendChild(ctrlSec);
+
+    // 4. Audio Controls & FPS Overlay
     const optGrid = document.createElement('div');
     optGrid.style.display = 'grid';
     optGrid.style.gridTemplateColumns = '1fr 1fr';
@@ -196,7 +322,7 @@ export class OptionsWindow extends SystemWindow {
     optGrid.appendChild(volBox);
     this.content.appendChild(optGrid);
 
-    // 4. Keyboard Controls Reference
+    // 5. Keyboard & Mouse Controls Reference
     const keySec = document.createElement('div');
     keySec.style.display = 'flex';
     keySec.style.flexDirection = 'column';
@@ -207,35 +333,48 @@ export class OptionsWindow extends SystemWindow {
     keySec.style.padding = '8px 12px';
 
     const keyTitle = document.createElement('div');
-    keyTitle.textContent = 'KEYBOARD SHORTCUTS';
+    keyTitle.textContent = 'CONTROLS REFERENCE';
     keyTitle.style.fontWeight = 'bold';
     keyTitle.style.color = 'var(--gold, #ffc27a)';
     keyTitle.style.fontSize = '11px';
     keyTitle.style.letterSpacing = '1px';
     keySec.appendChild(keyTitle);
 
+    this.keyGrid = document.createElement('div');
+    this.keyGrid.style.display = 'grid';
+    this.keyGrid.style.gridTemplateColumns = '120px 1fr';
+    this.keyGrid.style.gap = '3px 8px';
+    this.keyGrid.style.fontSize = '11px';
+    keySec.appendChild(this.keyGrid);
+
+    this.content.appendChild(keySec);
+    this.updateControlsKeyList();
+  }
+
+  updateControlsKeyList() {
+    if (!this.keyGrid) return;
+    this.keyGrid.innerHTML = '';
+    const ctrl = gameState.settings?.controls || { attackButton: 'right', blockButton: 'left' };
+    const atkStr = ctrl.attackButton === 'left' ? 'LEFT CLICK' : 'RIGHT CLICK';
+    const blkStr = ctrl.blockButton === 'right' ? 'RIGHT CLICK (HOLD)' : 'LEFT CLICK (HOLD)';
+
     const keysList = [
+      [atkStr, 'ATTACK (3-hit combo, 1 per press)'],
+      [blkStr, 'BLOCK (hold to raise shield; parry)'],
+      ['F', 'Shield bash while blocking / attack alias'],
+      ['Q', 'Roll / Dodge evasion'],
       ['WASD', 'Move player character'],
-      ['Arrows', 'Rotate & pitch camera'],
+      ['E', 'Interact with building / door / item'],
+      ['C', 'Squad Command Wheel (hold)'],
+      ['X', 'Toggle Auto-combat mode'],
+      ['Arrows', 'Rotate camera yaw & pitch'],
       ['Wheel', 'Zoom camera in / out'],
-      ['E', 'Interact with building / door'],
       ['R', 'Open Hero Roster'],
       ['T', 'Deploy / Enter Tower Gate'],
       ['O', 'Toggle Options Window'],
       ['M', 'Toggle Audio Mute'],
-      ['[ / ]', 'Shift time of day by -/+ 0.05'],
-      ['Shift+[', 'Pause / resume day cycle'],
-      ['Shift+]', 'Jump to next keyframe'],
-      ['F3', 'Toggle diagnostics & render stats'],
-      ['F6', 'Toggle NavGrid & colliders debug'],
-      ['F7', 'Ground height alignment audit'],
+      ['\\', 'Toggle Ground & surfaces debug overlay'],
     ];
-
-    const keyGrid = document.createElement('div');
-    keyGrid.style.display = 'grid';
-    keyGrid.style.gridTemplateColumns = '80px 1fr';
-    keyGrid.style.gap = '3px 8px';
-    keyGrid.style.fontSize = '11px';
 
     keysList.forEach(([k, desc]) => {
       const kEl = document.createElement('span');
@@ -245,12 +384,9 @@ export class OptionsWindow extends SystemWindow {
       const dEl = document.createElement('span');
       dEl.textContent = desc;
       dEl.style.color = '#aaaaaa';
-      keyGrid.appendChild(kEl);
-      keyGrid.appendChild(dEl);
+      this.keyGrid.appendChild(kEl);
+      this.keyGrid.appendChild(dEl);
     });
-
-    keySec.appendChild(keyGrid);
-    this.content.appendChild(keySec);
   }
 
   updateQualityBtnStyles() {
@@ -263,13 +399,21 @@ export class OptionsWindow extends SystemWindow {
     }
   }
 
-  updateResBtnStyles() {
-    const rs = gameState.settings?.resolutionScale ?? 1;
-    for (const [key, btn] of Object.entries(this.resBtns || {})) {
-      const isSel = Math.abs(parseFloat(key) - rs) < 0.05;
+  updateCamSpeedBtnStyles() {
+    const spd = gameState.settings?.camera?.followSpeed || 'tight';
+    for (const [key, btn] of Object.entries(this.camSpeedBtns || {})) {
+      const isSel = key === spd;
       btn.style.backgroundColor = isSel ? 'rgba(111, 224, 240, 0.25)' : 'rgba(20, 15, 30, 0.7)';
       btn.style.color = isSel ? '#6fe0f0' : '#cccccc';
-      btn.style.boxShadow = isSel ? '0 0 8px rgba(111, 224, 240, 0.4)' : 'none';
+    }
+  }
+
+  updateCamDistBtnStyles() {
+    const dist = gameState.settings?.camera?.distance || 'normal';
+    for (const [key, btn] of Object.entries(this.camDistBtns || {})) {
+      const isSel = key === dist;
+      btn.style.backgroundColor = isSel ? 'rgba(111, 224, 240, 0.25)' : 'rgba(20, 15, 30, 0.7)';
+      btn.style.color = isSel ? '#6fe0f0' : '#cccccc';
     }
   }
 

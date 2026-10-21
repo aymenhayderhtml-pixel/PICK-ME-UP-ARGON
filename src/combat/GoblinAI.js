@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SpellSystem } from './SpellSystem.js';
 
 // State Machine functions for Goblin enemies
 
@@ -38,6 +39,13 @@ export function handleChase(goblin, delta, player, distToPlayer, allies, dungeon
   const gPos = goblin.mesh.position;
   const dx = pPos.x - gPos.x;
   const dz = pPos.z - gPos.z;
+
+  // Flame Wall avoidance: steer away if overlapping or heading straight into fire
+  if (SpellSystem.isPointInFlameWall(gPos, 1.2)) {
+    const avoidAngle = Math.atan2(dx, dz) + 1.57;
+    goblin.moveInDirection(Math.sin(avoidAngle), Math.cos(avoidAngle), delta, dungeon);
+    return;
+  }
 
   // 1. Archer Behavior
   if (goblin.typeKey === 'ARCHER') {

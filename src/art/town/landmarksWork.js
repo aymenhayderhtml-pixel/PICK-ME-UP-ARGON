@@ -319,6 +319,28 @@ export function buildLandmarksWork(ctx = {}) {
     polygonOffsetUnits: -1
   });
 
+  // The landmark materials use vertex colors, so the training props get their
+  // own simple materials (module scope: they are disposed with the landmark).
+  const matTrainWood = new THREE.MeshStandardMaterial({
+    color: P.wood || 0x6a4a2e, roughness: 0.85, metalness: 0.05
+  });
+  const matTrainStraw = new THREE.MeshStandardMaterial({
+    color: 0xc9b183, roughness: 0.95, metalness: 0.0
+  });
+  const matTrainStone = new THREE.MeshStandardMaterial({
+    color: P.stoneMid || 0xaab4ba, roughness: 0.88, metalness: 0.05
+  });
+  const matTrainFlame = new THREE.MeshStandardMaterial({
+    color: P.forgeOrange || 0xff8a3a,
+    emissive: P.forgeOrange || 0xff8a3a,
+    emissiveIntensity: 1.6,
+    roughness: 0.3,
+    metalness: 0.05
+  });
+  const matTrainRope = new THREE.MeshStandardMaterial({
+    color: P.gold || 0xd8b45a, roughness: 0.45, metalness: 0.5
+  });
+
   const materials = [
     matStone,
     matPlasterWood,
@@ -328,7 +350,12 @@ export function buildLandmarksWork(ctx = {}) {
     matForge,
     matWindow,
     matSignGlyph,
-    matAO
+    matAO,
+    matTrainWood,
+    matTrainStraw,
+    matTrainStone,
+    matTrainFlame,
+    matTrainRope
   ];
 
   const colliders = [];
@@ -340,6 +367,7 @@ export function buildLandmarksWork(ctx = {}) {
     forgeLightIdx: -1,
     synthLightIdx: -1,
     dummies: [],
+    flames: [],
     time: 0
   };
 
@@ -362,6 +390,7 @@ export function buildLandmarksWork(ctx = {}) {
       forgeLightIdx: -1,
       synthLightIdx: -1,
       dummies: [],
+      flames: [],
       time: animRefs.time
     };
   }
@@ -886,6 +915,127 @@ export function buildLandmarksWork(ctx = {}) {
       colliders.push({ type: 'circle', x: dc.x, z: dc.z, r: 0.48 });
     }
 
+    // =========================================================================
+    // 3b. TRAINING SUB-ZONES (Archery Targets, Fire Targets, Sparring Ring)
+    // =========================================================================
+    const tgZones = tgCfg.trainingZones || {};
+    const archCfg = tgZones.archery_targets;
+    const fireCfg = tgZones.fire_targets;
+    const ringCfg = tgZones.sparring_ring;
+
+    // The landmark materials use vertex colors, so the training props use the
+    // dedicated matTrain* materials declared at landmark scope.
+
+    // --- Archery targets: a timber post carrying a straw bullseye ---------
+    if (archCfg && archCfg.slots) {
+      const postGeo = new THREE.CylinderGeometry(0.09, 0.12, 1.55, 8);
+      postGeo.translate(0, 0.775, 0);
+      const bullOuter = new THREE.CylinderGeometry(0.62, 0.62, 0.08, 20);
+      bullOuter.rotateX(Math.PI / 2);
+      const bullMid = new THREE.CylinderGeometry(0.40, 0.40, 0.10, 20);
+      bullMid.rotateX(Math.PI / 2);
+      const bullInner = new THREE.CylinderGeometry(0.18, 0.18, 0.12, 16);
+      bullInner.rotateX(Math.PI / 2);
+      activeDisposables.push(postGeo, bullOuter, bullMid, bullInner);
+
+      archCfg.slots.forEach((slot, i) => {
+        const sx = slot.target.x;
+        const sz = slot.target.z;
+        const sy = getGroundY(sx, sz);
+
+        const post = new THREE.Mesh(postGeo, matTrainWood);
+        post.name = `archery_post_${i}`;
+        post.position.set(sx, sy, sz);
+        rootGroup.add(post);
+
+        const outer = new THREE.Mesh(bullOuter, matTrainStraw);
+        outer.name = `archery_target_outer_${i}`;
+        outer.position.set(sx, sy + slot.target.y, sz + 0.10);
+        rootGroup.add(outer);
+
+        const mid = new THREE.Mesh(bullMid, matTrainWood);
+        mid.name = `archery_target_mid_${i}`;
+        mid.position.set(sx, sy + slot.target.y, sz + 0.14);
+        rootGroup.add(mid);
+
+        const inner = new THREE.Mesh(bullInner, matTrainFlame);
+        inner.name = `archery_target_inner_${i}`;
+        inner.position.set(sx, sy + slot.target.y, sz + 0.18);
+        rootGroup.add(inner);
+
+        anchors[slot.anchorId] = new THREE.Vector3(sx, sy + slot.target.y, sz);
+        anchors[`${slot.anchorId}_obj`] = inner;
+        colliders.push({ type: 'circle', x: sx, z: sz, r: 0.42 });
+      });
+    }
+
+    // --- Fire targets: a stone brazier the mage lights --------------------
+    if (fireCfg && fireCfg.slots) {
+      const bowlGeo = new THREE.CylinderGeometry(0.44, 0.28, 0.48, 12);
+      bowlGeo.translate(0, 0.24, 0);
+      const flameGeo = new THREE.ConeGeometry(0.3, 0.9, 10);
+      flameGeo.translate(0, 0.45, 0);
+      activeDisposables.push(bowlGeo, flameGeo);
+
+      fireCfg.slots.forEach((slot, i) => {
+        const sx = slot.target.x;
+        const sz = slot.target.z;
+        const sy = getGroundY(sx, sz);
+
+        const bowl = new THREE.Mesh(bowlGeo, matTrainStone);
+        bowl.name = `fire_bowl_${i}`;
+        bowl.position.set(sx, sy, sz);
+        rootGroup.add(bowl);
+
+        const flame = new THREE.Mesh(flameGeo, matTrainFlame);
+        flame.name = `fire_flame_${i}`;
+        flame.position.set(sx, sy + 0.44, sz);
+        rootGroup.add(flame);
+        animRefs.flames.push(flame);
+
+        anchors[slot.anchorId] = new THREE.Vector3(sx, sy + slot.target.y, sz);
+        anchors[`${slot.anchorId}_obj`] = flame;
+        colliders.push({ type: 'circle', x: sx, z: sz, r: 0.5 });
+      });
+    }
+
+    // --- Sparring ring: a rope circle pinned by four posts -----------------
+    if (ringCfg) {
+      const cx = ringCfg.center.x;
+      const cz = ringCfg.center.z;
+      const cy = getGroundY(cx, cz);
+      const r = ringCfg.radius || 1.9;
+
+      const ropeGeo = new THREE.TorusGeometry(r, 0.045, 6, 40);
+      ropeGeo.rotateX(Math.PI / 2);
+      const ringPostGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.72, 8);
+      ringPostGeo.translate(0, 0.36, 0);
+      activeDisposables.push(ropeGeo, ringPostGeo);
+
+      const rope = new THREE.Mesh(ropeGeo, matTrainRope);
+      rope.name = 'sparring_ring_rope';
+      rope.position.set(cx, cy + 0.1, cz);
+      rootGroup.add(rope);
+
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        const px = cx + Math.cos(a) * r;
+        const pz = cz + Math.sin(a) * r;
+        const post = new THREE.Mesh(ringPostGeo, matTrainWood);
+        post.name = `sparring_post_${i}`;
+        post.position.set(px, getGroundY(px, pz), pz);
+        rootGroup.add(post);
+      }
+
+      anchors['sparring_ring_center'] = new THREE.Vector3(cx, cy, cz);
+      anchors['sparring_spot_a'] = new THREE.Vector3(
+        ringCfg.spotA.x, getGroundY(ringCfg.spotA.x, ringCfg.spotA.z), ringCfg.spotA.z
+      );
+      anchors['sparring_spot_b'] = new THREE.Vector3(
+        ringCfg.spotB.x, getGroundY(ringCfg.spotB.x, ringCfg.spotB.z), ringCfg.spotB.z
+      );
+    }
+
     const tgDoorPos = new THREE.Vector3(
       (tgCfg.door && tgCfg.door.position.x) || -18.0,
       tgY,
@@ -1203,6 +1353,16 @@ export function buildLandmarksWork(ctx = {}) {
     if (animRefs.forgeLightIdx >= 0 && lights[animRefs.forgeLightIdx]) {
       const fl = lights[animRefs.forgeLightIdx];
       fl.intensity = (fl.baseIntensity || 5.5) * flicker;
+    }
+
+    // Training brazier flames flicker and stretch (allocation-free)
+    if (animRefs.flames.length > 0) {
+      matTrainFlame.emissiveIntensity = 1.6 * flicker;
+      for (let i = 0; i < animRefs.flames.length; i++) {
+        const f = animRefs.flames[i];
+        const s = 1.0 + Math.sin(t * 8.0 + i * 1.7) * 0.16 + Math.cos(t * 13.1 + i) * 0.07;
+        f.scale.set(0.9 + (s - 1) * 0.4, s, 0.9 + (s - 1) * 0.4);
+      }
     }
   }
 

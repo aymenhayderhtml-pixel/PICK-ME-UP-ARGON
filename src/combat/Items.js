@@ -77,6 +77,19 @@ export const ITEM_TEMPLATES = {
     blockMult: 1.25,
     attackSpeedMult: 1.0,
   },
+  HUNTING_BOW: {
+    id: 'hunting_bow',
+    name: 'Hunting Recurve Bow',
+    slot: 'weapon',
+    weaponType: 'bow',
+    kind: 'bow',
+    grade: 'C',
+    durability: 60,
+    maxDurability: 60,
+    damageMult: 1.3,
+    blockMult: 0,
+    attackSpeedMult: 1.0,
+  },
 };
 
 export class ItemsManager {

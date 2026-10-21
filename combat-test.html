@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>" />
+    <title>Universal Combat Engine - Phase 2 Sandbox (Staff & Spells)</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+      }
+      body {
+        overflow: hidden;
+        background-color: #0c1219;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+        color: #e2e8f0;
+      }
+      #canvas-container {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+
+      /* Top Center Bar: Arena Reset & Auto Respawn */
+      #top-controls-bar {
+        position: fixed;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+        z-index: 100;
+      }
+      .top-ctrl-btn {
+        background: rgba(12, 18, 25, 0.94);
+        border: 1px solid #1e3a5f;
+        border-radius: 6px;
+        padding: 6px 14px;
+        color: #f1f5f9;
+        font-size: 11px;
+        font-weight: bold;
+        cursor: pointer;
+        backdrop-filter: blur(4px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .top-ctrl-btn:hover {
+        background: #0284c7;
+        border-color: #38bdf8;
+      }
+      .top-ctrl-btn.active {
+        background: #059669;
+        border-color: #10b981;
+      }
+
+      /* Top HUD: Hero Stats & Controls */
+      #hero-hud {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        background: rgba(12, 18, 25, 0.92);
+        border: 1px solid #1e3a5f;
+        border-radius: 6px;
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 300px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        z-index: 100;
+        backdrop-filter: blur(4px);
+        transition: width 0.2s ease, padding 0.2s ease;
+      }
+      #hero-hud.collapsed {
+        width: auto;
+        padding: 8px 12px;
+      }
+      #hero-hud.collapsed .hud-collapsible-body {
+        display: none !important;
+      }
+      .hud-title {
+        font-size: 13px;
+        font-weight: bold;
+        color: #38bdf8;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .bar-wrap {
+        width: 100%;
+        height: 14px;
+        background: #1e293b;
+        border-radius: 3px;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid #334155;
+      }
+      .bar-fill {
+        height: 100%;
+        transition: width 0.08s ease-out;
+      }
+      .bar-text {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        font-size: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: #fff;
+        text-shadow: 0 1px 2px #000;
+      }
+      .stat-badges {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        font-size: 10px;
+        margin-top: 4px;
+      }
+      .badge {
+        padding: 2px 6px;
+        border-radius: 3px;
+        background: #1e293b;
+        color: #94a3b8;
+        font-weight: bold;
+      }
+      .badge.active {
+        background: #0284c7;
+        color: #ffffff;
+      }
+      .badge.parry {
+        background: #06b6d4;
+        color: #082f49;
+      }
+      .badge.counter {
+        background: #eab308;
+        color: #422006;
+      }
+      .badge.ward {
+        background: #0891b2;
+        color: #ecfeff;
+      }
+      .badge.burn {
+        background: #ea580c;
+        color: #fff7ed;
+      }
+      .badge.slow {
+        background: #0284c7;
+        color: #f0f9ff;
+      }
+      .badge.stun {
+        background: #eab308;
+        color: #422006;
+      }
+
+      /* Bottom Center: Spell Cast Bar & Squad Hotkeys */
+      #bottom-hud {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        z-index: 100;
+      }
+      .action-bar {
+        display: flex;
+        gap: 8px;
+        background: rgba(12, 18, 25, 0.94);
+        border: 1px solid #1e3a5f;
+        border-radius: 8px;
+        padding: 6px 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+      }
+      .spell-slot {
+        width: 64px;
+        height: 54px;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.15s;
+      }
+      .spell-slot:hover {
+        border-color: #38bdf8;
+        transform: translateY(-2px);
+      }
+      .spell-slot.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .slot-key {
+        position: absolute;
+        top: 2px;
+        left: 4px;
+        font-size: 9px;
+        font-weight: bold;
+        color: #38bdf8;
+      }
+      .slot-cost {
+        position: absolute;
+        top: 2px;
+        right: 4px;
+        font-size: 8px;
+        color: #60a5fa;
+      }
+      .slot-name {
+        font-size: 10px;
+        font-weight: bold;
+        color: #f1f5f9;
+        margin-top: 8px;
+        text-align: center;
+      }
+      .slot-cooldown-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 0%;
+        background: rgba(0, 0, 0, 0.75);
+        pointer-events: none;
+        transition: height 0.05s linear;
+      }
+
+      /* Right Panel: Telemetry, Event Bus & Tuning Controls */
+      #debug-panel {
+        position: fixed;
+        right: 16px;
+        top: 16px;
+        width: 320px;
+        background: rgba(12, 18, 25, 0.94);
+        border: 1px solid #1e3a5f;
+        border-radius: 6px;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        font-size: 11px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+        z-index: 100;
+        max-height: calc(100vh - 32px);
+        overflow-y: auto;
+        backdrop-filter: blur(4px);
+        transition: width 0.2s ease, padding 0.2s ease;
+      }
+      #debug-panel.collapsed {
+        width: auto;
+        padding: 8px 12px;
+      }
+      #debug-panel.collapsed .debug-collapsible-body {
+        display: none !important;
+      }
+      .section-hdr {
+        font-weight: bold;
+        font-size: 11px;
+        color: #38bdf8;
+        border-bottom: 1px solid #1e3a5f;
+        padding-bottom: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .telemetry-row {
+        display: flex;
+        justify-content: space-between;
+        color: #94a3b8;
+      }
+      .telemetry-val {
+        color: #f1f5f9;
+        font-weight: bold;
+      }
+      .btn-row {
+        display: flex;
+        gap: 6px;
+      }
+      button {
+        flex: 1;
+        padding: 6px 8px;
+        font-size: 11px;
+        font-family: inherit;
+        font-weight: bold;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 4px;
+        color: #f1f5f9;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      button:hover {
+        background: #0284c7;
+        border-color: #38bdf8;
+        color: #ffffff;
+      }
+      button.active-btn {
+        background: #0284c7;
+        border-color: #38bdf8;
+      }
+      #event-log {
+        background: #080d14;
+        border: 1px solid #1e293b;
+        border-radius: 4px;
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 10px;
+        height: 120px;
+        overflow-y: hidden;
+      }
+      .log-entry {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #94a3b8;
+      }
+      .log-entry.onHit { color: #f87171; }
+      .log-entry.onBlock { color: #38bdf8; }
+      .log-entry.onParry { color: #22d3ee; font-weight: bold; }
+      .log-entry.onDodge { color: #fbbf24; }
+      .log-entry.onPoiseBreak { color: #facc15; font-weight: bold; }
+      .log-entry.onCast { color: #c084fc; font-weight: bold; }
+      .log-entry.onHeal { color: #4ade80; font-weight: bold; }
+      .log-entry.onWard { color: #22d3ee; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div id="canvas-container"></div>
+
+    <!-- Top Center: Reset Arena & Auto-Respawn Toggle -->
+    <div id="top-controls-bar">
+      <button id="btn-reset-arena" class="top-ctrl-btn" title="Reset all combatants and cooldowns (R / P key)">
+        <span>↺</span> Reset Arena (R)
+      </button>
+      <button id="btn-toggle-respawn" class="top-ctrl-btn active" title="Toggle 3s auto-respawn of dead combatants">
+        Auto-Respawn: <span id="respawn-status-text" style="color:#4ade80;">ON</span>
+      </button>
+    </div>
+
+    <!-- Top Left: Hero HUD -->
+    <div id="hero-hud">
+      <div class="hud-title">
+        <span id="hero-name-label">HAN ISLAT (HERO)</span>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span id="hero-state-tag" style="color: #4ade80;">IDLE</span>
+          <button id="btn-toggle-hero-hud" style="flex: none; padding: 2px 6px; font-size: 10px; border-radius: 3px; background: #1e293b; color: #94a3b8; border: 1px solid #334155; cursor: pointer;" title="Collapse/Expand Hero HUD">◀</button>
+        </div>
+      </div>
+
+      <div class="hud-collapsible-body" style="display: flex; flex-direction: column; gap: 8px;">
+        <div class="btn-row" style="margin-bottom: 4px;">
+          <button id="btn-switch-hero" style="font-size: 10px; padding: 4px 6px;">
+            Role: <span id="hero-role-text" style="color: #38bdf8;">Han (Sword)</span>
+          </button>
+        </div>
+
+        <!-- Health -->
+        <div class="bar-wrap">
+          <div id="hero-hp-bar" class="bar-fill" style="width: 100%; background: #ef4444;"></div>
+          <div id="hero-hp-text" class="bar-text">HP: 120 / 120</div>
+        </div>
+
+        <!-- Stamina -->
+        <div class="bar-wrap">
+          <div id="hero-stamina-bar" class="bar-fill" style="width: 100%; background: #10b981;"></div>
+          <div id="hero-stamina-text" class="bar-text">STAMINA: 100 / 100</div>
+        </div>
+
+        <!-- Mana (Phase 2) -->
+        <div class="bar-wrap">
+          <div id="hero-mana-bar" class="bar-fill" style="width: 100%; background: #0284c7;"></div>
+          <div id="hero-mana-text" class="bar-text">MANA: 100 / 100</div>
+        </div>
+
+        <!-- Ward Barrier (Phase 2) -->
+        <div id="hero-ward-wrap" class="bar-wrap" style="display: none; height: 12px; border-color: #06b6d4;">
+          <div id="hero-ward-bar" class="bar-fill" style="width: 100%; background: #06b6d4;"></div>
+          <div id="hero-ward-text" class="bar-text">WARD: 60 / 60</div>
+        </div>
+
+        <!-- Poise -->
+        <div class="bar-wrap">
+          <div id="hero-poise-bar" class="bar-fill" style="width: 100%; background: #f59e0b;"></div>
+          <div id="hero-poise-text" class="bar-text">POISE: 100 / 100</div>
+        </div>
+
+        <!-- Status Flags -->
+        <div class="stat-badges">
+          <span id="badge-iframe" class="badge">I-FRAMES</span>
+          <span id="badge-parry" class="badge parry">PARRY</span>
+          <span id="badge-counter" class="badge counter">+40% CRIT</span>
+          <span id="badge-ward" class="badge ward">WARDED</span>
+          <span id="badge-burn" class="badge burn">BURN</span>
+          <span id="badge-slow" class="badge slow">SLOW</span>
+          <span id="badge-stun" class="badge stun">STUN</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Center: 6-Spell Cast Bar & Squad Hotkeys -->
+    <div id="bottom-hud">
+      <!-- 6 Direct Spells (Q, E, R, F, T, G) -->
+      <div class="action-bar" id="spell-cast-hud">
+        <div class="spell-slot" id="slot-spell-1" title="Fireball (18m range, 45 dmg + burn) [Q]">
+          <span class="slot-key">Q</span>
+          <span class="slot-cost">25 MP</span>
+          <span class="slot-name">Fireball</span>
+          <div class="slot-cooldown-overlay" id="cd-spell-1"></div>
+        </div>
+        <div class="spell-slot" id="slot-spell-2" title="Ice Spike (20m pierce bolt, 38 dmg + slow) [E]">
+          <span class="slot-key">E</span>
+          <span class="slot-cost">20 MP</span>
+          <span class="slot-name">Ice Spike</span>
+          <div class="slot-cooldown-overlay" id="cd-spell-2"></div>
+        </div>
+        <div class="spell-slot" id="slot-spell-3" title="Lightning Chain (14m, 3 jumps, 55 dmg + stun) [R]">
+          <span class="slot-key">R</span>
+          <span class="slot-cost">35 MP</span>
+          <span class="slot-name">Chain</span>
+          <div class="slot-cooldown-overlay" id="cd-spell-3"></div>
+        </div>
+        <div class="spell-slot" id="slot-spell-4" title="Restorative Surge (12m smart heal lowest ally) [F]">
+          <span class="slot-key">F</span>
+          <span class="slot-cost">30 MP</span>
+          <span class="slot-name">Heal</span>
+          <div class="slot-cooldown-overlay" id="cd-spell-4"></div>
+        </div>
+        <div class="spell-slot" id="slot-spell-5" title="Arcane Ward (3m aura, 60 HP barrier) [T]">
+          <span class="slot-key">T</span>
+          <span class="slot-cost">40 MP</span>
+          <span class="slot-name">Ward</span>
+          <div class="slot-cooldown-overlay" id="cd-spell-5"></div>
+        </div>
+        <div class="spell-slot" id="slot-spell-6" title="Meteor (16m range, super-armor, 110 dmg) [G]">
+          <span class="slot-key">G</span>
+          <span class="slot-cost">65 MP</span>
+          <span class="slot-name" style="color: #f87171;">Meteor</span>
+          <div class="slot-cooldown-overlay" id="cd-spell-6"></div>
+        </div>
+      </div>
+
+      <!-- Squad Skills (1, 2, 3, 4) -->
+      <div class="action-bar" style="padding: 4px 8px; gap: 6px;">
+        <div class="spell-slot" id="squad-slot-1" style="width: 58px; height: 38px;" title="Jenna Skill [1 / Z]">
+          <span class="slot-key">1</span>
+          <span class="slot-name" style="margin-top: 4px; font-size: 9px;">Jenna</span>
+          <div class="slot-cooldown-overlay" id="squad-cd-1"></div>
+        </div>
+        <div class="spell-slot" id="squad-slot-2" style="width: 58px; height: 38px;" title="Aaron Skill [2 / X]">
+          <span class="slot-key">2</span>
+          <span class="slot-name" style="margin-top: 4px; font-size: 9px;">Aaron</span>
+          <div class="slot-cooldown-overlay" id="squad-cd-2"></div>
+        </div>
+        <div class="spell-slot" id="squad-slot-3" style="width: 58px; height: 38px;" title="Velkist Skill [3 / C]">
+          <span class="slot-key">3</span>
+          <span class="slot-name" style="margin-top: 4px; font-size: 9px;">Velkist</span>
+          <div class="slot-cooldown-overlay" id="squad-cd-3"></div>
+        </div>
+        <div class="spell-slot" id="squad-slot-4" style="width: 58px; height: 38px;" title="Eolka Skill [4 / V]">
+          <span class="slot-key">4</span>
+          <span class="slot-name" style="margin-top: 4px; font-size: 9px; color: #f87171;">Eolka</span>
+          <div class="slot-cooldown-overlay" id="squad-cd-4"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Right: Debug Telemetry & Controls Panel (Starts Collapsed to show entire arena) -->
+    <div id="debug-panel" class="collapsed">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        <span style="font-weight: bold; font-size: 11px; color: #38bdf8; letter-spacing: 0.5px;">⚙ TELEMETRY & CONTROLS</span>
+        <button id="btn-toggle-debug-panel" style="flex: none; padding: 2px 6px; font-size: 10px; border-radius: 3px; background: #1e293b; color: #94a3b8; border: 1px solid #334155; cursor: pointer;" title="Expand/Collapse Telemetry Panel">◀</button>
+      </div>
+
+      <div class="debug-collapsible-body" style="display: flex; flex-direction: column; gap: 10px;">
+        <div class="section-hdr">Engine Telemetry</div>
+        <div class="telemetry-row"><span>Active Combatants:</span><span id="tel-count" class="telemetry-val">10</span></div>
+        <div class="telemetry-row"><span>Combat Tick CPU:</span><span id="tel-cpu" class="telemetry-val">0.45 ms</span></div>
+        <div class="telemetry-row"><span>Time Scale:</span><span id="tel-timescale" class="telemetry-val">1.00x</span></div>
+        <div class="telemetry-row"><span>Action Phase:</span><span id="tel-action" class="telemetry-val">NONE</span></div>
+
+        <div class="section-hdr">Arena Entities Status</div>
+        <div class="telemetry-row"><span>Enemy Shaman:</span><span id="shaman-stat" class="telemetry-val">CAST (0.0s)</span></div>
+        <div class="telemetry-row"><span>Hurt Scout Ally:</span><span id="hurt-ally-stat" class="telemetry-val">25 / 100 HP</span></div>
+        <div class="telemetry-row"><span>Cluster Grunts (3):</span><span id="cluster-stat" class="telemetry-val">3 Alive</span></div>
+        <div class="telemetry-row"><span>Timed Attacker:</span><span id="dummy2-stat" class="telemetry-val">CYCLE (0.0s)</span></div>
+        <div class="telemetry-row"><span>Elite Poise:</span><span id="dummy3-poise" class="telemetry-val">80 / 80</span></div>
+
+        <div class="section-hdr">Time Scale Sliders</div>
+        <div class="btn-row">
+          <button id="btn-ts-1" class="active-btn">1.0x</button>
+          <button id="btn-ts-05">0.5x</button>
+          <button id="btn-ts-02">0.2x</button>
+          <button id="btn-ts-005">0.05x</button>
+        </div>
+
+        <div class="section-hdr">Visualizers & Benchmarks</div>
+        <div class="btn-row">
+          <button id="btn-wireframe">Toggle Wireframes</button>
+          <button id="btn-stress">30-Dummy Swarm</button>
+        </div>
+
+        <div class="section-hdr">Combat Event Bus Feed</div>
+        <div id="event-log"></div>
+
+        <div class="section-hdr">Controls Guide</div>
+        <div style="font-size: 10px; color: #94a3b8; line-height: 1.5;">
+          • <b>WASD</b>: Move (4.8 m/s, slowed 0.35x while casting)<br/>
+          • <b>Q, E, R, F, T, G</b>: Cast Spells (Fireball, Ice, Lightning, Heal, Ward, Meteor)<br/>
+          • <b>1–4 / Z/X/C/V</b>: Squad Signature Skills (Jenna, Aaron, Velkist, Eolka)<br/>
+          • <b>LMB Tap</b>: Melee Strike (Light Combo)<br/>
+          • <b>Hold LMB</b>: Charged Heavy Attack<br/>
+          • <b>RMB Hold</b>: Shield Block (Parry in first 0.12s)<br/>
+          • <b>Space</b>: Directional Dodge Roll (I-Frames 0.05–0.22s)<br/>
+          • <b>R (when dead or Shift+R) / P</b>: Reset Arena & Revive All
+        </div>
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./node_modules/three/build/three.module.js",
+          "three/examples/jsm/utils/BufferGeometryUtils.js": "./node_modules/three/examples/jsm/utils/BufferGeometryUtils.js"
+        }
+      }
+    </script>
+    <script type="module">
+      import { initCombatSandbox } from './src/combat/testSandbox.js';
+      import { timeScale } from './src/combat/TimeScale.js';
+
+      const container = document.getElementById('canvas-container');
+
+      // UI References
+      const heroNameLabel = document.getElementById('hero-name-label');
+      const heroStateTag = document.getElementById('hero-state-tag');
+      const btnSwitchHero = document.getElementById('btn-switch-hero');
+      const heroRoleText = document.getElementById('hero-role-text');
+
+      const heroHpBar = document.getElementById('hero-hp-bar');
+      const heroHpText = document.getElementById('hero-hp-text');
+      const heroStaminaBar = document.getElementById('hero-stamina-bar');
+      const heroStaminaText = document.getElementById('hero-stamina-text');
+      const heroManaBar = document.getElementById('hero-mana-bar');
+      const heroManaText = document.getElementById('hero-mana-text');
+
+      const heroWardWrap = document.getElementById('hero-ward-wrap');
+      const heroWardBar = document.getElementById('hero-ward-bar');
+      const heroWardText = document.getElementById('hero-ward-text');
+      const heroPoiseBar = document.getElementById('hero-poise-bar');
+      const heroPoiseText = document.getElementById('hero-poise-text');
+
+      const badgeIframe = document.getElementById('badge-iframe');
+      const badgeParry = document.getElementById('badge-parry');
+      const badgeCounter = document.getElementById('badge-counter');
+      const badgeWard = document.getElementById('badge-ward');
+      const badgeBurn = document.getElementById('badge-burn');
+      const badgeSlow = document.getElementById('badge-slow');
+      const badgeStun = document.getElementById('badge-stun');
+
+      const telCount = document.getElementById('tel-count');
+      const telCpu = document.getElementById('tel-cpu');
+      const telTimeScale = document.getElementById('tel-timescale');
+      const telAction = document.getElementById('tel-action');
+
+      const shamanStat = document.getElementById('shaman-stat');
+      const hurtAllyStat = document.getElementById('hurt-ally-stat');
+      const clusterStat = document.getElementById('cluster-stat');
+      const dummy2Stat = document.getElementById('dummy2-stat');
+      const dummy3Poise = document.getElementById('dummy3-poise');
+      const eventLog = document.getElementById('event-log');
+
+      const cdSpells = [
+        document.getElementById('cd-spell-1'),
+        document.getElementById('cd-spell-2'),
+        document.getElementById('cd-spell-3'),
+        document.getElementById('cd-spell-4'),
+        document.getElementById('cd-spell-5'),
+        document.getElementById('cd-spell-6'),
+      ];
+
+      const squadCds = [
+        document.getElementById('squad-cd-1'),
+        document.getElementById('squad-cd-2'),
+        document.getElementById('squad-cd-3'),
+        document.getElementById('squad-cd-4'),
+      ];
+
+      const btnWireframe = document.getElementById('btn-wireframe');
+      const btnStress = document.getElementById('btn-stress');
+
+      const btnTs1 = document.getElementById('btn-ts-1');
+      const btnTs05 = document.getElementById('btn-ts-05');
+      const btnTs02 = document.getElementById('btn-ts-02');
+      const btnTs005 = document.getElementById('btn-ts-005');
+
+      const tsButtons = [btnTs1, btnTs05, btnTs02, btnTs005];
+      function setTsBtn(activeBtn, scale) {
+        tsButtons.forEach(b => b.classList.remove('active-btn'));
+        activeBtn.classList.add('active-btn');
+        timeScale.setDebugTimeScale(scale);
+      }
+
+      btnTs1.addEventListener('click', () => setTsBtn(btnTs1, 1.0));
+      btnTs05.addEventListener('click', () => setTsBtn(btnTs05, 0.5));
+      btnTs02.addEventListener('click', () => setTsBtn(btnTs02, 0.2));
+      btnTs005.addEventListener('click', () => setTsBtn(btnTs005, 0.05));
+
+      let currentRole = 'han';
+
+      const sandbox = initCombatSandbox(container, {
+        update: ({ hero, han, eolka, shamanDummy, hurtAllyDummy, clusterDummies, dummy2, dummy3, combatantsCount, cpuTickMs, timeScale, events, squadController }) => {
+          // Hero Bars
+          heroNameLabel.textContent = hero.name.toUpperCase();
+          heroStateTag.textContent = `${hero.stateMachine.state} (${hero.stateMachine.currentAction})`;
+          heroHpBar.style.width = `${Math.max(0, (hero.hp / hero.maxHp) * 100)}%`;
+          heroHpText.textContent = `HP: ${Math.round(hero.hp)} / ${hero.maxHp}`;
+
+          heroStaminaBar.style.width = `${Math.max(0, (hero.stamina / hero.maxStamina) * 100)}%`;
+          heroStaminaText.textContent = `STAMINA: ${Math.round(hero.stamina)} / ${hero.maxStamina}`;
+
+          heroManaBar.style.width = `${Math.max(0, (hero.mana / hero.maxMana) * 100)}%`;
+          heroManaText.textContent = `MANA: ${Math.round(hero.mana)} / ${hero.maxMana}`;
+
+          const ward = hero.statusEffects.get('ward_barrier');
+          if (ward && ward.active && ward.barrierHp > 0) {
+            heroWardWrap.style.display = 'block';
+            heroWardBar.style.width = `${Math.max(0, (ward.barrierHp / (ward.maxBarrierHp || 60)) * 100)}%`;
+            heroWardText.textContent = `WARD: ${Math.round(ward.barrierHp)} / ${ward.maxBarrierHp || 60}`;
+          } else {
+            heroWardWrap.style.display = 'none';
+          }
+
+          heroPoiseBar.style.width = `${Math.max(0, (hero.poise / hero.maxPoise) * 100)}%`;
+          heroPoiseText.textContent = `POISE: ${Math.round(hero.poise)} / ${hero.maxPoise}`;
+
+          // Badges
+          badgeIframe.classList.toggle('active', hero.iFrameTimer > 0);
+          badgeParry.classList.toggle('active', hero.parryWindowTimer > 0);
+          badgeCounter.classList.toggle('active', hero.counterWindowTimer > 0);
+          badgeWard.classList.toggle('active', Boolean(ward?.active && ward.barrierHp > 0));
+          badgeBurn.classList.toggle('active', Boolean(hero.statusEffects.get('burn')?.active));
+          badgeSlow.classList.toggle('active', Boolean(hero.statusEffects.get('freeze_slow')?.active));
+          badgeStun.classList.toggle('active', Boolean(hero.statusEffects.get('stun')?.active));
+
+          // Spell Cooldown Overlays
+          const spellIds = ['fireball', 'iceSpike', 'lightningChain', 'heal', 'ward', 'meteor'];
+          const maxCds = [2.5, 2.0, 4.0, 5.0, 8.0, 10.0];
+          for (let i = 0; i < 6; i++) {
+            const cd = hero.spellCooldowns[spellIds[i]] || 0;
+            const ratio = maxCds[i] > 0 ? (cd / maxCds[i]) : 0;
+            cdSpells[i].style.height = `${Math.min(100, ratio * 100)}%`;
+          }
+
+          // Squad Cooldown Overlays
+          for (let i = 0; i < 4; i++) {
+            const state = squadController.getSkillState(i);
+            if (state) {
+              squadCds[i].style.height = `${Math.min(100, state.cooldownRatio * 100)}%`;
+            }
+          }
+
+          // Telemetry
+          telCount.textContent = combatantsCount;
+          telCpu.textContent = `${cpuTickMs.toFixed(2)} ms`;
+          telTimeScale.textContent = `${timeScale.toFixed(2)}x`;
+          telAction.textContent = hero.stateMachine.state === 'CAST'
+            ? `CAST: ${hero.stateMachine.castPhase} (${hero.stateMachine.stateTime.toFixed(2)}s)`
+            : `${hero.stateMachine.attackPhase} (${hero.stateMachine.stateTime.toFixed(2)}s)`;
+
+          // Arena Entities
+          shamanStat.textContent = `${shamanDummy.stateMachine.state} (${(shamanDummy.castTimer % shamanDummy.castInterval).toFixed(1)}s, HP: ${Math.round(shamanDummy.hp)})`;
+          hurtAllyStat.textContent = `${Math.round(hurtAllyDummy.hp)} / ${hurtAllyDummy.maxHp} HP [${hurtAllyDummy.stateMachine.state}]`;
+          const livingCluster = clusterDummies.filter(d => !d.isDead).length;
+          clusterStat.textContent = `${livingCluster} / 3 Alive`;
+          dummy2Stat.textContent = `${dummy2.stateMachine.state} (${(dummy2.attackTimer % dummy2.attackInterval).toFixed(1)}s)`;
+          dummy3Poise.textContent = `${Math.round(dummy3.poise)} / ${dummy3.maxPoise} [${dummy3.stateMachine.state}]`;
+
+          // Event feed (Last 8 events with timestamp)
+          eventLog.innerHTML = events
+            .slice(-8)
+            .map(e => `<div class="log-entry ${e.event}"><span style="color:#64748b;">[${formatTimestamp(e.time)}]</span> [${e.event}] ${e.detail}</div>`)
+            .join('');
+        }
+      });
+
+      function formatTimestamp(timeSec) {
+        if (!timeSec) return '00:00:00.000';
+        const date = new Date(timeSec * 1000);
+        const h = String(date.getHours()).padStart(2, '0');
+        const m = String(date.getMinutes()).padStart(2, '0');
+        const s = String(date.getSeconds()).padStart(2, '0');
+        const ms = String(date.getMilliseconds()).padStart(3, '0');
+        return `${h}:${m}:${s}.${ms}`;
+      }
+
+      // Collapsible Toggles
+      const heroHud = document.getElementById('hero-hud');
+      const btnToggleHero = document.getElementById('btn-toggle-hero-hud');
+      btnToggleHero.addEventListener('click', (e) => {
+        e.stopPropagation();
+        heroHud.classList.toggle('collapsed');
+        btnToggleHero.textContent = heroHud.classList.contains('collapsed') ? '▶' : '◀';
+      });
+
+      const debugPanel = document.getElementById('debug-panel');
+      const btnToggleDebug = document.getElementById('btn-toggle-debug-panel');
+      btnToggleDebug.addEventListener('click', (e) => {
+        e.stopPropagation();
+        debugPanel.classList.toggle('collapsed');
+        btnToggleDebug.textContent = debugPanel.classList.contains('collapsed') ? '◀' : '▶';
+      });
+
+      // Top Control Bar Buttons
+      const btnResetArena = document.getElementById('btn-reset-arena');
+      btnResetArena.addEventListener('click', () => {
+        sandbox.resetAllCombatants();
+      });
+
+      const btnToggleRespawn = document.getElementById('btn-toggle-respawn');
+      const respawnStatusText = document.getElementById('respawn-status-text');
+      btnToggleRespawn.addEventListener('click', () => {
+        const on = sandbox.toggleAutoRespawn();
+        btnToggleRespawn.classList.toggle('active', on);
+        respawnStatusText.textContent = on ? 'ON' : 'OFF';
+        respawnStatusText.style.color = on ? '#4ade80' : '#f87171';
+      });
+
+      // Role Switcher Button
+      btnSwitchHero.addEventListener('click', () => {
+        if (currentRole === 'han') {
+          currentRole = 'eolka';
+          sandbox.setHeroRole('eolka');
+          heroRoleText.textContent = 'Eolka (Mage Staff)';
+          heroRoleText.style.color = '#d946ef';
+        } else {
+          currentRole = 'han';
+          sandbox.setHeroRole('han');
+          heroRoleText.textContent = 'Han (Sword + Shield)';
+          heroRoleText.style.color = '#38bdf8';
+        }
+      });
+
+      // Clickable Spells 1 to 6
+      const spellSlots = [
+        { id: 'slot-spell-1', spell: 'fireball' },
+        { id: 'slot-spell-2', spell: 'iceSpike' },
+        { id: 'slot-spell-3', spell: 'lightningChain' },
+        { id: 'slot-spell-4', spell: 'heal' },
+        { id: 'slot-spell-5', spell: 'ward' },
+        { id: 'slot-spell-6', spell: 'meteor' },
+      ];
+      spellSlots.forEach(({ id, spell }) => {
+        document.getElementById(id).addEventListener('click', () => {
+          sandbox.activeHero.castSpell(spell);
+        });
+      });
+
+      // Clickable Squad Skills F1 to F4
+      for (let i = 0; i < 4; i++) {
+        document.getElementById(`squad-slot-${i + 1}`).addEventListener('click', () => {
+          sandbox.squadController.triggerSquadSkill(i);
+        });
+      }
+
+      btnWireframe.addEventListener('click', () => {
+        const on = sandbox.toggleWireframes();
+        btnWireframe.classList.toggle('active-btn', on);
+      });
+
+      btnStress.addEventListener('click', () => {
+        sandbox.toggleStressTest();
+        const isSwarm = sandbox.combatants.length > 15;
+        btnStress.classList.toggle('active-btn', isSwarm);
+        btnStress.textContent = isSwarm ? 'Remove Swarm' : '30-Dummy Swarm';
+      });
+    </script>
+  </body>
+</html>

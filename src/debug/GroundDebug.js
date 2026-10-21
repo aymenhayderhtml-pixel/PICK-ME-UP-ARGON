@@ -317,10 +317,18 @@ export class GroundDebug {
         `  Model min world Y: ${hMinY.toFixed(4)}`;
     }
 
+    let surfacesStr = 'SURFACES: (none)';
+    if (map && typeof map.getSurfaceCandidates === 'function') {
+      const sInfo = map.getSurfaceCandidates(pX, pZ);
+      const cands = (sInfo.candidates || []).map(c => `(y:${c.y}, nY:${c.normalY}, clr:${c.clearance})${c.isValid ? '*' : ''}`).join(', ');
+      surfacesStr = `SURFACES: [${cands}] (chosen: ${sInfo.chosenY})`;
+    }
+
     this.contentEl.textContent =
       `PLAYER:\n` +
       `  World Pos:   (${pX.toFixed(2)}, ${pY.toFixed(2)}, ${pZ.toFixed(2)})\n` +
       `  GroundY:     ${groundY.toFixed(3)} | WalkY: ${walkYStr} | Diff: ${diff.toFixed(3)}\n` +
+      `  ${surfacesStr}\n` +
       `  Map Build:   ${progressPct}% complete\n` +
       `  Rig World:   ${rigWorldPos}\n` +
       `  Rig Local:   ${rigLocalPos}\n` +

@@ -2,6 +2,7 @@ import { SystemWindow } from './SystemWindow.js';
 import { gameState } from '../core/GameState.js';
 import { getCombatStats } from '../core/Stats.js';
 import { canHeroEquipItem, equipItem, unequipItem, autoEquipHero, autoEquipRoster, MAX_INVENTORY_CAPACITY } from '../core/Inventory.js';
+import { getHeroLoadout } from '../core/loadout.js';
 import { showSystemMessage } from './Hud.js';
 import { getItemIcon, ItemPreviewViewer } from './ItemIcon.js';
 
@@ -91,6 +92,9 @@ export class EquipmentWindow extends SystemWindow {
 
     hero.equipment = hero.equipment || { weapon: null, offhand: null, armor: null };
     const currentStats = getCombatStats(hero);
+    // Single source of truth: what this hero may wield and what it currently
+    // holds (weapon type, offhand type, pose set, attack mode, HUD).
+    const loadout = getHeroLoadout(hero);
 
     // 1. Top Action & Controls Bar (Auto-Equip, Auto-Equip All, Hero dropdown & Stats)
     const topBar = document.createElement('div');
@@ -186,7 +190,17 @@ export class EquipmentWindow extends SystemWindow {
     const heroInfo = document.createElement('div');
     heroInfo.style.fontSize = '12px';
     heroInfo.style.color = '#88aacc';
-    heroInfo.innerHTML = `Atk: <b style="color:#ffcc00">${currentStats.damage}</b> | Def: <b style="color:var(--ok)">${currentStats.defense}</b> | HP: <b style="color:var(--frame)">${currentStats.maxHp}</b>`;
+    const classLabel = loadout.profile ? loadout.profile.label : (hero.class || 'Unknown');
+    const kitLabel = loadout.weaponType === 'none'
+      ? 'Empty Hands'
+      : `${loadout.weaponType.toUpperCase()}${loadout.offhandType === 'shield' ? ' + SHIELD' : ''}`;
+    heroInfo.innerHTML =
+      `<span style="color:var(--frame);font-weight:bold">${classLabel}</span> | ` +
+      `Kit: <b style="color:#ffcc00">${kitLabel}</b> | ` +
+      `Usable: <b style="color:#88aacc">${loadout.allowedWeapons.join(', ')}</b> | ` +
+      `Atk: <b style="color:#ffcc00">${currentStats.damage}</b> | ` +
+      `Def: <b style="color:var(--ok)">${currentStats.defense}</b> | ` +
+      `HP: <b style="color:var(--frame)">${currentStats.maxHp}</b>`;
     topBar.appendChild(heroInfo);
 
     root.appendChild(topBar);

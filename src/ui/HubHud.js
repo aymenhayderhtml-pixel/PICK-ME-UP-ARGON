@@ -260,7 +260,7 @@ export class HubHud {
     ctx.strokeStyle = 'rgba(184, 196, 200, 0.25)';
     ctx.lineWidth = 3;
     const sqPos = toMap(14, -8);
-    for (const dest of [toMap(20, 26), toMap(30, 4), toMap(27, -27), toMap(0, -32), toMap(-6, -20), toMap(-26, -4), toMap(-24, 20)]) {
+    for (const dest of [toMap(20, 26), toMap(30, 4), toMap(31, -31), toMap(0, -32), toMap(-6, -20), toMap(-26, -4), toMap(-24, 20)]) {
       ctx.beginPath();
       ctx.moveTo(sqPos.x, sqPos.y);
       ctx.lineTo(dest.x, dest.y);

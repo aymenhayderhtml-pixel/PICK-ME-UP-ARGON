@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { createPortalSwirlTexture } from './landmarksMain.js';
 
 const PALETTE = {
   stoneLit: 0xc4cbcf,
@@ -32,7 +33,7 @@ const DEFAULT_AO_PADS = [
   { id: 'synthesis_chamber', x: 0, z: -32, r: 10, strength: 0.34 },
   { id: 'landing_area', x: 20, z: 26, r: 14, strength: 0.26 },
   { id: 'town_square', x: 14, z: -8, r: 12, strength: 0.16 },
-  { id: 'rift', x: 27, z: -27, r: 8, strength: 0.38 },
+  { id: 'rift', x: 32.53, z: -32.53, r: 8, strength: 0.38 },
   { id: 'armory', x: -6, z: -20, r: 8, strength: 0.34 },
   { id: 'residences', x: -26, z: -4, r: 15, strength: 0.30 },
   { id: 'training', x: -24, z: 20, r: 13, strength: 0.26 },
@@ -538,8 +539,8 @@ export function buildTownShell(ctx = {}) {
     pilasterWidth: 2.85,
     pilasterHeight: 10.5,
     pilasterDepth: 0.7,
-    riftTargetX: layout.rift?.x ?? 27.0,
-    riftTargetZ: layout.rift?.z ?? -27.0,
+    riftTargetX: layout.rift?.x ?? 32.53,
+    riftTargetZ: layout.rift?.z ?? -32.53,
     riftWidth: layout.rift?.openingWidth ?? 6.5,
     riftHeight: layout.rift?.openingHeight ?? 10.0
   };
@@ -751,6 +752,16 @@ export function buildTownShell(ctx = {}) {
       const rotY = Math.atan2(nx, nz);
 
       if (k === riftSideIndex) {
+        // Solid wall collider across the archway threshold to prevent walking into the void
+        colliders.push({
+          type: 'box',
+          x: cx,
+          z: cz,
+          w: wallSpec.riftWidth,
+          d: wallSpec.thickness,
+          rotY
+        });
+
         const wingWidth = (sideLength - wallSpec.riftWidth) * 0.5;
         const offset = (wallSpec.riftWidth + wingWidth) * 0.5;
         for (const sign of [-1, 1]) {
@@ -767,24 +778,29 @@ export function buildTownShell(ctx = {}) {
         const gateGroundY = getGroundY(cx, cz);
         const gatePos = new THREE.Vector3(cx, gateGroundY, cz);
         const inward = new THREE.Vector3(-nx, 0, -nz).normalize();
+        const doorPos = gatePos.clone().addScaledVector(inward, 2.0);
 
         const riftDoorId = layout.doors?.rift?.id || 'space_time_rift';
         doors.push({
           id: riftDoorId,
-          position: gatePos.clone(),
+          position: doorPos.clone(),
           outward: inward.clone()
         });
 
         anchors.riftGate = gatePos.clone();
-        anchors.sign_space_time_rift = gatePos
-          .clone()
-          .addScaledVector(inward, 2.2)
-          .addScaledVector(new THREE.Vector3(tx, 0, tz), -4.2);
+        anchors.door_space_time_rift = doorPos.clone();
+        anchors.portal = gatePos.clone().add(new THREE.Vector3(0, 4.2, 0));
+        anchors.portal_center = anchors.portal.clone();
+        anchors.sign_space_time_rift = new THREE.Vector3(
+          cx - nx * 1.5,
+          gateGroundY + 10.5,
+          cz - nz * 1.5
+        );
 
         lights.push({
           position: new THREE.Vector3(cx - nx * 1.4, gateGroundY + 5.5, cz - nz * 1.4),
           color: PALETTE.tealGlow,
-          intensity: 1.35,
+          intensity: 6.0,
           distance: 18.0
         });
       } else {
@@ -821,6 +837,8 @@ export function buildTownShell(ctx = {}) {
   let sunBaseColors = null;
   let moonBaseColors = null;
   let cloudSheetMesh = null;
+  let riftPortalDisc = null;
+  const riftPortalRings = [];
   let leafInstancedMesh = null;
   let leafData = [];
   let glintPoints = null;
@@ -858,6 +876,8 @@ export function buildTownShell(ctx = {}) {
     sunBaseColors = null;
     moonBaseColors = null;
     cloudSheetMesh = null;
+    riftPortalDisc = null;
+    riftPortalRings.length = 0;
     leafInstancedMesh = null;
     leafData = [];
     glintPoints = null;
@@ -1366,10 +1386,93 @@ export function buildTownShell(ctx = {}) {
           placePanelPart(voussoir, vx, vy, 0, 0.25);
         }
 
-        const keystoneGeom = new THREE.BoxGeometry(0.68, 1.18, wallT + 1.12);
-        placeTrimPart(keystoneGeom, 0, wallH + 0.45, 0, PALETTE.tealGlow, (c, v) => {
-          c.multiplyScalar(0.88 + 0.12 * Math.sin(v.y * 2.0));
+        // 1. Recessed solid stone back-wall completely sealing the arch opening from the exterior void
+        const backWallGeom = new THREE.BoxGeometry(openW + 0.8, wallH + 1.6, 0.55);
+        placePanelPart(backWallGeom, 0, (wallH + 1.6) * 0.5 - 0.2, wallT * 0.5 - 0.22, 0.12);
+
+        // Upper arch lunette / transom infill behind the arch curve
+        const transomGeom = new THREE.BoxGeometry(openW + 0.4, archRadius * 0.95, 0.55);
+        placePanelPart(transomGeom, 0, wallH - archRadius * 0.35, wallT * 0.5 - 0.22, 0.12);
+
+        // 2. Stepped stone dais in front of the portal threshold
+        for (let st = 0; st < 3; st++) {
+          const sw = openW - 0.4 - st * 0.35;
+          const sd = 0.55;
+          const sh = 0.18;
+          const stepGeom = new THREE.BoxGeometry(sw, sh, sd);
+          placePanelPart(stepGeom, 0, (st + 0.5) * sh, -(wallT * 0.5 + (2.5 - st) * sd), 0.12);
+        }
+
+        // 3. Massive Dark-Stone Side Piers with Pilasters & Capitals framing the portal
+        const openInnerW = 3.6;
+        const pierW = (openW - openInnerW) * 0.5;
+        const pierH = 6.8;
+        for (const side of [-1, 1]) {
+          const px = side * (openInnerW * 0.5 + pierW * 0.5);
+          // Plinth base
+          const plinthGeom = new THREE.BoxGeometry(pierW + 0.25, 0.85, wallT + 0.2);
+          placePanelPart(plinthGeom, px, 0.425, -0.05, 0.18);
+          // Dark slate pier shaft
+          const shaftGeom = new THREE.BoxGeometry(pierW, pierH, wallT - 0.1);
+          placePanelPart(shaftGeom, px, 0.85 + pierH * 0.5, -0.05, 0.18);
+          // Glowing vertical rune strip in inner pier face
+          const runeGeom = new THREE.BoxGeometry(0.18, pierH - 1.2, 0.12);
+          placeTrimPart(runeGeom, px, 0.85 + pierH * 0.5, -(wallT * 0.5 + 0.08), PALETTE.tealGlow);
+          // Molded impost capital
+          const capGeom = new THREE.BoxGeometry(pierW + 0.35, 0.65, wallT + 0.25);
+          placePanelPart(capGeom, px, 0.85 + pierH + 0.325, -0.05, 0.18);
+        }
+
+        // Winged figures bas-relief on arch shoulders
+        for (const side of [-1, 1]) {
+          const figGeom = new THREE.BoxGeometry(0.55, 1.6, 0.35);
+          placePanelPart(figGeom, side * (openInnerW * 0.5 + 0.45), pierH - 0.2, -(wallT * 0.5 + 0.1), 0.15);
+        }
+
+        // 5. Dimensional Portal Vortex Disc & Rotating Torus Rings
+        const portalCenter = new THREE.Vector3(
+          cx - nx * (wallT * 0.25),
+          gy + 4.0,
+          cz - nz * (wallT * 0.25)
+        );
+        const portalGeo = new THREE.PlaneGeometry(3.5, 5.6);
+        disposableGeometries.push(portalGeo);
+        const portalTex = createPortalSwirlTexture();
+        const portalMat = new THREE.MeshBasicMaterial({
+          map: portalTex,
+          color: 0x99dcff,
+          transparent: true,
+          opacity: 0.92,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide
         });
+        const pDisc = new THREE.Mesh(portalGeo, portalMat);
+        pDisc.position.copy(portalCenter);
+        pDisc.rotation.y = innerFaceRotY;
+        contentGroup.add(pDisc);
+        riftPortalDisc = pDisc;
+
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0x6fe0f0,
+          transparent: true,
+          opacity: 0.55,
+          wireframe: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        });
+
+        const pRingRadii = [1.35, 1.75, 2.1];
+        for (let r = 0; r < 3; r++) {
+          const prGeo = new THREE.TorusGeometry(pRingRadii[r], 0.045, 8, 36);
+          disposableGeometries.push(prGeo);
+          const prMesh = new THREE.Mesh(prGeo, ringMat);
+          prMesh.position.copy(portalCenter);
+          prMesh.scale.set(1.0, 1.35, 1.0);
+          prMesh.rotation.set((r - 1) * 0.18, innerFaceRotY + (r % 2 === 0 ? 1 : -1) * 0.15, r * 0.8);
+          contentGroup.add(prMesh);
+          riftPortalRings.push(prMesh);
+        }
       } else {
         const totalH = wallH + baseDepth;
         const wallPanelGeom = new THREE.BoxGeometry(sideLength, totalH, wallT, 4, 5, 1);
@@ -2444,6 +2547,14 @@ export function buildTownShell(ctx = {}) {
       cloudSheetMesh.rotation.y = elapsedTime * 0.004;
       cloudSheetMesh.position.x = Math.sin(elapsedTime * 0.12) * 2.5;
       cloudSheetMesh.position.z = Math.cos(elapsedTime * 0.10) * 2.5;
+    }
+
+    if (riftPortalDisc) {
+      riftPortalDisc.rotation.z -= safeDt * 0.55;
+    }
+    for (let r = 0; r < riftPortalRings.length; r++) {
+      const dir = r % 2 === 0 ? 1 : -1;
+      riftPortalRings[r].rotation.z += safeDt * (0.35 + r * 0.18) * dir;
     }
 
     if (leafInstancedMesh && leafData.length > 0) {
