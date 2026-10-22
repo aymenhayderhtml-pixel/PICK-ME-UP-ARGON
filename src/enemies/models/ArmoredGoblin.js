@@ -2,6 +2,7 @@
 // Procedural mesh builder and animator for Armored Goblin / Gnoll Warrior.
 import * as THREE from 'three';
 import { getGradientMap } from '../shared.js';
+import { POSE_INFO } from '../poses/poseInfo.js';
 
 let _gnollMaterials = null;
 let _gnollGeometries = null;

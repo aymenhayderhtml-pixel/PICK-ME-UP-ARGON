@@ -492,7 +492,7 @@ export function createEnemyModel(type = 'goblin_grunt', opts = {}) {
 
 
   function setPose(name, t = 0, intensity = 1) {
-    applyBipedPose(name, t, intensity, parts, arch, bannerMesh, eyesMesh, tongueMesh, resetRigToRest, applyExpressionOffsets);
+    applyBipedPose(name, t, intensity, parts, arch, bannerMesh, eyesMesh, tongueMesh, orbMat, healRingMesh, bowStringMesh, resetRigToRest, applyExpressionOffsets);
   }
 
 
