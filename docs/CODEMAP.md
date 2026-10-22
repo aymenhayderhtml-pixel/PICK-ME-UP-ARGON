@@ -84,7 +84,17 @@ src/art/artIselleTest.js | Test runner logic for Iselle expression inspection ha
 src/art/artTest.js | Test runner logic for hero rig and customization harness | (none) | three, hero, HeroRig, presets, itemModels, weapons | dev only
 src/art/artTownTest.js | Test runner logic for 3D town hub visual inspection harness | (none) | three, TownAssembler, WalkHeight | dev only
 src/art/artWeaponTest.js | Test runner logic for weapon animation and swing visual harness | (none) | three, weapons, weaponAnimations, HeroRig | dev only
-src/art/enemies.js | Procedural primitive 3D mesh generators and poses for enemies (including goblin_armored, goblin_hound, black_wolf) | ENEMY_TYPES, POSE_INFO, ENEMY_POSES, createGnollWarriorModel, createEnemyModel | three | live game
+src/art/enemies.js | Compatibility re-export wrapper forwarding to src/enemies/index.js | ENEMY_TYPES, POSE_INFO, ENEMY_POSES, createGnollWarriorModel, createEnemyModel | src/enemies/index.js | live game
+src/enemies/index.js | Central entry point and re-exports for the enemy subsystem | ENEMY_TYPES, POSE_INFO, ENEMY_POSES, createGnollWarriorModel, createEnemyModel | poseInfo, ArmoredGoblin, EnemyFactory | live game
+src/enemies/models/ArmoredGoblin.js | Procedural mesh builder and animator for Armored Goblin / Gnoll Warrior | createGnollWarriorModel | three, shared | live game
+src/enemies/models/EnemyFactory.js | Main enemy model builder creating humanoid, non-humanoid, and boss models | createEnemyModel | three, shared, Geometries, ArmoredGoblin, Wolf, bipedPoses | live game
+src/enemies/models/Geometries.js | Merged geometry builders and geometry caching per type, weapon variant and armor tier | getTypeGeometries | three, shared | live game
+src/enemies/models/Wolf.js | Quadruped procedural mesh builder and controller for wolf enemy types | buildQuadrupedModel | three, WolfAssets, wolfPoses | live game
+src/enemies/models/WolfAssets.js | Procedural geometry, textures, materials and cache for Wolf quadruped enemy models | WOLF_ART_CACHE, getPrairieWolfAssets | three | live game
+src/enemies/poses/bipedPoses.js | Biped skeletal animation pose evaluator for humanoid and non-humanoid enemies | applyBipedPose | three, poseInfo | live game
+src/enemies/poses/poseInfo.js | Pose animation definition metadata and durations for all enemy types | POSE_INFO, ENEMY_POSES | (none) | live game
+src/enemies/poses/wolfPoses.js | Quadruped skeletal animation poses for wolf enemies | applyPrairieWolfPose | three, poseInfo | live game
+src/enemies/shared.js | Shared constants, procedural geometry helpers, material caches, and enemy archetypes | CACHES, mulberry32, getGradientMap, getSharedVertexColorMat, getSharedSkinMat, getOutlineMat, getGeom, paintGeom, mergeGeoms, makeTransformMatrix, placeGeom, buildInvertedHullGeom, buildTaperedLimbGeom, buildTorsoGeom, buildWedgeGeom, buildCurvedBladeGeom, buildLatheClubGeom, buildPlankShieldGeom, buildSickleKnifeGeom, buildCleaverGeom, buildBannerGeom, ARCHETYPES | three | live game
 src/art/enemyPresets.js | Preconfigured visual appearance presets for enemy types | ENEMY_PRESETS | (none) | dev only
 src/art/hero.js | Procedural primitive 3D mesh generator and joint sockets for heroes | HERO_POSES, createHeroModel | three, looks, weaponAnimations | live game
 src/art/iselle.js | Procedural primitive 3D mesh generator and 2D canvas face for Iselle | ISELLE_POSES, ISELLE_EXPRESSIONS, POSE_INFO, drawIselleFace, drawIsellePortrait, disposeIselleCaches, createIselleModel | three | live game

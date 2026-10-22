@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { POSE_INFO } from './poseInfo.js';
 
-  export function applyBipedPose(name, t, intensity, parts, arch, bannerMesh, eyesMesh, resetRigToRest) {
+  export function applyBipedPose(name, t, intensity, parts, arch, bannerMesh, eyesMesh, tongueMesh, resetRigToRest, applyExpressionOffsets) {
     const info = POSE_INFO[name] || POSE_INFO.idle;
     const time = info.loop ? t : Math.max(0, Math.min(info.duration, t));
     const u = info.duration > 0 ? time / info.duration : 0;
