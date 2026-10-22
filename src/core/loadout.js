@@ -105,11 +105,16 @@ export function getHeroClassKey(hero) {
   if (c.includes('cleric') || c.includes('healer') || c.includes('priest')) return 'healer';
   if (c.includes('archer') || c.includes('scout') || c.includes('ranger')) return 'archer';
   if (c.includes('knight')) return 'knight';
+  // A mercenary fights with sword and shield: the knight profile is the one
+  // that may hold a shield.
+  if (c.includes('mercen')) return 'knight';
   if (c.includes('valkyrie')) return 'valkyrie';
   if (c.includes('berserk')) return 'berserker';
   if (c.includes('artisan') || c.includes('smith')) return 'artisan';
   if (c.includes('tank')) return 'tank';
   if (c.includes('vanguard')) return 'vanguard';
+  // A commoner is a plain melee fighter.
+  if (c.includes('commoner')) return 'vanguard';
   return null;
 }
 

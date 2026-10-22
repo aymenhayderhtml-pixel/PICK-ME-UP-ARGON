@@ -16,6 +16,9 @@ export function canHeroEquipItem(hero, item) {
   if (!hero || !item) {
     return { canEquip: false, reason: 'Invalid hero or item' };
   }
+  if (item.exclusiveHeroId && item.exclusiveHeroId !== hero.id) {
+    return { canEquip: false, reason: 'Exclusive to another hero' };
+  }
 
   // 1. Armor can be worn by any hero
   if (item.slot === 'armor') {
@@ -78,8 +81,11 @@ export function autoEquipHero(hero, inventory) {
   // 1. Best Weapon
   let bestW = null;
   let bestWScore = hero.equipment.weapon ? getItemScore(hero.equipment.weapon) : -1;
+  if (hero.equipment.weapon && hero.equipment.weapon.exclusiveHeroId === hero.id) {
+    bestWScore = Infinity;
+  }
   for (const item of inventory) {
-    if (item.slot === 'weapon' && canHeroEquipItem(hero, item).canEquip) {
+    if (item.slot === 'weapon' && canHeroEquipItem(hero, item).canEquip && (!item.exclusiveHeroId || item.exclusiveHeroId === hero.id)) {
       const s = getItemScore(item);
       if (s > bestWScore) {
         bestWScore = s;
@@ -95,8 +101,11 @@ export function autoEquipHero(hero, inventory) {
   // 2. Best Armor
   let bestA = null;
   let bestAScore = hero.equipment.armor ? getItemScore(hero.equipment.armor) : -1;
+  if (hero.equipment.armor && hero.equipment.armor.exclusiveHeroId === hero.id) {
+    bestAScore = Infinity;
+  }
   for (const item of inventory) {
-    if (item.slot === 'armor' && canHeroEquipItem(hero, item).canEquip) {
+    if (item.slot === 'armor' && canHeroEquipItem(hero, item).canEquip && (!item.exclusiveHeroId || item.exclusiveHeroId === hero.id)) {
       const s = getItemScore(item);
       if (s > bestAScore) {
         bestAScore = s;
@@ -112,8 +121,11 @@ export function autoEquipHero(hero, inventory) {
   // 3. Best Offhand
   let bestO = null;
   let bestOScore = hero.equipment.offhand ? getItemScore(hero.equipment.offhand) : -1;
+  if (hero.equipment.offhand && hero.equipment.offhand.exclusiveHeroId === hero.id) {
+    bestOScore = Infinity;
+  }
   for (const item of inventory) {
-    if (item.slot === 'offhand' && canHeroEquipItem(hero, item).canEquip) {
+    if (item.slot === 'offhand' && canHeroEquipItem(hero, item).canEquip && (!item.exclusiveHeroId || item.exclusiveHeroId === hero.id)) {
       const s = getItemScore(item);
       if (s > bestOScore) {
         bestOScore = s;

@@ -14,6 +14,7 @@ import {
   applyRestOutcome,
   evaluateSquadLeaderOrder,
   getTraitModifiers,
+  hasTrait,
   isHeroPanicking,
   pickTrainingTypeForHero,
 } from './EmotionEngine.js';
@@ -86,6 +87,11 @@ export function computeActivityWeights(hero, gameState) {
     trainDummy *= EMOTION_CONFIG.PANIC_SAFE_TRAIN_MULT;
     trainArchery *= EMOTION_CONFIG.PANIC_SAFE_TRAIN_MULT;
     rest *= 1.5;
+  }
+
+  // A coward refuses to fight: the sparring ring is off limits.
+  if (hasTrait(hero, EMOTION_CONFIG.TRAITS_REFUSING_SPAR)) {
+    spar = 0;
   }
 
   // A serious injury rules out sparring entirely.
@@ -246,14 +252,17 @@ export function simulateGameDay(gameState, options = {}) {
     report.activities.push({ heroId: hero.id, heroName: hero.name, activity });
 
     if (activity === 'eat') {
-      applyEatOutcome(hero, gameState.foodQuality);
+      const eatOutcome = applyEatOutcome(hero, gameState.foodQuality);
       push({
         day,
         heroId: hero.id,
         heroName: hero.name,
         type: 'ate',
         importance: EMOTION_CONFIG.REPORT_IMPORTANCE.ate,
-        text: `${hero.name} ate at the Cafeteria.`,
+        text:
+          eatOutcome && eatOutcome.complained
+            ? `${hero.name} ate at the Cafeteria and complained about the potatoes.`
+            : `${hero.name} ate at the Cafeteria.`,
         details: { foodQuality: gameState.foodQuality },
       });
     } else if (activity === 'rest') {

@@ -203,6 +203,9 @@ export class SummonWindow extends SystemWindow {
   }
 
   handlePull(count) {
+    if (count === 10) {
+      showSystemMessage('MASTER, BEGINNING 10 SUMMONINGS. EXCITED TO SEE WHAT HEROES WILL COME!');
+    }
     const result = gachaSystem.pull(count);
     if (result.error) {
       alert(result.error);

@@ -166,6 +166,18 @@ export class DeployWindow extends SystemWindow {
     this.availableContainer.style.padding = '4px';
     this.scrollArea.appendChild(this.availableContainer);
 
+    this.fallenBlock = document.createElement('div');
+    this.fallenBlock.style.display = 'none';
+    this.fallenBlock.style.backgroundColor = 'rgba(40, 0, 0, 0.6)';
+    this.fallenBlock.style.border = '1px solid #ff3333';
+    this.fallenBlock.style.borderRadius = '6px';
+    this.fallenBlock.style.padding = '8px 12px';
+    this.fallenBlock.style.textAlign = 'center';
+    this.fallenBlock.style.color = '#ff4444';
+    this.fallenBlock.style.fontWeight = 'bold';
+    this.fallenBlock.style.fontSize = '12px';
+    this.scrollArea.appendChild(this.fallenBlock);
+
     // 3. Permadeath Warning Banner
     const warningBox = document.createElement('div');
     warningBox.style.backgroundColor = 'rgba(255, 34, 34, 0.15)';
@@ -190,6 +202,59 @@ export class DeployWindow extends SystemWindow {
     this.floorSelectBar.style.flex = '0 0 auto';
     this.contentElement.appendChild(this.floorSelectBar);
 
+    // Boss stage warning badge (shown when floor % 5 === 0)
+    this.bossBadge = document.createElement('div');
+    this.bossBadge.style.display = 'none';
+    this.bossBadge.style.backgroundColor = 'rgba(255, 34, 34, 0.2)';
+    this.bossBadge.style.border = '1px solid #ff3333';
+    this.bossBadge.style.borderRadius = '6px';
+    this.bossBadge.style.padding = '6px 12px';
+    this.bossBadge.style.textAlign = 'center';
+    this.bossBadge.style.color = '#ff4444';
+    this.bossBadge.style.fontWeight = 'bold';
+    this.bossBadge.style.fontSize = '12px';
+    this.bossBadge.style.flex = '0 0 auto';
+    this.bossBadge.textContent = 'BOSS STAGE — EVERY 5 STAGES, THE DIFFICULTY SPIKES!';
+    this.contentElement.appendChild(this.bossBadge);
+
+    // Party tab switcher (1 PARTY / 2 PARTY)
+    this.partyTabsBar = document.createElement('div');
+    this.partyTabsBar.style.display = 'flex';
+    this.partyTabsBar.style.gap = '6px';
+    this.partyTabsBar.style.flex = '0 0 auto';
+    const tab1 = document.createElement('button');
+    tab1.textContent = '1 PARTY';
+    tab1.className = 'mm-btn mm-btn-accent';
+    tab1.style.padding = '4px 12px';
+    tab1.style.fontSize = '11px';
+    const tab2 = document.createElement('button');
+    tab2.textContent = '2 PARTY';
+    tab2.className = 'mm-btn';
+    tab2.style.padding = '4px 12px';
+    tab2.style.fontSize = '11px';
+    this.partyTabsBar.appendChild(tab1);
+    this.partyTabsBar.appendChild(tab2);
+    this.contentElement.insertBefore(this.partyTabsBar, this.scrollArea);
+
+    // Forming message
+    this.formingMsg = document.createElement('div');
+    this.formingMsg.style.fontSize = '12px';
+    this.formingMsg.style.color = '#88aacc';
+    this.formingMsg.style.fontWeight = 'bold';
+    this.formingMsg.textContent = 'FORMING A PARTY. DRAG AND DROP THE HEROES!';
+    this.contentElement.insertBefore(this.formingMsg, this.scrollArea);
+
+    // Repeat-floor confirmation prompt (hidden by default)
+    this.repeatConfirmEl = document.createElement('div');
+    this.repeatConfirmEl.style.display = 'none';
+    this.repeatConfirmEl.style.backgroundColor = 'rgba(255, 215, 0, 0.12)';
+    this.repeatConfirmEl.style.border = '1px solid var(--gold)';
+    this.repeatConfirmEl.style.borderRadius = '6px';
+    this.repeatConfirmEl.style.padding = '8px 12px';
+    this.repeatConfirmEl.style.textAlign = 'center';
+    this.repeatConfirmEl.style.flex = '0 0 auto';
+    this.contentElement.appendChild(this.repeatConfirmEl);
+
     // 5. Bottom Enter Button Bar
     const bottomBar = document.createElement('div');
     bottomBar.style.display = 'flex';
@@ -213,6 +278,7 @@ export class DeployWindow extends SystemWindow {
     this.enterBtn.style.fontSize = '14px';
     this.enterBtn.style.letterSpacing = '1.5px';
     this.enterBtn.addEventListener('click', () => {
+      const floor = (this.targetFloor != null ? this.targetFloor : (gameState.currentFloor || 1));
       if (this.hasUnarmedHeroes() && !this.equipNoticeDismissed) {
         showEquipmentNotice({
           onSummon: () => {
@@ -230,14 +296,108 @@ export class DeployWindow extends SystemWindow {
         });
         return;
       }
+       // Repeat-floor confirmation
+      if (floor < (gameState.currentFloor || 1) || floor <= (gameState.clearedFloors || 0)) {
+        this.showRepeatConfirm(floor);
+        return;
+      }
+
+      // Volunteer prompt: if an open slot and a veteran not in party
+      const party = gameState.party || [];
+      if (party.length < 5) {
+        const volunteer = (gameState.heroes || []).find((h) => h.alive && !gameState.isInParty(h.id) && (h.star || 1) >= 3);
+        if (volunteer) {
+          const prompt = document.createElement('div');
+          prompt.style.position = 'fixed';
+          prompt.style.top = '50%';
+          prompt.style.left = '50%';
+          prompt.style.transform = 'translate(-50%, -50%)';
+          prompt.style.zIndex = '10030';
+          prompt.style.padding = '16px';
+          prompt.style.background = 'rgba(11,8,16,0.95)';
+          prompt.style.border = '1px solid var(--gold)';
+          prompt.style.borderRadius = '8px';
+          prompt.style.textAlign = 'center';
+          prompt.innerHTML = `
+            <div style="color:var(--gold); font-weight:bold; margin-bottom:8px;">${String(volunteer.name).toUpperCase()} (★) WANTS TO JOIN THE PARTY. WILL YOU ACCEPT? [Yes] [No]</div>
+            <div style="color:#88aacc; font-size:11px; margin-bottom:8px;">TIP: HEROES WILL OFTEN WANT COMBAT. THEY WILL PERFORM BETTER IN THOSE FIGHTS.</div>
+          `;
+          const yes = document.createElement('button');
+          yes.textContent = 'Yes';
+          yes.className = 'mm-btn mm-btn-ok';
+          yes.style.marginRight = '8px';
+          const no = document.createElement('button');
+          no.textContent = 'No';
+          no.className = 'mm-btn mm-btn-danger';
+          yes.addEventListener('click', () => {
+            gameState.addToParty(volunteer.id, 'front');
+            volunteer.volunteerBuffActive = true;
+            document.body.removeChild(prompt);
+            this.close();
+            if (this.onEnterFloor) this.onEnterFloor(floor);
+          });
+          no.addEventListener('click', () => {
+            document.body.removeChild(prompt);
+            this.close();
+            if (this.onEnterFloor) this.onEnterFloor(floor);
+          });
+          prompt.appendChild(yes);
+          prompt.appendChild(no);
+          document.body.appendChild(prompt);
+          return;
+        }
+      }
+
       this.close();
       if (this.onEnterFloor) {
-        this.onEnterFloor(gameState.currentFloor || 1);
+        this.onEnterFloor(floor);
       }
     });
     bottomBar.appendChild(this.enterBtn);
 
     this.contentElement.appendChild(bottomBar);
+  }
+
+  showRepeatConfirm(floor) {
+    if (!this.repeatConfirmEl) return;
+    this.repeatConfirmEl.innerHTML = '';
+    const text = document.createElement('div');
+    text.textContent = `FLOOR ${floor} — WILL YOU ATTEMPT IT AGAIN?`;
+    text.style.color = 'var(--gold)';
+    text.style.fontWeight = 'bold';
+    text.style.fontSize = '12px';
+    text.style.marginBottom = '6px';
+    this.repeatConfirmEl.appendChild(text);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.justifyContent = 'center';
+    btnRow.style.gap = '8px';
+
+    const yesBtn = document.createElement('button');
+    yesBtn.className = 'mm-btn mm-btn-ok';
+    yesBtn.textContent = 'Yes';
+    yesBtn.style.padding = '4px 14px';
+    yesBtn.style.fontSize = '12px';
+    yesBtn.addEventListener('click', () => {
+      this.repeatConfirmEl.style.display = 'none';
+      this.close();
+      if (this.onEnterFloor) this.onEnterFloor(floor);
+    });
+    btnRow.appendChild(yesBtn);
+
+    const noBtn = document.createElement('button');
+    noBtn.className = 'mm-btn mm-btn-danger';
+    noBtn.textContent = 'No';
+    noBtn.style.padding = '4px 14px';
+    noBtn.style.fontSize = '12px';
+    noBtn.addEventListener('click', () => {
+      this.repeatConfirmEl.style.display = 'none';
+    });
+    btnRow.appendChild(noBtn);
+
+    this.repeatConfirmEl.appendChild(btnRow);
+    this.repeatConfirmEl.style.display = 'block';
   }
 
   autoSelectParty() {
@@ -329,6 +489,24 @@ export class DeployWindow extends SystemWindow {
         <span style="font-weight:bold; color:var(--frame); font-size:13px;">EXPEDITION TARGET:</span>
         <span style="font-size:15px; font-weight:bold; color:var(--gold); letter-spacing:1px; background:rgba(255, 211, 107, 0.15); border:1px solid var(--gold); padding:3px 12px; border-radius:4px;">FLOOR ${gameState.currentFloor || 1}</span>
       `;
+    }
+
+    // Boss stage warning badge
+    if (this.bossBadge) {
+      const f = gameState.currentFloor || 1;
+      this.bossBadge.style.display = (f % 5 === 0) ? 'block' : 'none';
+    }
+
+    // DIED IN BATTLE stamp for fallen party members
+    if (this.fallenBlock) {
+      const fallen = (gameState.fallenHeroes || []).filter(Boolean);
+      if (fallen.length > 0) {
+        this.fallenBlock.style.display = 'block';
+        this.fallenBlock.innerHTML = fallen.map((h) => `<div style="filter:brightness(0.6);">${(h.name || 'HERO').toUpperCase()} <span style="font-weight:bold;">DIED IN BATTLE</span></div>`).join('');
+      } else {
+        this.fallenBlock.style.display = 'none';
+        this.fallenBlock.innerHTML = '';
+      }
     }
 
     // 1. Render Party Slots (Always 5 slots)
@@ -481,6 +659,18 @@ export class DeployWindow extends SystemWindow {
         `;
       }
 
+      // HTML5 drag-and-drop: allow dropping an available hero into this slot
+      slotCard.setAttribute('draggable', 'false');
+      slotCard.addEventListener('dragover', (e) => { e.preventDefault(); });
+      slotCard.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const heroId = e.dataTransfer.getData('text/plain');
+        if (heroId && !gameState.isInParty(heroId) && (gameState.party || []).length < 5) {
+          gameState.addToParty(heroId, 'front');
+          this.render();
+        }
+      });
+
       this.slotsContainer.appendChild(slotCard);
     }
 
@@ -547,11 +737,15 @@ export class DeployWindow extends SystemWindow {
       this.availableContainer.appendChild(empty);
     } else {
       availableHeroes.forEach((h) => {
-        const starColor = getRarityHexString(h.star);
-        const isExhausted = (h.fatigue || 0) > 80;
+       const starColor = getRarityHexString(h.star);
+       const isExhausted = (h.fatigue || 0) > 80;
 
-        const row = document.createElement('div');
-        row.style.padding = '6px 10px';
+       const row = document.createElement('div');
+       row.draggable = true;
+       row.addEventListener('dragstart', (e) => {
+         e.dataTransfer.setData('text/plain', h.id);
+       });
+       row.style.padding = '6px 10px';
         row.style.backgroundColor = 'rgba(15, 10, 25, 0.75)';
         row.style.border = '1px solid rgba(180, 140, 255, 0.25)';
         row.style.borderRadius = '4px';

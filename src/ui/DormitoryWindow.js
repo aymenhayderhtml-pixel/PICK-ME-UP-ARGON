@@ -133,6 +133,146 @@ export class DormitoryWindow extends SystemWindow {
     mealsBar.appendChild(mealsBtns);
     this.contentElement.appendChild(mealsBar);
 
+    // Mess Hall / Cook Assignment
+    const cookSection = document.createElement('div');
+    cookSection.style.backgroundColor = 'rgba(20, 15, 35, 0.7)';
+    cookSection.style.border = '1px solid var(--frame-inner)';
+    cookSection.style.borderRadius = '6px';
+    cookSection.style.padding = '8px 12px';
+    cookSection.style.display = 'flex';
+    cookSection.style.flexDirection = 'column';
+    cookSection.style.gap = '6px';
+
+    const assignedCook = (gameState.heroes || []).find((h) => h.id === gameState.assignedCookId);
+    const cookName = assignedCook ? assignedCook.name : 'NONE';
+    const cookStar = assignedCook ? '★'.repeat(assignedCook.star || 1) : '';
+    const hasCookingSkill = assignedCook ? (assignedCook.skills || []).some((s) => s.id === 'cooking') : false;
+
+    const cookHeader = document.createElement('div');
+    cookHeader.style.display = 'flex';
+    cookHeader.style.justifyContent = 'space-between';
+    cookHeader.style.alignItems = 'center';
+    cookHeader.innerHTML = `
+      <span style="font-weight:bold; font-size:12px; color:var(--gold);">MESS HALL — COOK ASSIGNMENT</span>
+      <span style="font-size:11px; color:#a0b0c0;">Current Cook: <b style="color:#ffffff;">${cookName} ${cookStar}</b></span>
+    `;
+    cookSection.appendChild(cookHeader);
+
+    const cookSelect = document.createElement('select');
+    cookSelect.style.padding = '4px 8px';
+    cookSelect.style.fontSize = '11px';
+    cookSelect.style.borderRadius = '4px';
+    cookSelect.style.backgroundColor = 'rgba(15, 10, 25, 0.6)';
+    cookSelect.style.color = '#cccccc';
+    cookSelect.style.border = '1px solid var(--frame-inner)';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = '-- Select Cook --';
+    cookSelect.appendChild(defaultOpt);
+    (gameState.heroes || []).filter((h) => h.alive).forEach((h) => {
+      const opt = document.createElement('option');
+      opt.value = h.id;
+      opt.textContent = `${h.name} (${ '★'.repeat(h.star || 1) })`;
+      if (h.id === gameState.assignedCookId) opt.selected = true;
+      cookSelect.appendChild(opt);
+    });
+    cookSelect.addEventListener('change', () => {
+      const newId = cookSelect.value;
+      if (!newId) return;
+      const newHero = (gameState.heroes || []).find((h) => h.id === newId);
+      const oldHero = assignedCook;
+      if (oldHero && oldHero.id !== newId) {
+        const confirmBox = document.createElement('div');
+        confirmBox.style.position = 'fixed';
+        confirmBox.style.top = '50%';
+        confirmBox.style.left = '50%';
+        confirmBox.style.transform = 'translate(-50%, -50%)';
+        confirmBox.style.zIndex = '10030';
+        confirmBox.style.padding = '16px';
+        confirmBox.style.background = 'rgba(11,8,16,0.95)';
+        confirmBox.style.border = '1px solid var(--gold)';
+        confirmBox.style.borderRadius = '8px';
+        confirmBox.style.textAlign = 'center';
+        confirmBox.innerHTML = `<div style="color:var(--gold); font-weight:bold; margin-bottom:8px;">WILL YOU MAKE ${String(newHero.name).toUpperCase()} (★) THE COOK? ${String(oldHero.name).toUpperCase()} (★)'S SPOT WILL BE TAKEN. [Yes] [No]</div>`;
+        const yes = document.createElement('button');
+        yes.textContent = 'Yes';
+        yes.className = 'mm-btn mm-btn-ok';
+        yes.style.marginRight = '8px';
+        const no = document.createElement('button');
+        no.textContent = 'No';
+        no.className = 'mm-btn mm-btn-danger';
+        yes.addEventListener('click', () => {
+          gameState.assignedCookId = newId;
+          gameState.saveToLocalStorage();
+          document.body.removeChild(confirmBox);
+          this.render();
+        });
+        no.addEventListener('click', () => {
+          document.body.removeChild(confirmBox);
+          this.render();
+        });
+        confirmBox.appendChild(yes);
+        confirmBox.appendChild(no);
+        document.body.appendChild(confirmBox);
+      } else {
+        gameState.assignedCookId = newId;
+        gameState.saveToLocalStorage();
+        this.render();
+      }
+    });
+    cookSection.appendChild(cookSelect);
+
+    // Service result / logs
+    if (assignedCook) {
+      if (hasCookingSkill) {
+        const feast = document.createElement('div');
+        feast.style.fontSize = '11px';
+        feast.style.color = '#7dffb0';
+        feast.textContent = 'POTATO FEAST SERVED — HUNGER REDUCED, PARTY MORALE & STAMINA BOOSTED.';
+        cookSection.appendChild(feast);
+      } else {
+        const distaste = document.createElement('div');
+        distaste.style.fontSize = '11px';
+        distaste.style.color = '#aaaaaa';
+        distaste.style.opacity = '0.7';
+        distaste.style.transform = 'skewX(-8deg)';
+        const partyHeroes = (gameState.party || []).map((p) => gameState.heroes.find((h) => h.id === (typeof p === 'string' ? p : p.id))).filter(Boolean);
+        const targetNames = ['JENNA', 'HAN'];
+        targetNames.forEach((n) => {
+          const line = document.createElement('div');
+          line.textContent = `${n} (★) SHOWS DISTASTE AT THE COOKING.`;
+          distaste.appendChild(line);
+        });
+        cookSection.appendChild(distaste);
+      }
+    }
+
+    // Meat Feast button (when beast_meat > 0)
+    if ((gameState.materials?.beast_meat || 0) > 0) {
+      const feastBtn = document.createElement('button');
+      feastBtn.textContent = 'SERVE MEAT FEAST';
+      feastBtn.className = 'mm-btn mm-btn-gold';
+      feastBtn.style.padding = '6px 16px';
+      feastBtn.style.fontSize = '12px';
+      feastBtn.addEventListener('click', () => {
+        if ((gameState.materials?.beast_meat || 0) <= 0) return;
+        gameState.materials.beast_meat -= 1;
+        (gameState.heroes || []).forEach((h) => {
+          if (h.alive) {
+            h.hunger = 0;
+            h.fatigue = 0;
+            h.morale = 100;
+          }
+        });
+        gameState.saveToLocalStorage();
+        showSystemMessage("OOH-! MEAT! I'VE MISSED EATING MEAT! EVERYONE SHOULD BE ABLE TO EAT WELL FOR NOW.");
+        this.render();
+      });
+      cookSection.appendChild(feastBtn);
+    }
+
+    this.contentElement.appendChild(cookSection);
+
     // Hero List
     const listContainer = document.createElement('div');
     listContainer.style.display = 'flex';

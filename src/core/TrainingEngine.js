@@ -21,6 +21,7 @@ import { chooseFightAction, chooseSwitchTarget, getFightStyleForHero } from './F
 import { Combatant } from '../combat/Combatant.js';
 import { COMBAT_STATES } from '../combat/StateMachine.js';
 import { DamageResolver } from '../combat/DamageResolver.js';
+import { showSystemMessage } from '../ui/Notices.js';
 
 const normalizeId = (v) => String(v || '').toLowerCase().replace(/\s+/g, '_');
 
@@ -204,6 +205,13 @@ export function checkAndCombineSkills(hero) {
       result.level = Math.min(20, (result.level || 1) + combinedLevel);
     }
 
+    const skillAName = (a && (a.name || getSkill(recipe.parentA)?.name || recipe.parentA)) || recipe.parentA;
+    const skillBName = (b && (b.name || getSkill(recipe.parentB)?.name || recipe.parentB)) || recipe.parentB;
+    const newSkillName = recipe.resultName || result.name || recipe.resultSkillId;
+    showSystemMessage(
+      `SKILL AWAKENED! '${skillAName.toUpperCase()}' AND '${skillBName.toUpperCase()}' ARE COMBINING TO CREATE A NEW SKILL.\n'${(hero.name || 'HERO').toUpperCase()}' HAS OBTAINED THE '${newSkillName.toUpperCase()}' SKILL!`
+    );
+
     results.push({
       recipeId: recipe.id,
       resultSkillId: recipe.resultSkillId,
@@ -300,10 +308,23 @@ export function resolveTrainingSession(hero, trainingType, gameState, options = 
   const heroExp = Math.max(1, Math.round(baseHeroExp * outcomeMult * hungerMult));
 
   const levelsBefore = captureSkillLevels(hero);
-  addSkillExp(hero, primary, skillXp);
+  addSkillExp(hero, primary, skillXp, { notify: false });
   if (secondary) {
-    addSkillExp(hero, secondary, Math.round(skillXp * cfg.SECONDARY_SKILL_XP_RATIO));
+    addSkillExp(hero, secondary, Math.round(skillXp * cfg.SECONDARY_SKILL_XP_RATIO), { notify: false });
   }
+
+  const levelsAfter = captureSkillLevels(hero);
+  for (const [id, beforeLevel] of Object.entries(levelsBefore)) {
+    const afterLevel = levelsAfter[id];
+    if (afterLevel && afterLevel > beforeLevel) {
+      const skill = (hero.skills || []).find((s) => normalizeId(typeof s === 'string' ? s : (s.id || s.name)) === id);
+      const skillName = skill && typeof skill === 'object'
+        ? (skill.name || getSkill(id)?.name || id)
+        : (getSkill(id)?.name || id);
+      showSystemMessage(`'${String(skillName).toUpperCase()}' HAS LEVELED UP TO LV${afterLevel}!`);
+    }
+  }
+  // newly added skills that somehow leveled beyond 1 are handled above; new skills at level 1 do not notify.
 
   // Direct core stat growth.
   const statChance = cfg.STAT_GAIN_CHANCE_BY_OUTCOME[outcome] ?? 0;
@@ -361,6 +382,9 @@ export function resolveTrainingSession(hero, trainingType, gameState, options = 
   if (outcome === 'accident' && injury) {
     const dmg = Math.round(10 + skillXp * 0.2);
     painTolerance = recordTrainingDamageAndHeal(hero, dmg, dmg) || painTolerance;
+    if (painTolerance && painTolerance.leveledUp) {
+      showSystemMessage(`'PAIN TOLERANCE' HAS LEVELED UP TO LV${painTolerance.newLevel}!`);
+    }
   }
 
   // Death: only risky training, and never while Iselle is present.
@@ -1610,7 +1634,19 @@ export function awardLiveTrainingTickXp(hero, zone, skillId, gameState, nowMs = 
     )
   );
 
-  addSkillExp(hero, resolvedSkillId, xpGained);
+  const beforeLevels = captureSkillLevels(hero);
+  addSkillExp(hero, resolvedSkillId, xpGained, { notify: false });
+  const afterLevels = captureSkillLevels(hero);
+  const sid = normalizeId(resolvedSkillId);
+  const before = beforeLevels[sid] || 0;
+  const after = afterLevels[sid] || 0;
+  if (after > before) {
+    const skill = (hero.skills || []).find((s) => normalizeId(typeof s === 'string' ? s : (s.id || s.name)) === sid);
+    const skillName = skill && typeof skill === 'object'
+      ? (skill.name || getSkill(sid)?.name || resolvedSkillId)
+      : (getSkill(sid)?.name || resolvedSkillId);
+    showSystemMessage(`'${String(skillName).toUpperCase()}' HAS LEVELED UP TO LV${after}!`);
+  }
   if (pinnedSlot) {
     pinnedSlot.expGained = (pinnedSlot.expGained || 0) + xpGained;
   }

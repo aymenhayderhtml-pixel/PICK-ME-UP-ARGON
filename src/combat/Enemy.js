@@ -116,7 +116,11 @@ export class Enemy {
     this.isBoss = isBoss || this.typeKey === 'LEADER';
     this.floorNumber = floorNumber;
     this.level = level !== null ? level : (this.stats.level || (floorNumber <= 2 ? 3 : Math.max(1, floorNumber * 2 - 1)));
-    this.name = this.typeKey === 'PRAIRIE_WOLF' ? 'Prairie Wolf' : (this.stats.name || (this.isBoss ? 'Hobgoblin Chief' : 'Goblin'));
+    this.name = this.typeKey === 'PRAIRIE_WOLF' ? 'Prairie Wolf'
+      : this.typeKey === 'GOBLIN_HOUND' ? 'Goblin Hound'
+      : this.typeKey === 'BLACK_WOLF' ? 'Black Wolf'
+      : this.typeKey === 'HARPY' ? 'Harpy'
+      : (this.stats.name || (this.isBoss ? 'Hobgoblin Chief' : 'Goblin'));
 
     this.mesh = new THREE.Group();
     this.materials = [];
@@ -139,6 +143,13 @@ export class Enemy {
     // State Machine
     this.state = 'idle';
     this.stateTimer = 0;
+
+    // Goblin Scout horn windup
+    this.hornStarted = false;
+    this.hornFinished = false;
+    this.hornCancelled = false;
+    this.hornMessageShown = false;
+    this.hornWindupTimer = 0;
     this.attackCooldown = 0;
     this.healCooldown = 0;
     this.rallyCooldown = 3.0;
@@ -157,7 +168,7 @@ export class Enemy {
     // Death & Corpse
     this.dead = false;
     this.isDying = false;
-    this.deathTimer = this.typeKey === 'PRAIRIE_WOLF' ? 1.0 : 0.8;
+    this.deathTimer = (this.typeKey === 'PRAIRIE_WOLF' || this.typeKey === 'GOBLIN_HOUND' || this.typeKey === 'BLACK_WOLF' || this.typeKey === 'LIGHTNING_WOLF' || this.typeKey === 'QUEEN_OF_THE_FOREST') ? 1.0 : 0.8;
     this.corpseTimer = 6.0; // Corpse stays for 6 seconds
     this.corpseFadeTimer = 0.8; // Fades out over 0.8s after 6 seconds
     this.isCorpseCleaned = false;
@@ -386,6 +397,13 @@ export class Enemy {
 
   takeDamage(dmg, isFinisher = false) {
     if (this.dead) return;
+    if (this.typeKey === 'GOBLIN_SCOUT' && this.hornStarted && !this.hornFinished && !this.hornCancelled) {
+      this.hornCancelled = true;
+      this.hornFinished = false;
+      this.hornStarted = false;
+      this.state = 'stagger';
+      this.stateTimer = 0.25;
+    }
     this.hp -= dmg;
     this.flashTimer = 0.1;
     if (this.rig) this.rig.setTint(0xffffff, 0.85);
@@ -445,6 +463,30 @@ export class Enemy {
     // Slime splitting: Crystal Slime splits into 2 small slimes on death
     if (this.typeKey === 'CRYSTAL_SLIME' && this.onSplit) {
       this.onSplit(this.mesh.position.clone());
+    }
+
+    // Queen of the Forest drops + Jenna skill
+    if (this.typeKey === 'QUEEN_OF_THE_FOREST') {
+      if (!gameState.materials) gameState.materials = {};
+      gameState.materials.wind_elemental_stone = (gameState.materials.wind_elemental_stone || 0) + 1;
+      gameState.materials.wind_elemental_stone_d = (gameState.materials.wind_elemental_stone_d || 0) + 1;
+      gameState.materials.queens_blood = (gameState.materials.queens_blood || 0) + 1;
+      gameState.materials.beast_meat = (gameState.materials.beast_meat || 0) + 1;
+      const jenna = (gameState.heroes || []).find((h) => h.id === 'hero_jenna' || (h.name || '').toLowerCase() === 'jenna');
+      if (jenna) {
+        if (!Array.isArray(jenna.skills)) jenna.skills = [];
+        if (!jenna.skills.some((s) => String(typeof s === 'string' ? s : (s.id || s.name || '')).toLowerCase().replace(/\s+/g, '_') === 'hunter_of_the_forest')) {
+          jenna.skills.push({ id: 'hunter_of_the_forest', name: 'Hunter of the Forest', level: 1, exp: 0 });
+        }
+        showSystemMessage("DARARANG!! SKILL AWAKENED! JENNA (★) HAS RECEIVED THE SKILL 'HUNTER OF THE FOREST!'");
+      }
+    }
+
+    // Lightning Wolf drops
+    if (this.typeKey === 'LIGHTNING_WOLF') {
+      if (!gameState.materials) gameState.materials = {};
+      gameState.materials.water_elemental_stone = (gameState.materials.water_elemental_stone || 0) + 1;
+      gameState.materials.water_elemental_stone_d = (gameState.materials.water_elemental_stone_d || 0) + 1;
     }
 
     // Check weapon scavenging drop (35% chance)
@@ -594,6 +636,18 @@ export class Enemy {
     }
 
 
+    // Goblin Scout horn windup trigger when aggroed
+    if (this.typeKey === 'GOBLIN_SCOUT' && this.state === 'chase' && !this.hornStarted && !this.hornFinished && !this.hornCancelled) {
+      this.state = 'hornWindup';
+      this.stateTimer = 4.0;
+      this.hornStarted = true;
+      this.hornWindupTimer = 4.0;
+      if (!this.hornMessageShown) {
+        this.hornMessageShown = true;
+        showSystemMessage("WAIT, THEY HAVE A BLOWING HORN! I WON'T LET YOU CALL FOR REINFORCEMENTS!");
+      }
+    }
+
     // Rig animation update
     const moving = this.isMoving;
     this.isMoving = false;
@@ -601,7 +655,7 @@ export class Enemy {
     let actionTime = 0;
     if (this.state === 'attack') {
       actionTime = Math.max(0, 0.25 - this.stateTimer);
-    } else if (this.state === 'windup') {
+    } else if (this.state === 'windup' || this.state === 'hornWindup') {
       actionTime = Math.max(0, 0.4 - this.stateTimer);
     } else if (this.state === 'stagger') {
       actionTime = Math.max(0, 0.25 - this.stateTimer);
@@ -611,7 +665,7 @@ export class Enemy {
       this.rig.update(delta, {
         moving,
         speed: this.speed / 2.0,
-        state: this.state,
+        state: this.state === 'hornWindup' ? 'windup' : this.state,
         actionTime,
         morale: this.morale
       });
@@ -624,11 +678,24 @@ export class Enemy {
     const stealthReduction = 1 - (context?.stealthLevel || 0) * 0.04;
     const effectiveDetectionRange = this.detectionRange * stealthReduction;
 
-    if (this.typeKey === 'PRAIRIE_WOLF') {
+    if (this.typeKey === 'PRAIRIE_WOLF' || this.typeKey === 'GOBLIN_HOUND' || this.typeKey === 'BLACK_WOLF' || this.typeKey === 'LIGHTNING_WOLF' || this.typeKey === 'QUEEN_OF_THE_FOREST') {
       WolfAI.updateWolf(this, delta, player, dungeon, camera, projectilesManager, allies, context);
       return;
     }
 
+    // Goblin Scout horn windup: handled below after AI routing guard
+    if (this.typeKey === 'GOBLIN_SCOUT' && this.state === 'hornWindup') {
+      this.stateTimer -= delta;
+      this.hornWindupTimer = this.stateTimer;
+      if (this.stateTimer <= 0) {
+        this.state = 'idle';
+        this.hornFinished = true;
+      }
+    }
+
+    if (this.typeKey === 'GOBLIN_SCOUT' && this.state === 'hornWindup') {
+      // skip normal AI
+    } else {
     // State machine updates via GoblinAI
     switch (this.state) {
       case 'idle':
@@ -658,6 +725,7 @@ export class Enemy {
       case 'flee':
         GoblinAI.handleFlee(this, delta, player, dungeon);
         break;
+    }
     }
   }
 

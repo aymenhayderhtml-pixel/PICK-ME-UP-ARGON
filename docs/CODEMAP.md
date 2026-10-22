@@ -84,7 +84,7 @@ src/art/artIselleTest.js | Test runner logic for Iselle expression inspection ha
 src/art/artTest.js | Test runner logic for hero rig and customization harness | (none) | three, hero, HeroRig, presets, itemModels, weapons | dev only
 src/art/artTownTest.js | Test runner logic for 3D town hub visual inspection harness | (none) | three, TownAssembler, WalkHeight | dev only
 src/art/artWeaponTest.js | Test runner logic for weapon animation and swing visual harness | (none) | three, weapons, weaponAnimations, HeroRig | dev only
-src/art/enemies.js | Procedural primitive 3D mesh generators and poses for enemies | ENEMY_TYPES, POSE_INFO, ENEMY_POSES, createEnemyModel | three | live game
+src/art/enemies.js | Procedural primitive 3D mesh generators and poses for enemies (including goblin_armored, goblin_hound, black_wolf) | ENEMY_TYPES, POSE_INFO, ENEMY_POSES, createGnollWarriorModel, createEnemyModel | three | live game
 src/art/enemyPresets.js | Preconfigured visual appearance presets for enemy types | ENEMY_PRESETS | (none) | dev only
 src/art/hero.js | Procedural primitive 3D mesh generator and joint sockets for heroes | HERO_POSES, createHeroModel | three, looks, weaponAnimations | live game
 src/art/iselle.js | Procedural primitive 3D mesh generator and 2D canvas face for Iselle | ISELLE_POSES, ISELLE_EXPRESSIONS, POSE_INFO, drawIselleFace, drawIsellePortrait, disposeIselleCaches, createIselleModel | three | live game
@@ -97,7 +97,7 @@ src/art/weapons.js | Procedural 3D primitive mesh builders for weapons and shiel
 ### src/art/floors/
 src/art/floors/FloorAssembler.js | Assembles floor terrain chunks, props, and lighting budgets | FLOOR_ART_BUDGETS, floorArtModuleName, assembleFloor | prairie, farm, forest | live game
 src/art/floors/farm.js | Procedural farm floor terrain builder with fences and haystacks | buildFarmFloorArt, default | three | live game
-src/art/floors/forest.js | Procedural forest floor terrain builder with moss rocks and foliage | buildForestFloorArt | three | live game
+src/art/floors/forest.js | Procedural forest floor terrain builder with moss rocks and foliage, plus Floor 3 single clearing arena and drifting leaf debris | BRIGHT_FOREST_LIGHTING, FOREST_FLOOR_LIGHTING, createSeededRandom, mergeStaticGeometries, getForestPalette, getForestGeometries, buildForestFloorArt, buildFloor3Clearing, buildForestFloor, updateFloor3Debris | three | live game
 src/art/floors/prairie.js | Procedural prairie floor terrain builder with rolling hills | buildPrairieFloorArt | three | live game
 
 ### src/art/town/
@@ -154,7 +154,7 @@ src/core/Inventory.js | Inventory slots, auto-equip logic, repair costs, and enh
 src/core/loadout.js | Single source of truth for a hero's weapon, offhand, pose set, attack mode and HUD mode | ATTACK_MODES, HUD_MODES, POSE_SETS, CLASS_PROFILES, getHeroClassKey, getHeroClassProfile, getAllowedWeaponTypes, getHeroLoadout, reconcileHeroLoadout | itemModels, items | live game
 src/core/SceneManager.js | Manages active scene lifecycle, transitions, and main animation loop | SceneManager | three | live game
 src/core/FightAI.js | Pure headless emotion and weapon-style combat decision AI | FIGHT_ACTIONS, getFightStyleForHero, computeActionWeights, chooseFightAction, chooseSwitchTarget | emotions.config, EmotionEngine | live game
-src/core/EmotionEngine.js | Pure emotion mutations: trait modifiers, panic, fear, the daily tick, eating, resting and the squad leader order | getTraitModifiers, isHeroPanicking, applyFearGain, applyDailyEmotionTick, applyEatOutcome, applyRestOutcome, evaluateSquadLeaderOrder, pickTrainingTypeForHero | emotions.config, heroes | live game
+src/core/EmotionEngine.js | Pure emotion mutations: trait modifiers, panic, fear, the daily tick, eating, resting and the squad leader order | getTraitModifiers, hasTrait, isHeroPanicking, applyFearGain, applyDailyEmotionTick, applyEatOutcome, applyRestOutcome, evaluateSquadLeaderOrder, pickTrainingTypeForHero | emotions.config, heroes | live game
 src/core/TrainingEngine.js | Pure training session, the shared real-combatant fight engine and the unified live training XP path | findHeroSkill, rollHitZone, rollSessionOutcome, recordTrainingDamageAndHeal, checkAndUnlockPainTolerance, recordCoTraining, checkAndCombineSkills, resolveTrainingSession, pickPrimarySkillForHero, handleHeroDeathAndDropGear, createFighterFromHero, createFightSession, stepFightExchange, applyTrainingYardRecovery, evaluateFightIntervention, applyFightConsequences, resolveEmotionFight, resolveSparringSession, checkHeroFightTrigger, pairDailyFights, pairAndResolveDailyFights, evaluateTensionFight, awardLiveTrainingTickXp | three, training.config, emotions.config, skills, iselle, Stats, EmotionEngine, FightAI, Combatant, StateMachine, DamageResolver | live game
 src/core/DailyDecisionEngine.js | The ONE daily decision path shared by live play and the offline login simulation | computeActivityWeights, chooseDailyActivity, simulateGameDay, simulateMultipleDays | emotions.config, Rng, EmotionEngine, TrainingEngine | live game
 src/core/Rng.js | Small deterministic seeded random generator (mulberry32) | createRng | (none) | live game
@@ -163,13 +163,13 @@ src/core/Stats.js | Calculates total combat stats from base, levels, gear, and g
 
 ### src/data/
 src/data/drops.js | Item and material drop tables for defeated enemy tiers | DROP_TYPES | items, materials | live game
-src/data/enemies.js | Enemy archetype definitions, base stats, and stat calculators | ENEMY_TYPES, getEnemyStats | (none) | live game
-src/data/heroes.js | Hero base templates, past jobs, motivations, novice generators, personality traits, and emotion field helpers | HERO_TEMPLATES, PAST_JOBS, JOB_SKILL_MAP, generateNoviceHero, generateRandomHero, rollMotivation, createHeroFromTemplate, rollPersonalityTraits, normalizeHeroEmotionFields, setHeroAnger, addHeroAnger, setHeroHunger, addHeroHunger, getWeightedStatsForClass | skills, emotions.config | live game
+src/data/enemies.js | Enemy archetype definitions (including ARMORED_GOBLIN, GOBLIN_HOUND, BLACK_WOLF), base stats, and stat calculators | ENEMY_TYPES, getEnemyStats | (none) | live game
+src/data/heroes.js | Hero base templates, past jobs, motivations, novice generators, personality traits, and emotion field helpers | HERO_TEMPLATES, PAST_JOBS, JOB_SKILL_MAP, UNNAMED_MEN_RECRUITS, generateNoviceHero, generateRandomHero, rollMotivation, createHeroFromTemplate, rollPersonalityTraits, normalizeHeroEmotionFields, setHeroAnger, addHeroAnger, setHeroHunger, addHeroHunger, getWeightedStatsForClass | skills, emotions.config | live game
 src/data/iselle.js | Dialogue lines for guide NPC Iselle plus the fight and intervention report text templates | ISELLE_LINES, pickLine, ISELLE_INTERVENTION_REPORT_TEXT, ISELLE_FIGHT_EVENT_TEXT | (none) | live game
 src/data/items.js | Item database, equipment recipes, gacha pools, and item instances | ITEM_GRADES, ITEM_TEMPLATES, FORGE_RECIPES, createItemInstance, GACHA_BASE_TYPES, rollEquipmentGacha | (none) | live game
 src/data/materials.js | Crafting and upgrade material types and inventory helpers | MATERIALS, getMaterial, createInitialMaterials | (none) | live game
-src/data/missions.js | Mission types and floor objectives for dungeon expedition stages | MISSION_TYPES, getMissionInfo | (none) | live game
-src/data/rewards.js | Stage clear reward payout schedules per dungeon floor | STAGE_REWARDS, getFloorClearReward | (none) | live game
+src/data/missions.js | Mission types and floor objectives for dungeon expedition stages | MISSION_TYPES, DAILY_DUNGEONS, getMissionInfo | (none) | live game
+src/data/rewards.js | Stage clear reward payout schedules per dungeon floor (Floors 1-3 presets) | STAGE_REWARDS, REPEAT_CLEAR_GOLD, getFloorClearReward | (none) | live game
 src/data/rules.js | Core progression balance formulas: XP curves, level caps, star limits | LEVEL_CAP_PER_STAR, MAX_STAR, getStarMultiplier, getXpForLevel, getPromotionCost, getSynthesisXp, getSkillInheritChance, getSkillXpNeeded, RARITY_COLORS, RARITY_HEX_STRINGS, getRarityColor, getRarityHexString | emotions.config | live game
 src/data/skills.js | Hero passive and active combat skill definitions and level-up curves | SKILLS, getSkill, getSkillEffects, addSkillExp, rollStatFromSkill | (none) | live game
 src/data/emotions.config.js | All tunable numbers for emotions, needs, mentality, star scaling, decision weights, squad leader orders, Iselle intervention, and lobby laws | EMOTION_CONFIG, getDefaultMentality, getDefaultMotivationScore | (none) | live game
@@ -216,20 +216,21 @@ src/player/ThirdPersonCamera.js | Third-person follow camera with distance colli
 
 ### src/scenes/
 src/scenes/HubScene.js | Town hub Three.js scene managing buildings, NPCs, and town interaction; hands the town obstacle shapes to the player and can draw them as wireframes | HubScene | three, TownAssembler, layout, HubHeroes, Iselle, TownSparringController, IselleReportWindow, LoginSimulation, EmotionEngine, AudioManager | live game
-src/scenes/TowerScene.js | Tower dungeon Three.js scene managing dungeon floors, mobs, and player | TowerScene | three, DungeonGenerator, FloorAssembler, Player, EnemyManager, equipmentEvents | live game
+src/scenes/TowerScene.js | Tower dungeon Three.js scene managing dungeon floors, mobs, lighting (including BRIGHT_FOREST_LIGHTING), and player | TowerScene | three, DungeonGenerator, FloorAssembler, Player, EnemyManager, equipmentEvents | live game
 
 ### src/ui/
 src/ui/AccountCreationScreen.js | Initial new game account creation and tutorial intro screen | AccountCreationScreen | (none) | live game
 src/ui/BlacksmithWindow.js | Blacksmith UI for forging, upgrading, and repairing hero equipment | BlacksmithWindow | SystemWindow, Inventory, items, rules | live game
 src/ui/BossBar.js | Boss HP bar overlay displaying name and shield phases | BossBar | (none) | live game
 src/ui/CommandWheel.js | Radial squad command wheel overlay for tactical orders | CommandWheel | Commands | live game
+src/ui/ConfirmPrompt.js | Reusable manhua-style YES/NO confirm prompt (detached panel + modal overlay Promise) | createConfirmPrompt, showConfirmPrompt | ornaments | live game
 src/ui/DeployWindow.js | Dungeon expedition stage select and party dispatch modal | DeployWindow | SystemWindow, missions, rules | live game
 src/ui/DormitoryWindow.js | Hero living quarters UI for resting and relationship checks | DormitoryWindow | SystemWindow, rules | live game
-src/ui/DungeonBoardWindow.js | Dungeon floor selection bulletin board UI | DungeonBoardWindow | SystemWindow, missions | live game
+src/ui/DungeonBoardWindow.js | Dungeon floor selection bulletin board UI | DungeonBoardWindow | SystemWindow, GameState, Hud | live game
 src/ui/EnemyTags.js | Overhead floating health bars and target reticle overlays for enemies | EnemyTagsOverlay | three | live game
 src/ui/EquipmentWindow.js | Hero equipment management modal for inspecting and equipping gear | EquipmentWindow | SystemWindow, Inventory, ItemIcon, loadout | live game
 src/ui/FpsCounter.js | The single FPS readout of the live game: a bottom-right badge with the FPS number and the active quality tier | fpsCounter | (none) | live game
-src/ui/HeroReport.js | End-of-stage hero battle performance and XP summary report modal | showHeroReport | rules | live game
+src/ui/HeroReport.js | Toast/notice helper for hero report messages (stacked panels, severity-based styling) | showHeroReport | (none) | live game
 src/ui/HubHud.js | Top-level hub navigation bar, resources (gold/gems), and menu buttons | HubHud | GameState | live game
 src/ui/Hud.js | Combat HUD showing player HP, stamina bar, minimap, and squad status | Hud, isAnySystemWindowOpen, showSystemMessage, showNotices, clearSystemMessages | Notices | live game
 src/ui/IselleBubble.js | Floating tutorial and guide dialogue speech bubbles from Iselle | showIselleBubble, updateIselleBubbles, clearIselleBubbles | three, AudioManager | live game
@@ -248,6 +249,7 @@ src/ui/SummonWindow.js | Gacha banner summon interface with pull animations and 
 src/ui/SynthesisWindow.js | Hero fusion and star promotion modal UI | SynthesisWindow | SystemWindow, rules, Stats | live game
 src/ui/SystemWindow.js | Base modal window component with draggable headers and ornate borders | SystemWindow, showSystemMessage | ornaments, Notices | live game
 src/ui/TrainingWindow.js | Training grounds modal for assigning heroes to skill training slots | TrainingWindow | SystemWindow, rules | live game
+src/ui/hud-floor3.css | Ornate manhwa purple-crystal styling for mission banners, stage clear cards, and dialogue speech bubbles | (none) | (none) | live game
 src/ui/ornaments.js | Decorative SVG corner accents and gold filigree borders for UI windows | cornerSvg, attachOrnateCorners | (none) | live game
 src/ui/theme.css | Comprehensive fantasy dark-mode styling and layout rules for game UI | (none) | (none) | live game
 

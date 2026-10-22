@@ -107,6 +107,12 @@ export class Player {
     // Combat Stats & Resources
     this.hp = 100;
     this.maxHp = 100;
+    this.bleedingTimer = 0;
+    this.brinkNotified = false;
+    this.crisisAwakened = false;
+    this.berserkActive = false;
+    this.berserkAuraLight = null;
+    this.berserkAuraMesh = null;
     this.stamina = 100;
     this.maxStamina = 100;
     this.baseDamage = 14;
@@ -473,7 +479,7 @@ export class Player {
     const hero = this.getHero();
     const stats = getCombatStats(hero, gameState.party, gameState.relations);
     const weaponMult = this.weapon && this.weapon.durability > 0 ? (this.weapon.damageMult || 1.0) : 0.4;
-    const baseDmg = Math.round(stats.damage * weaponMult);
+    const baseDmg = Math.round(stats.damage * weaponMult * (this.berserkActive ? 1.5 : 1));
 
     this.arrowPool.spawnArrow({
       position: _arrowOrigin,
@@ -537,7 +543,7 @@ export class Player {
     const hero = this.getHero();
     const stats = getCombatStats(hero, gameState.party, gameState.relations);
     const weaponMult = this.weapon && this.weapon.durability > 0 ? (this.weapon.damageMult || 1.0) : 0.4;
-    const baseDmg = Math.round(stats.damage * weaponMult);
+    const baseDmg = Math.round(stats.damage * weaponMult * (this.berserkActive ? 1.5 : 1));
 
     if (this.rig?.weaponModel?.getArrowWorldTransform) {
       this.rig.weaponModel.getArrowWorldTransform(_arrowOrigin, _arrowQuat);
@@ -942,11 +948,58 @@ export class Player {
     this.hitTimer = 0.25;
     this.rig.setTint(0xffffff, 0.8);
     if (camera) camera.shake(0.15, 0.2);
+
+    // Bleeding chance
+    if (amount >= this.maxHp * 0.1 && Math.random() < 0.3) {
+      this.bleedingTimer = 8;
+      const hero = this.getHero();
+      showSystemMessage(`${(hero?.name || 'HAN').toUpperCase()} (★) HAS BEEN INFLICTED WITH BLEEDING. HIS HP WILL BE REDUCED FOR A PERIOD OF TIME.`);
+    }
+    // Brink of Death
+    if (this.hp > 0 && this.hp < this.maxHp * 0.2 && !this.brinkNotified) {
+      this.brinkNotified = true;
+      const hero = this.getHero();
+      showSystemMessage(`${(hero?.name || 'HAN').toUpperCase()} (★) IS ON THE BRINK OF DEATH. HIS LIFE IS IN DANGER!`);
+    }
+    // Crisis Soul Awakening
+    if (this.hp > 0 && this.hp < this.maxHp * 0.25 && !this.crisisAwakened) {
+      this.crisisAwakened = true;
+      showSystemMessage("THE HEROES' SOULS ARE BEING AWAKENED IN THE SITUATION THAT TESTS THE HEROES' LIMITS!");
+      const hero = this.getHero();
+      if (hero) {
+        hero.skills = hero.skills || [];
+        const findSk = (id) => hero.skills.find((s) => String(typeof s === 'string' ? s : (s.id || s.name || '')).toLowerCase().replace(/\s+/g, '_') === id);
+        for (const id of ['basic_sword', 'pain_tolerance', 'composure']) {
+          const sk = findSk(id);
+          if (sk) sk.exp = (sk.exp || 0) + 50;
+        }
+        const bs = findSk('basic_sword') || findSk('basic_swordsmanship');
+        if (bs && (bs.level || 1) >= 3 && !findSk('quick_movements')) {
+          hero.skills.push({ id: 'quick_movements', name: 'Quick Movements', level: 1, exp: 0 });
+          showSystemMessage("SKILL AWAKENED! 'BASIC SWORDSMANSHIP' HAS LEVELLED UP TO LV.3! YOU'VE LEARNED 'QUICK MOVEMENTS'!");
+        }
+        if (hero.id === 'hero_han' && !findSk('berserk')) {
+          hero.skills.push({ id: 'berserk', name: 'Berserk', level: 1, exp: 0 });
+          showSystemMessage("SKILL AWAKENED! HAN (★) HAS OBTAINED THE SKILL, 'BERSERK'!");
+          this.berserkActive = true;
+        }
+      }
+    }
+
     if (this.hp <= 0) {
       this.dead = true;
       this.deathTimer = 0;
     }
     return { damage: amount };
+  }
+
+  // Shield Bash fallback
+  shieldBash(enemy) {
+    if (!this.shield) return;
+    showSystemMessage("IF SWORDS DON'T WORK, THEN USE THE SHIELD!");
+    if (enemy && typeof enemy.takeDamage === 'function') {
+      enemy.takeDamage(this.baseDamage * 0.8, false, this.mesh.position);
+    }
   }
 
   applyKnockback(dirX, dirZ, force = 6) {
@@ -1224,7 +1277,7 @@ export class Player {
     const hero = this.getHero();
     const stats = getCombatStats(hero, gameState.party, gameState.relations);
     const weaponMult = this.weapon && this.weapon.durability > 0 ? (this.weapon.damageMult || 1.0) : 0.4;
-    const baseDmg = stats.damage * weaponMult;
+    const baseDmg = stats.damage * weaponMult * (this.berserkActive ? 1.5 : 1);
 
     const isFinisher = this.comboStep === 2;
     const damage = isFinisher ? Math.round(baseDmg * 1.8) : Math.round(baseDmg);
@@ -1340,6 +1393,13 @@ export class Player {
       this.guardBreakTimer -= delta;
       this.rig.update(delta, { action: 'hit', actionTime: 0.2, mood: 'pain' });
       return;
+    }
+
+    // Bleeding drain
+    if (this.bleedingTimer > 0) {
+      this.bleedingTimer = Math.max(0, this.bleedingTimer - delta);
+      this.hp = Math.max(1, this.hp - delta * (this.maxHp * 0.02));
+      // Staunch if near a non-bleeding ally? simplified: auto-staunch after timer
     }
 
     // Archery State Machine (Ranged Combat & Over-the-Shoulder Aiming)
@@ -1515,6 +1575,38 @@ export class Player {
         if (d.life <= 0) {
           d.mesh.visible = false;
         }
+      }
+    }
+
+    // Berserk aura
+    if (this.berserkActive) {
+      if (!this.berserkAuraLight) {
+        this.berserkAuraLight = new THREE.PointLight(0xff1122, 2.5, 6);
+        this.mesh.add(this.berserkAuraLight);
+        this.berserkAuraLight.position.set(0, 1, 0);
+      }
+      if (!this.berserkAuraMesh) {
+        const auraGeo = new THREE.RingGeometry(0.6, 0.9, 16);
+        const auraMat = new THREE.MeshBasicMaterial({ color: 0xff1122, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+        this.berserkAuraMesh = new THREE.Mesh(auraGeo, auraMat);
+        this.berserkAuraMesh.rotation.x = -Math.PI / 2;
+        this.mesh.add(this.berserkAuraMesh);
+        this.berserkAuraMesh.position.set(0, 0.1, 0);
+      }
+      const pulse = 0.8 + Math.sin(Date.now() * 0.01) * 0.2;
+      this.berserkAuraMesh.scale.set(pulse, pulse, 1);
+      this.berserkAuraLight.intensity = 2.5 * pulse;
+    } else {
+      if (this.berserkAuraLight) {
+        this.mesh.remove(this.berserkAuraLight);
+        this.berserkAuraLight.dispose();
+        this.berserkAuraLight = null;
+      }
+      if (this.berserkAuraMesh) {
+        this.mesh.remove(this.berserkAuraMesh);
+        if (this.berserkAuraMesh.geometry) this.berserkAuraMesh.geometry.dispose();
+        if (this.berserkAuraMesh.material) this.berserkAuraMesh.material.dispose();
+        this.berserkAuraMesh = null;
       }
     }
 

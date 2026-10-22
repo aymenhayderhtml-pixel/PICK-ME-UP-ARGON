@@ -11,6 +11,10 @@ export const MISSION_TYPES = {
     type: 'GATHERING',
     objective: 'GATHER ORE AND DEFEAT THE MONSTERS!',
   },
+  DAILY_DUNGEON: {
+    type: 'DAILY DUNGEON',
+    objective: 'COLLECT ALL SORTS OF RARE MATERIALS!',
+  },
 };
 
 /**
@@ -38,7 +42,27 @@ export function getMissionInfo({ mode, floorNumber = 1, difficulty = 1 } = {}) {
     };
   }
 
-  if (floorNumber === 5 || floorNumber % 5 === 0) {
+  if (floorNumber === 5) {
+    return {
+      title: 'FLOOR 5',
+      missionType: 'SURVIVAL',
+      objective: 'SURVIVE THE HORDE OF ENEMIES!',
+      line1: 'MISSION CATEGORY - SURVIVAL',
+      line2: 'GOAL - SURVIVE THE HORDE OF ENEMIES! GOBLIN LV.? X 1846',
+    };
+  }
+
+  if (floorNumber === 6) {
+    return {
+      title: 'FLOOR 6',
+      missionType: 'EXPLORE',
+      objective: 'INVESTIGATE THE UNFAMILIAR LOCATION!',
+      line1: 'MISSION TYPE - EXPLORE',
+      line2: 'GOAL - INVESTIGATE THE UNFAMILIAR LOCATION!',
+    };
+  }
+
+  if (floorNumber % 5 === 0) {
     return {
       title: `FLOOR ${floorNumber}`,
       missionType: MISSION_TYPES.BOSS_BATTLE.type,
@@ -77,3 +101,9 @@ export function getMissionInfo({ mode, floorNumber = 1, difficulty = 1 } = {}) {
     line2: 'GOAL: KILL ALL THE ENEMIES!',
   };
 }
+
+export const DAILY_DUNGEONS = {
+  daily_mine: { id: 'daily_mine', name: 'ISRALTA MINE', title: 'ISRALTA MINE' },
+  daily_forest: { id: 'daily_forest', name: 'KENDERT FOREST', title: 'KENDERT FOREST' },
+  daily_plateau: { id: 'daily_plateau', name: 'SINMIEL PLATEAU', title: 'SINMIEL PLATEAU' },
+};

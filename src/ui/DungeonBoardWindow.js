@@ -1,6 +1,7 @@
 import { SystemWindow } from './SystemWindow.js';
 import { gameState } from '../core/GameState.js';
 import { showSystemMessage } from './Hud.js';
+import { DAILY_DUNGEONS } from '../data/missions.js';
 
 export class DungeonBoardWindow extends SystemWindow {
   constructor(onOpenTowerDeploy, onEnterHuntingGround, onEnterMine) {
@@ -83,6 +84,84 @@ export class DungeonBoardWindow extends SystemWindow {
     });
     towerCard.appendChild(towerBtn);
     list.appendChild(towerCard);
+
+    // Daily Dungeon section (unlocked after clearing Floor 5)
+    if (gameState.isDailyDungeonUnlocked && gameState.isDailyDungeonUnlocked()) {
+      const ddCard = document.createElement('div');
+      ddCard.style.padding = '12px 16px';
+      ddCard.style.backgroundColor = 'rgba(35, 25, 45, 0.65)';
+      ddCard.style.border = '1px solid #c084fc';
+      ddCard.style.borderRadius = '6px';
+      ddCard.style.display = 'flex';
+      ddCard.style.flexDirection = 'column';
+      ddCard.style.gap = '6px';
+
+      const banner = document.createElement('div');
+      banner.style.fontWeight = 'bold';
+      banner.style.color = 'var(--gold)';
+      banner.textContent = "[THE DUNGEON'S BANQUET THAT RUNS EVERY DAY!] <DAILY DUNGEON> [COLLECT ALL SORTS OF RARE MATERIALS!]";
+      ddCard.appendChild(banner);
+
+      const tip = document.createElement('div');
+      tip.style.fontSize = '11px';
+      tip.style.color = '#88aacc';
+      tip.textContent = 'TIPS: THE TYPE OF DUNGEON WILL DIFFER DEPENDING ON THE DAY OF THE WEEK. PLEASE CHECK BEFORE ENTERING!';
+      ddCard.appendChild(tip);
+
+      const schedule = document.createElement('div');
+      schedule.style.display = 'flex';
+      schedule.style.gap = '6px';
+      schedule.style.flexWrap = 'wrap';
+      const cards = [
+        'MON–TUES: ISRALTA MINE',
+        'WED–THURS: KENDERT FOREST',
+        'FRI–SAT: SINMIEL PLATEAU',
+        'SUN: ALL DUNGEONS ARE OPEN',
+      ];
+      cards.forEach((c) => {
+        const sc = document.createElement('div');
+        sc.style.padding = '4px 8px';
+        sc.style.border = '1px solid #c084fc';
+        sc.style.borderRadius = '4px';
+        sc.style.fontSize = '11px';
+        sc.style.color = '#e9d5ff';
+        sc.textContent = c;
+        schedule.appendChild(sc);
+      });
+      ddCard.appendChild(schedule);
+
+      const enterDdBtn = document.createElement('button');
+      enterDdBtn.textContent = 'ENTER DAILY DUNGEON';
+      enterDdBtn.className = 'mm-btn mm-btn-accent';
+      enterDdBtn.style.padding = '6px 14px';
+      enterDdBtn.style.fontSize = '12px';
+      enterDdBtn.addEventListener('click', () => {
+        const type = gameState.getDailyDungeonForDay();
+        gameState.activeDungeonType = type;
+        const name = (DAILY_DUNGEONS && DAILY_DUNGEONS[type]?.name) || type.toUpperCase();
+        showSystemMessage(`PARTY 1 HAS ENTERED THE DAILY DUNGEON, ${name} (LOWEST RANK). YOU WILL COLLECT THE MATERIALS AND THEN RETURN!`);
+        this.close();
+      });
+      ddCard.appendChild(enterDdBtn);
+
+      list.appendChild(ddCard);
+    }
+
+    // Boss stage warning badge when current floor is a multiple of 5
+    const curFloor = gameState.currentFloor || 1;
+    if (curFloor % 5 === 0) {
+      const bossBadge = document.createElement('div');
+      bossBadge.style.backgroundColor = 'rgba(255, 34, 34, 0.2)';
+      bossBadge.style.border = '1px solid #ff3333';
+      bossBadge.style.borderRadius = '6px';
+      bossBadge.style.padding = '6px 12px';
+      bossBadge.style.textAlign = 'center';
+      bossBadge.style.color = '#ff4444';
+      bossBadge.style.fontWeight = 'bold';
+      bossBadge.style.fontSize = '12px';
+      bossBadge.textContent = 'BOSS STAGE — EVERY 5 STAGES, THE DIFFICULTY SPIKES!';
+      list.appendChild(bossBadge);
+    }
 
     // 2. Hunting Ground
     const huntUnlocked = cleared >= 1;

@@ -3,6 +3,7 @@ import { PALETTE } from '../town/palette.js';
 import { buildFarmFloorArt } from './farm.js';
 import { buildPrairieFloorArt } from './prairie.js';
 import { buildForestFloorArt } from './forest.js';
+import { buildFloor3Clearing } from './forest.js';
 
 export const FLOOR_ART_BUDGETS = {
   high: { triangles: 240000, drawCalls: 48 },
@@ -23,7 +24,9 @@ export function assembleFloor(floorNumber, seed = floorNumber * 7919 + 13, quali
   const ctx = { layout, quality: q, seed, palette: PALETTE };
   const moduleName = floorArtModuleName(floor);
   let art;
-  if (moduleName === 'farm') {
+  if (floor === 3) {
+    art = buildFloor3Clearing(ctx);
+  } else if (moduleName === 'farm') {
     art = buildFarmFloorArt(ctx);
   } else if (moduleName === 'prairie') {
     art = buildPrairieFloorArt(ctx);

@@ -5,6 +5,7 @@ import { showSystemMessage } from './Hud.js';
 import { getFloorClearReward } from '../data/rewards.js';
 import { drawRewardIcon } from './RewardIcons.js';
 import { attachOrnateCorners } from './ornaments.js';
+import { createConfirmPrompt } from './ConfirmPrompt.js';
 
 function getStarString(star = 1) {
   return '★'.repeat(Math.max(1, Math.min(7, star)));
@@ -49,6 +50,14 @@ export class RewardWindow extends SystemWindow {
     const isHunt = mode === 'hunt';
     const isMine = mode === 'mine';
 
+    // Tower floors only. A clear is a FIRST clear while this floor is still
+    // the highest floor ever cleared, so this MUST be evaluated BEFORE the
+    // `clearedFloors` update further down. A repeat clear pays the flat
+    // repeat reward (see `getFloorClearReward`).
+    const isTowerClear = !isHunt && !isMine;
+    const isFirstClear = isTowerClear ? (gameState.clearedFloors || 0) < floorNumber : true;
+    const isRepeatClear = isTowerClear && !isFirstClear;
+
     // 1. Calculate Rewards
     let goldEarned = 0;
     let gemsEarned = 0;
@@ -86,12 +95,11 @@ export class RewardWindow extends SystemWindow {
       }
     } else {
       // Main tower floor clear
-      const isFirstFloor5 = floorNumber === 5 && (gameState.clearedFloors || 0) < 5;
-      const clearDef = getFloorClearReward(floorNumber, isFirstFloor5);
+      const clearDef = getFloorClearReward(floorNumber, isFirstClear);
 
       goldEarned = clearDef.gold;
-      gemsEarned = clearDef.gems;
-      ticketsEarned = clearDef.tickets;
+      gemsEarned = clearDef.gems || 0;
+      ticketsEarned = clearDef.tickets || 0;
 
       rewardSlots.push({ id: 'gold', label: `'${goldEarned.toLocaleString()}G'` });
 
@@ -210,13 +218,18 @@ export class RewardWindow extends SystemWindow {
     title1.style.textShadow = '0 0 16px rgba(255, 215, 0, 0.6), 0 0 30px rgba(255, 215, 0, 0.3)';
     panel1.appendChild(title1);
 
-    // Leveled up line: '<NAME> (★), <NAME> (★) LEVELED UP!'
+    // Leveled up line: '<NAME> (★) HAS LEVELED UP!' or '<NAME> (★), <NAME> (★) LEVELED UP!'
     if (leveledUpHeroes.length > 0) {
       const lvlLine = document.createElement('div');
-      const namesStr = leveledUpHeroes
-        .map((h) => `${(h.name || 'Hero').toUpperCase()} (${getStarString(h.star || 1)})`)
-        .join(', ');
-      lvlLine.textContent = `${namesStr} LEVELED UP!`;
+      if (leveledUpHeroes.length === 1) {
+        const h = leveledUpHeroes[0];
+        lvlLine.textContent = `${(h.name || 'Hero').toUpperCase()} (${getStarString(h.star || 1)}) HAS LEVELED UP!`;
+      } else {
+        const namesStr = leveledUpHeroes
+          .map((h) => `${(h.name || 'Hero').toUpperCase()} (${getStarString(h.star || 1)})`)
+          .join(', ');
+        lvlLine.textContent = `${namesStr} LEVELED UP!`;
+      }
       lvlLine.style.fontSize = '14px';
       lvlLine.style.fontWeight = '700';
       lvlLine.style.color = '#6ee7b7';
@@ -236,6 +249,20 @@ export class RewardWindow extends SystemWindow {
     mvpLine.style.letterSpacing = '1.5px';
     mvpLine.style.textShadow = '0 0 12px rgba(255, 215, 0, 0.5)';
     panel1.appendChild(mvpLine);
+
+    // Repeat clear summary (manhua): one composed line with the stage clear,
+    // the flat repeat reward and the MVP. The existing 3-line layout above is
+    // kept as it is, this is only ADDED on a repeat clear.
+    if (isRepeatClear) {
+      const summaryLine = document.createElement('div');
+      summaryLine.textContent = `STAGE CLEAR! REWARD '${goldEarned.toLocaleString()}G' MVP - ${mvpName} (${mvpStar})`;
+      summaryLine.style.fontSize = '13px';
+      summaryLine.style.fontWeight = '800';
+      summaryLine.style.color = '#e2e8f0';
+      summaryLine.style.letterSpacing = '1px';
+      summaryLine.style.textShadow = '0 0 10px rgba(56, 189, 248, 0.35)';
+      panel1.appendChild(summaryLine);
+    }
 
     root.appendChild(panel1);
 
@@ -308,6 +335,12 @@ export class RewardWindow extends SystemWindow {
     panel2.appendChild(slotsRow);
     root.appendChild(panel2);
 
+    // Comic dialogue bubble (Chapter 5, Panel 31: "THIS SEEMS QUITE DOABLE.")
+    const speechBubble = document.createElement('div');
+    speechBubble.className = 'pmu-speech-bubble';
+    speechBubble.textContent = 'THIS SEEMS QUITE DOABLE.';
+    root.appendChild(speechBubble);
+
     // BUTTONS: stay below in the small panel style
     const btnPanel = document.createElement('div');
     btnPanel.className = 'mm-panel';
@@ -331,7 +364,11 @@ export class RewardWindow extends SystemWindow {
       this.close();
       if (this.onReturnToHub) this.onReturnToHub();
     });
-    btnPanel.appendChild(hubBtn);
+    // On a repeat clear the button panel only shows the YES/NO prompt row:
+    // its NO button IS the "return to hub" action.
+    if (!isRepeatClear) {
+      btnPanel.appendChild(hubBtn);
+    }
 
     const partyHeroObjects = (gameState.party || []).map((p) => {
       const pId = typeof p === 'string' ? p : p.id;
@@ -367,7 +404,24 @@ export class RewardWindow extends SystemWindow {
       });
     }
 
-    if (!isHunt && !isMine) {
+    if (isRepeatClear) {
+      // Manhua repeat prompt: "FLOOR N WILL YOU ATTEMPT IT AGAIN?"
+      // YES re-enters the SAME floor, NO returns to the hub.
+      btnPanel.appendChild(createConfirmPrompt({
+        title: `FLOOR ${floorNumber} WILL YOU ATTEMPT IT AGAIN?`,
+        message: '',
+        yesLabel: 'YES',
+        noLabel: 'NO',
+        onYes: () => {
+          this.close();
+          if (this.onNextFloor) this.onNextFloor(floorNumber);
+        },
+        onNo: () => {
+          this.close();
+          if (this.onReturnToHub) this.onReturnToHub();
+        },
+      }));
+    } else if (!isHunt && !isMine) {
       btnPanel.appendChild(nextBtn);
     }
     root.appendChild(btnPanel);

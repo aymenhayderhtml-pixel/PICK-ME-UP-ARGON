@@ -25,6 +25,7 @@ export const EMOTION_CONFIG = Object.freeze({
     Vanguard: 55,
     'Vanguard Tank': 60,
     Knight: 60,
+    Mercenary: 50,
     Berserker: 50,
     Valkyrie: 60,
     Scout: 48,
@@ -32,6 +33,7 @@ export const EMOTION_CONFIG = Object.freeze({
     'Fire Mage': 52,
     Healer: 54,
     Artisan: 55,
+    Commoner: 40,
     Novice: 42,
   }),
   MENTALITY_BONUS_PER_STAR: 3,
@@ -51,6 +53,20 @@ export const EMOTION_CONFIG = Object.freeze({
   HIGH_HUNGER_MOTIVATION_PENALTY: 8,
   HIGH_HUNGER_ANGER_GAIN: 10,
   HIGH_HUNGER_TRAINING_MULT: 0.65,
+
+  // Trait driven hunger. A hero carrying one of these traits gets hungry
+  // faster, and a meal barely satisfies them (the manhua's potato grumble).
+  // The multipliers are applied inside the normal emotion pipeline
+  // (applyDailyEmotionTick / applyEatOutcome), never in a parallel system.
+  TRAIT_HUNGER_GAIN_MULT: Object.freeze({ food_complainer: 1.5 }),
+  TRAIT_EAT_REDUCTION_MULT: Object.freeze({ food_complainer: 0.6 }),
+
+  // --- Food complaints ----------------------------------------------------
+  // The manhua's "unnamed men" complain that the Cafeteria serves nothing
+  // but potatoes. Heroes carrying one of these traits say so out loud.
+  FOOD_COMPLAINT_TRAITS: Object.freeze(['food_complainer']),
+  FOOD_COMPLAINT_ANGER_GAIN: 6,
+  FOOD_COMPLAINT_TEXT: 'complains that the Cafeteria served nothing but potatoes again!',
 
   // --- Eating (Cafeteria) -------------------------------------------------
   EAT_HUNGER_REDUCTION: Object.freeze({ basic: 35, good: 55, feast: 80 }),
@@ -81,14 +97,41 @@ export const EMOTION_CONFIG = Object.freeze({
   FIGHT_LOW_RELATION_THRESHOLD: 20,
 
   // --- Personality traits -------------------------------------------------
-  PERSONALITY_TRAITS: Object.freeze(['diligent', 'lazy', 'brave', 'cautious', 'hot_headed']),
+  PERSONALITY_TRAITS: Object.freeze([
+    'diligent', 'lazy', 'brave', 'cautious', 'hot_headed',
+    // The manhua's three "unnamed men".
+    'coward', 'exit_seeker', 'food_complainer',
+    // Cowardly: higher fear gain, lower panic threshold, prioritizes rest/eating.
+    'cowardly',
+  ]),
   TRAIT_MODIFIERS: Object.freeze({
     diligent: Object.freeze({ trainWeight: 1.5, idleWeight: 0.4 }),
     lazy: Object.freeze({ trainWeight: 0.45, idleWeight: 1.8 }),
     brave: Object.freeze({ sparWeight: 1.4, fearGainMult: 0.7 }),
     cautious: Object.freeze({ sparWeight: 0.6, restWeight: 1.3, fearGainMult: 1.25 }),
     hot_headed: Object.freeze({ sparWeight: 1.35, angerGainMult: 1.3, refuseOrderBonus: 0.35 }),
+    // coward: refuses to fight and avoids risky activity.
+    coward: Object.freeze({
+      sparWeight: 0.2, trainWeight: 0.7, idleWeight: 1.15, fearGainMult: 1.4, refuseOrderBonus: 0.3,
+    }),
+    // cowardly: higher fear gain, lower panic threshold, prioritizes rest/eating over risky training.
+    cowardly: Object.freeze({
+      sparWeight: 0.15, trainWeight: 0.6, idleWeight: 1.2, restWeight: 1.5, fearGainMult: 1.6, refuseOrderBonus: 0.4,
+    }),
+    // exit_seeker: always looking for the way out, disengages early.
+    exit_seeker: Object.freeze({
+      sparWeight: 0.3, trainWeight: 0.85, idleWeight: 1.5, restWeight: 1.2,
+      fearGainMult: 1.25, refuseOrderBonus: 0.25,
+    }),
+    // food_complainer: hungry faster, angrier about it, slacker about work.
+    food_complainer: Object.freeze({ angerGainMult: 1.25, idleWeight: 1.2 }),
   }),
+
+  // --- Trait behaviour switches -------------------------------------------
+  // Heroes carrying one of these traits refuse to enter the sparring ring.
+  TRAITS_REFUSING_SPAR: Object.freeze(['coward', 'cowardly']),
+  // How much an uncooperative hero leans into the uncooperative traits.
+  UNCOOPERATIVE_TRAIT_WEIGHT_MULT: 2,
 
   // --- Daily decision weights --------------------------------------------
   BASE_DECISION_WEIGHTS: Object.freeze({
@@ -106,6 +149,7 @@ export const EMOTION_CONFIG = Object.freeze({
     Vanguard: Object.freeze({ train_dummy: 1.0, train_archery: 0.3, train_magic: 0.2 }),
     'Vanguard Tank': Object.freeze({ train_dummy: 1.0, train_archery: 0.2, train_magic: 0.1 }),
     Knight: Object.freeze({ train_dummy: 1.0, train_archery: 0.2, train_magic: 0.1 }),
+    Mercenary: Object.freeze({ train_dummy: 1.0, train_archery: 0.25, train_magic: 0.15 }),
     Berserker: Object.freeze({ train_dummy: 1.0, train_archery: 0.2, train_magic: 0.1 }),
     Valkyrie: Object.freeze({ train_dummy: 1.0, train_archery: 0.2, train_magic: 0.1 }),
     Scout: Object.freeze({ train_dummy: 0.4, train_archery: 1.0, train_magic: 0.3 }),
@@ -113,6 +157,7 @@ export const EMOTION_CONFIG = Object.freeze({
     'Fire Mage': Object.freeze({ train_dummy: 0.2, train_archery: 0.2, train_magic: 1.0 }),
     Healer: Object.freeze({ train_dummy: 0.3, train_archery: 0.3, train_magic: 1.0 }),
     Artisan: Object.freeze({ train_dummy: 0.8, train_archery: 0.3, train_magic: 0.2 }),
+    Commoner: Object.freeze({ train_dummy: 0.8, train_archery: 0.5, train_magic: 0.3 }),
     Novice: Object.freeze({ train_dummy: 0.7, train_archery: 0.7, train_magic: 0.7 }),
   }),
   HIGH_FATIGUE_REST_THRESHOLD: 70,
@@ -130,6 +175,11 @@ export const EMOTION_CONFIG = Object.freeze({
   LEADER_ORDER_MAX_TARGETS: 1,
   LEADER_ORDER_REFUSE_ANGER_GAIN: 10,
   LEADER_ORDER_REFUSE_TENSION_GAIN: 12,
+  // Above this anger the squad leader's order is likely to be refused.
+  LEADER_ORDER_REFUSE_ANGER_THRESHOLD: 50,
+  // Heroes carrying one of these traits refuse the order even when calm:
+  // the manhua's cowards and exit seekers do not want to be told what to do.
+  LEADER_ORDER_REFUSING_TRAITS: Object.freeze(['coward', 'cowardly', 'exit_seeker']),
   LEADER_INTERVENE_MAX_DIST: 7.0,
   LEADER_INTERVENE_POWER_RATIO: 1.0,
 
@@ -209,6 +259,7 @@ export const EMOTION_CONFIG = Object.freeze({
     vanguard: 'sword',
     'vanguard tank': 'sword',
     knight: 'sword',
+    mercenary: 'sword',
     berserker: 'sword',
     valkyrie: 'spear',
     scout: 'bow',
@@ -216,6 +267,7 @@ export const EMOTION_CONFIG = Object.freeze({
     'fire mage': 'staff',
     healer: 'staff',
     artisan: 'sword',
+    commoner: 'sword',
     novice: 'sword',
   }),
 

@@ -3,10 +3,11 @@ import { showSystemMessage } from '../ui/Hud.js';
 import { createInitialMaterials } from '../data/materials.js';
 import { createItemInstance, FORGE_RECIPES, ITEM_TEMPLATES } from '../data/items.js';
 import { getBestSmith, MAX_INVENTORY_CAPACITY } from './Inventory.js';
-import { generateNoviceHero, rollMotivation, normalizeHeroEmotionFields, getWeightedStatsForClass } from '../data/heroes.js';
+import { generateNoviceHero, rollMotivation, normalizeHeroEmotionFields, getWeightedStatsForClass, UNNAMED_MEN_RECRUITS } from '../data/heroes.js';
 import { EMOTION_CONFIG } from '../data/emotions.config.js';
 import { getSkill, getSkillEffects } from '../data/skills.js';
 import { simulateGameDay } from './DailyDecisionEngine.js';
+import { hasTrait } from './EmotionEngine.js';
 import { showHeroReport } from '../ui/HeroReport.js';
 import { generateLook } from '../art/looks.js';
 import { getHeroClassProfile, reconcileHeroLoadout } from './loadout.js';
@@ -64,11 +65,17 @@ export class GameState {
     this.freeTickets = 0;
     this.premiumSummons = 1;
     this.heroes = [];
-    this.party = []; // Array of { id, formation: 'front'|'back' }
+    this.parties = [[], []]; // at least 2 parties; active synced to this.party
+    this.activePartyIndex = 0;
+    this.assignedCookId = null;
+    this.party = []; // Array of { id, formation: 'front'|'back' } (synced to active party)
     this.currentFloor = 1;
     this.clearedFloors = 0;
     this.deadHeroes = [];
     this.dissolvedHeroes = 0;
+    this.dailyDungeonUnlocked = false;
+    this.activeDungeonType = null;
+    this.fallenHeroes = [];
     this.trainingSlots = [null, null, null]; // [ { heroId, skillId, tickTimer, animTimer } | null ]
     this.inventory = [];
     this.materials = createInitialMaterials();
@@ -120,6 +127,19 @@ export class GameState {
     }
   }
 
+  get party() {
+    if (!this.parties || !this.parties.length) this.parties = [[], []];
+    if (this.activePartyIndex === undefined || this.activePartyIndex === null) this.activePartyIndex = 0;
+    if (!this.parties[this.activePartyIndex]) this.parties[this.activePartyIndex] = [];
+    return this.parties[this.activePartyIndex];
+  }
+  set party(value) {
+    if (!this.parties || !this.parties.length) this.parties = [[], []];
+    if (this.activePartyIndex === undefined || this.activePartyIndex === null) this.activePartyIndex = 0;
+    if (!this.parties[this.activePartyIndex]) this.parties[this.activePartyIndex] = [];
+    this.parties[this.activePartyIndex] = value;
+  }
+
   initNewGame() {
     this.masterName = '';
     this.gold = 50000;
@@ -130,6 +150,9 @@ export class GameState {
     this.clearedFloors = 0;
     this.deadHeroes = [];
     this.dissolvedHeroes = 0;
+    this.dailyDungeonUnlocked = false;
+    this.activeDungeonType = null;
+    this.fallenHeroes = [];
     this.trainingSlots = [null, null, null];
     this.inventory = [];
     this.materials = createInitialMaterials();
@@ -221,7 +244,16 @@ export class GameState {
     this.normalizeHeroEmotionFields(nov1);
     heroes.push(nov1);
 
-    const nov2 = generateNoviceHero({ existingHeroes: heroes });
+    // The manhua's three "unnamed men": 1-star Commoners. One refuses to
+    // fight (coward), one looks for an exit (exit_seeker), one complains
+    // about eating only potatoes (food_complainer).
+    const nov2 = generateNoviceHero({
+      job: UNNAMED_MEN_RECRUITS[0].job,
+      heroClass: UNNAMED_MEN_RECRUITS[0].heroClass,
+      forceCooperative: true,
+      traits: [UNNAMED_MEN_RECRUITS[0].trait],
+      existingHeroes: heroes,
+    });
     nov2.noviceIndex = 2;
     nov2.look = generateLook(nov2);
     nov2.potentials = rollHeroPotentials(nov2);
@@ -232,7 +264,13 @@ export class GameState {
     this.normalizeHeroEmotionFields(nov2);
     heroes.push(nov2);
 
-    const nov3 = generateNoviceHero({ existingHeroes: heroes });
+    const nov3 = generateNoviceHero({
+      job: UNNAMED_MEN_RECRUITS[1].job,
+      heroClass: UNNAMED_MEN_RECRUITS[1].heroClass,
+      forceCooperative: true,
+      traits: [UNNAMED_MEN_RECRUITS[1].trait],
+      existingHeroes: heroes,
+    });
     nov3.noviceIndex = 3;
     nov3.look = generateLook(nov3);
     nov3.potentials = rollHeroPotentials(nov3);
@@ -243,7 +281,13 @@ export class GameState {
     this.normalizeHeroEmotionFields(nov3);
     heroes.push(nov3);
 
-    const nov4 = generateNoviceHero({ existingHeroes: heroes });
+    const nov4 = generateNoviceHero({
+      job: UNNAMED_MEN_RECRUITS[2].job,
+      heroClass: UNNAMED_MEN_RECRUITS[2].heroClass,
+      forceCooperative: true,
+      traits: [UNNAMED_MEN_RECRUITS[2].trait],
+      existingHeroes: heroes,
+    });
     nov4.noviceIndex = 4;
     nov4.look = generateLook(nov4);
     nov4.potentials = rollHeroPotentials(nov4);
@@ -263,6 +307,10 @@ export class GameState {
       { id: nov3.id, formation: 'back' },
       { id: nov4.id, formation: 'back' },
     ];
+    if (!this.parties || this.parties.length < 2) this.parties = [this.party, []];
+    else { this.parties[0] = this.party; if (!this.parties[1]) this.parties[1] = []; }
+    this.activePartyIndex = 0;
+    this.assignedCookId = null;
     this.playerClass = 'Vanguard';
     this.controlledHeroId = 'hero_han';
     this.manaPotions = 3;
@@ -565,7 +613,15 @@ export class GameState {
     for (const hero of this.heroes) {
       if (!hero.alive) continue;
       if ((hero.satisfaction ?? 100) < 35) {
-        showHeroReport(`${hero.name} (${hero.star}★) is discontent about the food.`, 'severe');
+        if (hasTrait(hero, EMOTION_CONFIG.FOOD_COMPLAINT_TRAITS)) {
+          // The manhua's potato grumble.
+          showHeroReport(
+            `${hero.name} (${hero.star}★) ${EMOTION_CONFIG.FOOD_COMPLAINT_TEXT}`,
+            'severe'
+          );
+        } else {
+          showHeroReport(`${hero.name} (${hero.star}★) is discontent about the food.`, 'severe');
+        }
       }
     }
 
@@ -687,6 +743,18 @@ export class GameState {
 
   isInParty(heroId) {
     return this.party.some((p) => (typeof p === 'string' ? p : p.id) === heroId);
+  }
+
+  isDailyDungeonUnlocked() {
+    return !!(this.dailyDungeonUnlocked || (this.clearedFloors || 0) >= 5 || (this.currentFloor || 1) > 5);
+  }
+
+  getDailyDungeonForDay(day = this.dayCount) {
+    const d = ((Math.max(1, day || 1) - 1) % 7) + 1;
+    if (d <= 2) return 'daily_mine';
+    if (d <= 4) return 'daily_forest';
+    if (d <= 6) return 'daily_plateau';
+    return 'all';
   }
 
   getPartySlot(heroId) {
@@ -1041,6 +1109,9 @@ export class GameState {
         premiumSummons: this.premiumSummons,
         heroes: this.heroes,
         party: this.party,
+        parties: this.parties,
+        activePartyIndex: this.activePartyIndex,
+        assignedCookId: this.assignedCookId,
         currentFloor: this.currentFloor,
         clearedFloors: this.clearedFloors,
         deadHeroes: this.deadHeroes,
@@ -1090,6 +1161,9 @@ export class GameState {
       this.clearedFloors = data.clearedFloors ?? 0;
       this.deadHeroes = data.deadHeroes ?? [];
       this.dissolvedHeroes = data.dissolvedHeroes ?? 0;
+      this.dailyDungeonUnlocked = data.dailyDungeonUnlocked ?? (this.clearedFloors >= 5);
+      this.activeDungeonType = data.activeDungeonType ?? null;
+      this.fallenHeroes = data.fallenHeroes ?? [];
       this.trainingSlots = data.trainingSlots || [null, null, null];
       this.inventory = data.inventory || [];
       this.materials = { ...createInitialMaterials(), ...(data.materials || {}) };
@@ -1141,6 +1215,16 @@ export class GameState {
       this.manaPotions = data.manaPotions !== undefined ? data.manaPotions : 3;
       this.arrows = data.arrows !== undefined ? data.arrows : 20;
       this.spellMastery = data.spellMastery || {};
+      this.assignedCookId = data.assignedCookId || null;
+      this.activePartyIndex = (typeof data.activePartyIndex === 'number') ? data.activePartyIndex : 0;
+      if (Array.isArray(data.parties) && data.parties.length >= 2) {
+        this.parties = data.parties.map((p) => Array.isArray(p) ? p : []);
+        if (this.parties.length < 2) while (this.parties.length < 2) this.parties.push([]);
+      } else {
+        this.parties = [[], []];
+      }
+      if (!this.parties[0]) this.parties[0] = [];
+      if (!this.parties[1]) this.parties[1] = [];
 
       // Safe migration for facilities
       if (data.facilities) {
@@ -1178,6 +1262,7 @@ export class GameState {
           talents: h.talents || [],
           equipment: h.equipment || { weapon: null, offhand: null, armor: null },
           look: h.look || generateLook(h),
+          isFavorite: h.isFavorite === true,
         }, h);
       });
       this.assignHouses();

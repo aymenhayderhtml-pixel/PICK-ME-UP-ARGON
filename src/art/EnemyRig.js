@@ -27,6 +27,21 @@ function mapEnemyType(typeKey) {
     case 'PRAIRIE_WOLF':
     case 'WOLF':
       return 'prairie_wolf';
+    case 'GOBLIN_HOUND':
+      return 'goblin_hound';
+    case 'BLACK_WOLF':
+      return 'black_wolf';
+    case 'ARMORED_GOBLIN':
+    case 'GOBLIN_ARMORED':
+      return 'goblin_armored';
+    case 'GOBLIN_SCOUT':
+      return 'goblin_scout';
+    case 'HARPY':
+      return 'harpy';
+    case 'QUEEN_OF_THE_FOREST':
+      return 'queen_of_the_forest';
+    case 'LIGHTNING_WOLF':
+      return 'lightning_wolf';
     case 'ORC_WARRIOR':
       return 'orc_warrior';
     case 'ORC_ARCHER':
@@ -188,6 +203,25 @@ export class EnemyRig {
       pose = 'idle';
       t = this.clock;
       this.setExpression(state.mood || 'neutral');
+    }
+
+    // Harpy wings: flap + hover bob, sweep forward on attack/dive
+    if (this.modelType === 'harpy') {
+      const wingL = this.model.parts && this.model.parts.wingL;
+      const wingR = this.model.parts && this.model.parts.wingR;
+      const diving = st === 'attack' || st === 'pounce' || st === 'windup';
+      const flap = diving ? 0.2 : Math.sin(this.clock * 6) * 0.7;
+      if (wingL) {
+        wingL.rotation.z = flap;
+        wingL.rotation.x = diving ? -1.0 : 0.1;
+      }
+      if (wingR) {
+        wingR.rotation.z = -flap;
+        wingR.rotation.x = diving ? -1.0 : 0.1;
+      }
+      if (this.model.group) {
+        this.model.group.position.y = Math.sin(this.clock * 2) * 0.08;
+      }
     }
 
     this.model.setPose(pose, t, intensity);

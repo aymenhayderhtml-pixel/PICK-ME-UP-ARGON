@@ -658,7 +658,7 @@ export class RosterWindow extends SystemWindow {
       header.innerHTML = `
         <div>
           <div style="${selNameStyle}">
-            ${selHero.name} ${selStarsHtml}${selPanicTag}
+            ${selHero.name} (${selStarsHtml})${selPanicTag}
           </div>
           <div style="font-size:12px; color:#88aacc; margin-top:2px;">
             Class: ${selHero.class}${selHero.pastJob ? ` (Former ${selHero.pastJob})` : ''} &bull; ${selHero.personality || 'Standard'} &bull; ${getMotivationTagHtml(selHero.motivation)} &bull; <span style="color:var(--gold);">HOME: HOUSE ${selHero.houseIndex || 1}</span>${growthHtml}
@@ -798,11 +798,11 @@ export class RosterWindow extends SystemWindow {
 
       const ds = getDisplayStats(selHero);
       const statsKeys = [
-        { k: 'str', label: 'STR', color: '#ff6666', obj: ds.str },
-        { k: 'int', label: 'INT', color: '#44aaff', obj: ds.int },
-        { k: 'hp', label: 'HP', color: '#ffaa44', obj: ds.vit },
-        { k: 'agi', label: 'AGI', color: '#66ff88', obj: ds.agi },
-        { k: 'wil', label: 'WIL', color: '#cc66ff', obj: ds.wil },
+        { k: 'str', label: 'STRENGTH', color: '#ff6666', obj: ds.str },
+        { k: 'int', label: 'INTELLIGENCE', color: '#44aaff', obj: ds.int },
+        { k: 'hp', label: 'STAMINA', color: '#ffaa44', obj: ds.vit },
+        { k: 'agi', label: 'DEXTERITY', color: '#66ff88', obj: ds.agi },
+        { k: 'wil', label: 'WILLPOWER', color: '#cc66ff', obj: ds.wil },
       ];
 
       statsKeys.forEach((s) => {
@@ -873,7 +873,7 @@ export class RosterWindow extends SystemWindow {
       skillsContainer.style.gap = '6px';
 
       const sTitle = document.createElement('div');
-      sTitle.textContent = 'SKILLS:';
+      sTitle.textContent = 'UNIQUE SKILLS:';
       sTitle.style.fontSize = '12px';
       sTitle.style.color = 'var(--frame)';
       sTitle.style.fontWeight = 'bold';
@@ -1147,6 +1147,56 @@ export class RosterWindow extends SystemWindow {
         awakenTag.style.color = '#ffffff';
         awakenTag.textContent = '★ 7-STAR TRANSCENDED';
         actionsRow.appendChild(awakenTag);
+      }
+
+      // Favorite Toggle Button
+      const favBtn = document.createElement('button');
+      favBtn.style.padding = '8px 14px';
+      favBtn.style.fontFamily = 'monospace';
+      favBtn.style.fontSize = '12px';
+      favBtn.style.fontWeight = 'bold';
+      favBtn.style.borderRadius = '4px';
+      favBtn.style.cursor = 'pointer';
+      favBtn.textContent = selHero.isFavorite ? '★ FAVORITED' : '☆ FAVORITE';
+      favBtn.style.border = selHero.isFavorite ? '1px solid #ffd700' : '1px solid #888888';
+      favBtn.style.backgroundColor = selHero.isFavorite ? 'rgba(255, 215, 0, 0.25)' : 'transparent';
+      favBtn.style.color = selHero.isFavorite ? '#ffd700' : '#aaaaaa';
+      favBtn.addEventListener('click', () => {
+        const turningOn = !selHero.isFavorite;
+        selHero.isFavorite = turningOn;
+        if (turningOn) {
+          showSystemMessage(`${selHero.name.toUpperCase()} (★) HAS BEEN FAVORITED.`);
+        }
+        gameState.saveToLocalStorage();
+        this.render();
+      });
+      actionsRow.appendChild(favBtn);
+
+      // Exclusive Weapon Lock Toggle
+      const weapon = selHero.equipment?.weapon;
+      if (weapon) {
+        const exclBtn = document.createElement('button');
+        exclBtn.style.padding = '8px 14px';
+        exclBtn.style.fontFamily = 'monospace';
+        exclBtn.style.fontSize = '12px';
+        exclBtn.style.fontWeight = 'bold';
+        exclBtn.style.borderRadius = '4px';
+        exclBtn.style.cursor = 'pointer';
+        const isExcl = weapon.exclusiveHeroId === selHero.id;
+        exclBtn.textContent = isExcl ? 'EXCLUSIVE (LOCKED)' : 'EXCLUSIVE (UNLOCKED)';
+        exclBtn.style.border = isExcl ? '1px solid #ff4444' : '1px solid #888888';
+        exclBtn.style.backgroundColor = isExcl ? 'rgba(255, 68, 68, 0.2)' : 'transparent';
+        exclBtn.style.color = isExcl ? '#ff6666' : '#aaaaaa';
+        exclBtn.addEventListener('click', () => {
+          if (weapon.exclusiveHeroId === selHero.id) {
+            weapon.exclusiveHeroId = null;
+          } else {
+            weapon.exclusiveHeroId = selHero.id;
+          }
+          gameState.saveToLocalStorage();
+          this.render();
+        });
+        actionsRow.appendChild(exclBtn);
       }
 
       // Synthesize Button

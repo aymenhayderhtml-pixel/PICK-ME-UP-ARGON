@@ -79,7 +79,7 @@ export function updateWolf(wolf, delta, player, dungeon, camera, projectilesMana
     wolf.speed = wolf.stats.speed;
   }
 
-  const livingWolves = enemies.filter((e) => e.typeKey === 'PRAIRIE_WOLF' && !e.dead && !e.isDying);
+  const livingWolves = enemies.filter((e) => (e.typeKey === 'PRAIRIE_WOLF' || e.typeKey === 'GOBLIN_HOUND' || e.typeKey === 'BLACK_WOLF') && !e.dead && !e.isDying);
 
   // Initialize pack initial count if first time
   if (wolf.packInitialCount === undefined) {

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Player } from '../player/Player.js';
 import { ThirdPersonCamera } from '../player/ThirdPersonCamera.js';
 import { buildTowerFloor } from '../world/TowerFloor.js';
+import { updateFloor3Debris } from '../art/floors/forest.js';
 import { buildCaveFloor } from '../world/CaveFloor.js';
 import { getMissionInfo } from '../data/missions.js';
 import { spawnSparks } from '../combat/Combat.js';
@@ -64,12 +65,12 @@ const FOREST_FLOOR_LIGHTING = {
 };
 
 const BRIGHT_FOREST_LIGHTING = {
-  background: 0xa8d5ba,
-  fog: { color: 0xb8e0c8, near: 35, far: 140 },
-  exposure: 1.2,
-  ambient: { color: 0xf4f9f4, intensity: 1.0 },
-  hemi: { sky: 0xd6f0e0, ground: 0x4a6b38, intensity: 0.85 },
-  sun: { color: 0xfffaed, intensity: 1.3, direction: { x: 25, y: 40, z: -15 } },
+  background: 0xb9dcce,
+  fog: { color: 0xa8cebc, near: 28, far: 72 },
+  exposure: 1.12,
+  ambient: { color: 0x5c7c68, intensity: 0.45 },
+  hemi: { sky: 0xd9f5e3, ground: 0x2c3f25, intensity: 0.70 },
+  sun: { color: 0xfff4d4, intensity: 1.65, direction: { x: 22, y: 42, z: 14 } },
 };
 
 export class TowerScene {
@@ -157,8 +158,13 @@ export class TowerScene {
     });
     this.rewardWindow = new RewardWindow({
       onNextFloor: (fl) => {
-        this.initFloor(fl);
-        this.playOpeningTransition(fl);
+        // Re-entering the SAME floor: the state's floor pointer follows, so
+        // the reward window's floor advancement and the hub deploy window
+        // stay coherent with the floor the party is actually running.
+        const floor = fl || gameState.currentFloor || 1;
+        gameState.currentFloor = floor;
+        this.initFloor(floor);
+        this.playOpeningTransition(floor);
       },
       onReturnToHub: () => {
         if (this.sceneManager) {
@@ -211,8 +217,18 @@ export class TowerScene {
 
     this.forestFloor = null;
     this.currentFloorNumber = 1;
+    this.f3IntroActive = false;
+    this.f3IntroTimer = 0;
     this.partySlotPositions = [];
     this.isActive = false;
+    this.dailyDungeonType = null;
+    this.survivalTimer = 0;
+    this.survivalTimerEl = null;
+    this.materialNodes = [];
+    this.floor5Dissolving = false;
+    this.dissolveTimer = 0;
+    this.dissolveParticles = [];
+    this.dissolveAllEnemies = null;
 
     this.setupInputs();
 
@@ -232,10 +248,39 @@ export class TowerScene {
 
   initFloor(floorNumber = 1, mode = 'tower', difficulty = 1) {
     this.currentFloorNumber = floorNumber;
+    this.f3IntroActive = false;
+    this.f3IntroTimer = 0;
     this.mode = mode;
     this.difficulty = difficulty;
     this.gatheredMaterials = {};
     this.miningTimer = 0;
+    this.materialNodes = [];
+    this.dailyDungeonType = gameState.activeDungeonType || null;
+    if (mode === 'tower' && floorNumber === 5) {
+      this.survivalTimer = 30 * 60;
+      if (!this.survivalTimerEl) {
+        const el = document.createElement('div');
+        el.style.position = 'fixed';
+        el.style.top = '12px';
+        el.style.left = '50%';
+        el.style.transform = 'translateX(-50%)';
+        el.style.zIndex = '10003';
+        el.style.padding = '8px 16px';
+        el.style.background = 'rgba(11,8,16,0.85)';
+        el.style.border = '1px solid #00e5ff';
+        el.style.borderRadius = '6px';
+        el.style.color = '#00e5ff';
+        el.style.fontFamily = 'monospace';
+        el.style.fontSize = '20px';
+        el.style.fontWeight = 'bold';
+        document.body.appendChild(el);
+        this.survivalTimerEl = el;
+      }
+      this.survivalTimerEl.style.display = 'block';
+    } else {
+      this.survivalTimer = 0;
+      if (this.survivalTimerEl) this.survivalTimerEl.style.display = 'none';
+    }
 
     // 1. Clean up existing floor & boss systems
     if (this.telegraph) this.telegraph.clear();
@@ -265,6 +310,15 @@ export class TowerScene {
     this.thirdPersonCamera.distance = 6;
     this.thirdPersonCamera.pitch = 0.3;
     this.thirdPersonCamera.yaw = Math.PI;
+    if (floorNumber === 3) {
+      this.thirdPersonCamera.distance = 16;
+      this.thirdPersonCamera.pitch = 0.5;
+      this.camera.fov = 50;
+      this.camera.updateProjectionMatrix();
+    } else {
+      this.camera.fov = 60;
+      this.camera.updateProjectionMatrix();
+    }
 
     // Unconditionally clear managers
     this.dropsManager.clear(this.scene);
@@ -329,6 +383,25 @@ export class TowerScene {
       this.forestFloor = buildCaveFloor(difficulty, seed);
       this.hud.setFloorLabel(`Mine D${difficulty}`);
       this.hud.showMissionBox(getMissionInfo({ mode: 'mine', difficulty }));
+    } else if (this.dailyDungeonType) {
+      const dt = this.dailyDungeonType;
+      if (dt === 'isralta_mine' || dt === 'daily_mine') {
+        this.scene.background = new THREE.Color(0x151210);
+        this.scene.fog = new THREE.Fog(0x151210, 8, 45);
+        if (this.ambLight) { this.ambLight.color.setHex(0xffffff); this.ambLight.intensity = 0.25; }
+        if (this.dirLight) { this.dirLight.color.setHex(0x665544); this.dirLight.intensity = 0.25; this.dirLight.position.set(10, 20, 10); }
+        if (this.hemiLight) this.hemiLight.intensity = 0;
+        this.forestFloor = buildCaveFloor(1, floorNumber * 9973 + 23);
+      } else if (dt === 'kendert_forest' || dt === 'daily_forest') {
+        this.applyFloorLighting(3);
+        const seed = floorNumber * 7919 + 13;
+        this.forestFloor = buildTowerFloor({ floorNumber: 3, seed, quality, scene: this.scene });
+      } else {
+        this.applyFloorLighting(1);
+        const seed = floorNumber * 7919 + 13;
+        this.forestFloor = buildTowerFloor({ floorNumber: 1, seed, quality, scene: this.scene });
+      }
+      this.hud.setFloorLabel(null);
     } else {
       this.hud.setFloorLabel(null);
       const seed = floorNumber * 7919 + 13;
@@ -525,6 +598,28 @@ export class TowerScene {
       };
     }
 
+    // Daily Dungeon material gathering nodes
+    if (this.dailyDungeonType) {
+      const nodeDefs = [
+        { type: 'branch', color: 0x8b5a2b, count: 5 },
+        { type: 'plant_of_life', color: 0xff3366, count: 3 },
+        { type: 'trash_f', color: 0x666666, count: 2 },
+      ];
+      for (const def of nodeDefs) {
+        for (let i = 0; i < def.count; i++) {
+          const x = (Math.random() - 0.5) * 30;
+          const z = -10 - Math.random() * 40;
+          const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.35, 8, 6),
+            new THREE.MeshStandardMaterial({ color: def.color, emissive: def.color, emissiveIntensity: 0.6 })
+          );
+          mesh.position.set(x, 0.4, z);
+          this.scene.add(mesh);
+          this.materialNodes.push({ type: def.type, mesh, collected: false });
+        }
+      }
+    }
+
     // 6. Mission Announcement Panel (5 seconds duration, manhua .mm-panel)
     this.hud.showMissionBox(getMissionInfo({ mode, floorNumber, difficulty }));
 
@@ -563,6 +658,10 @@ export class TowerScene {
       this.dirLight.intensity = L.sun.intensity;
       this.dirLight.position.set(L.sun.direction.x, L.sun.direction.y, L.sun.direction.z);
       this.dirLight.castShadow = false;
+      if (floor === 3) {
+        if (!this.dirLight.target.parent) this.scene.add(this.dirLight.target);
+        this.dirLight.target.position.set(0, 0, -34);
+      }
     }
   }
 
@@ -745,9 +844,27 @@ export class TowerScene {
 
   playOpeningTransition(floorNumber) {
     if (floorNumber === 3) {
+      this.f3IntroActive = true;
+      this.f3IntroTimer = 1.2;
+      this.camera.position.set(0, 10, 14);
+      this.camera.lookAt(0, 1, -34);
+      const cleared = floorNumber - 1;
+      const ordinal = (n) => {
+        const v = n % 100;
+        let suffix = 'TH';
+        if (v < 11 || v > 13) {
+          switch (n % 10) {
+            case 1: suffix = 'ST'; break;
+            case 2: suffix = 'ND'; break;
+            case 3: suffix = 'RD'; break;
+            default: suffix = 'TH'; break;
+          }
+        }
+        return `${n}${suffix}`;
+      };
       showNotices([
-        'CONGRATULATIONS ON COMPLETING THE 2ND FLOOR!',
-        'YOU WILL PROCEED TO THE 3RD FLOOR.',
+        `CONGRATULATIONS ON COMPLETING THE ${ordinal(cleared)} FLOOR!`,
+        `YOU WILL PROCEED TO THE ${ordinal(floorNumber)} FLOOR.`,
       ]);
     }
 
@@ -1179,6 +1296,16 @@ export class TowerScene {
 
   exit() {
     this.isActive = false;
+    this.camera.fov = 60;
+    this.camera.updateProjectionMatrix();
+    if (gameState.activeDungeonType) {
+      gameState.activeDungeonType = null;
+      gameState.saveToLocalStorage();
+    }
+    if (this.survivalTimerEl && this.survivalTimerEl.parentNode) {
+      this.survivalTimerEl.parentNode.removeChild(this.survivalTimerEl);
+      this.survivalTimerEl = null;
+    }
     if (this.hud) {
       this.hud.hide();
     }
@@ -1312,6 +1439,11 @@ export class TowerScene {
       effectiveDelta = delta * 0.3;
     }
 
+    // Floor 3 drifting leaf debris
+    if (this.currentFloorNumber === 3) {
+      updateFloor3Debris(effectiveDelta);
+    }
+
     // Han Death Check
     if (this.player && this.player.dead) {
       this.handleHanDeath();
@@ -1379,6 +1511,100 @@ export class TowerScene {
     }
 
     const windowOpen = isAnySystemWindowOpen() || (this.commandWheel && this.commandWheel.isOpen);
+
+    // Floor 5 survival countdown
+    if (this.currentFloorNumber === 5 && this.survivalTimer > 0) {
+      this.survivalTimer -= delta * 15;
+      if (this.survivalTimer < 0) this.survivalTimer = 0;
+      if (this.survivalTimerEl) {
+        const t = Math.ceil(this.survivalTimer);
+        const mm = String(Math.floor(t / 60)).padStart(2, '0');
+        const ss = String(t % 60).padStart(2, '0');
+        this.survivalTimerEl.textContent = `[${mm}:${ss}]`;
+        if (this.survivalTimer <= 180) {
+          this.survivalTimerEl.style.color = '#ff3333';
+          this.survivalTimerEl.style.textShadow = '0 0 12px #ff3333';
+        } else {
+          this.survivalTimerEl.style.color = '#00e5ff';
+          this.survivalTimerEl.style.textShadow = '0 0 12px #00e5ff';
+        }
+      }
+      if (this.survivalTimer <= 0 && !this.floor5Dissolving) {
+        this.floor5Dissolving = true;
+        this.dissolveTimer = 1.5;
+        if (this.survivalTimerEl) {
+          this.survivalTimerEl.textContent = '[00:00]';
+          this.survivalTimerEl.style.color = '#00e5ff';
+          this.survivalTimerEl.style.textShadow = '0 0 12px #00e5ff';
+        }
+        // Freeze & tint remaining enemies cyan/blue
+        for (const en of (this.enemyManager.enemies || [])) {
+          if (!en.dead && en.mesh) {
+            en.state = 'idle';
+            en.mesh.traverse((o) => {
+              if (o.isMesh && o.material) {
+                o.material.transparent = true;
+                o.material.opacity = 1.0;
+                if (o.material.emissive) o.material.emissive.setHex(0x00e5ff);
+                if (o.material.color) o.material.color.setHex(0x00e5ff);
+              }
+            });
+          }
+        }
+      }
+
+    // Animate dissolution
+    if (this.floor5Dissolving) {
+      this.dissolveTimer -= delta;
+      const progress = Math.max(0, Math.min(1, 1 - (this.dissolveTimer / 1.5)));
+      for (const en of (this.enemyManager.enemies || [])) {
+        if (!en.dead && en.mesh) {
+          en.mesh.position.y += delta * 1.2;
+          en.mesh.traverse((o) => {
+            if (o.isMesh && o.material) {
+              o.material.opacity = Math.max(0, 1 - progress);
+            }
+          });
+        }
+      }
+      if (this.dissolveTimer <= 0) {
+        this.floor5Dissolving = false;
+        if (this.enemyManager && typeof this.enemyManager.dissolveAllEnemies === 'function') {
+          this.enemyManager.dissolveAllEnemies(this.scene);
+        }
+        gameState.dailyDungeonUnlocked = true;
+        gameState.saveToLocalStorage();
+        showSystemMessage('CONGRATULATIONS, MASTER! YOU HAVE CLEARED THE 5TH FLOOR. THE DAILY DUNGEON WILL BE MADE AVAILABLE.\\nGATHER MATERIALS AND STRENGTHEN YOUR HEROES IN THE WAITING ROOM.');
+      }
+    }
+    }
+
+    // Daily Dungeon material node collection
+    if (this.dailyDungeonType && this.materialNodes && this.materialNodes.length) {
+      const pPos = this.player.mesh.position;
+      for (const node of this.materialNodes) {
+        if (node.collected) continue;
+        const d = Math.hypot(pPos.x - node.mesh.position.x, pPos.z - node.mesh.position.z);
+        if (d < 2.0) {
+          node.collected = true;
+          this.scene.remove(node.mesh);
+          if (!gameState.materials) gameState.materials = {};
+          const type = node.type;
+          if (type === 'branch') {
+            gameState.materials.branch = (gameState.materials.branch || 0) + 1;
+            showSystemMessage("HAN (★) HAS GATHERED A 'BRANCH'.");
+            showSystemMessage("TIPS: IF YOU COLLECT 100 'BRANCHES', YOU CAN TURN IT INTO LUMBER. HOWEVER, YOU'LL NEED A CARPENTER'S SHOP.");
+          } else if (type === 'trash_f') {
+            gameState.materials.trash_f = (gameState.materials.trash_f || 0) + 1;
+            showSystemMessage("HAN (★) HAS GATHERED 'TRASH (F)'. TIPS: TRASH IS NOT NEEDED. PLEASE THROW IT AWAY.");
+          } else if (type === 'plant_of_life') {
+            gameState.materials.plant_of_life = (gameState.materials.plant_of_life || 0) + 1;
+            showSystemMessage("HAN (★) HAS GATHERED 'PLANT OF LIFE'.");
+          }
+          gameState.saveToLocalStorage();
+        }
+      }
+    }
 
     // Hit-Stop logic
     if (this.player.hitStop > 0) {
@@ -1612,11 +1838,23 @@ export class TowerScene {
     // Update Han Shout speech bubble
     this.updateHanShout(effectiveDelta);
 
+    // Floor 3 intro camera hold
+    if (this.f3IntroActive) {
+      this.f3IntroTimer -= delta;
+      this.camera.position.set(0, 10, 14);
+      this.camera.lookAt(0, 1, -34);
+      if (this.f3IntroTimer <= 0) {
+        this.f3IntroActive = false;
+      }
+    }
+
     // Camera zoom out to 9 during boss fight, 6 otherwise
     if (this.boss && !this.boss.dead && this.bossIntroPlayed) {
       this.thirdPersonCamera.distance = 9;
     }
-    this.thirdPersonCamera.update(effectiveDelta, effectiveInput);
+    if (!this.f3IntroActive) {
+      this.thirdPersonCamera.update(effectiveDelta, effectiveInput);
+    }
 
     // Update Enemies with projectilesManager and squad allies passed
     this.enemyManager.update(
@@ -1721,7 +1959,12 @@ export class TowerScene {
     } else {
       let isFloorCleared = false;
       if (this.currentFloorNumber === 5) {
-        isFloorCleared = this.initialEnemiesSpawned && !!(this.boss && this.boss.dead && this.enemyManager.bossDefeated);
+        // Survival: prevent completion until countdown reaches 0.
+        if (this.survivalTimer > 0) {
+          isFloorCleared = false;
+        } else {
+          isFloorCleared = this.initialEnemiesSpawned && !!(this.boss && this.boss.dead && this.enemyManager.bossDefeated);
+        }
       } else if (this.isTutorial) {
         isFloorCleared = this.initialEnemiesSpawned && this.tutorialAmbushTriggered && activeEnemies.length === 0;
       } else {

@@ -1,6 +1,16 @@
 import { gameState } from '../core/GameState.js';
 import { generateRandomHero, HERO_TEMPLATES } from '../data/heroes.js';
 
+// The chance that a pull is a NAMED hero at all. Inside that roll the per-star
+// sub-chances below decide which named hero shows up.
+const NAMED_HERO_CHANCE = 0.05;
+// Sub-chance inside the named-hero roll that a 3-star pull is Catio.
+const CATIO_3STAR_CHANCE = 0.1;
+// Sub-chance inside the named-hero roll that a 2-star pull is Molmont, the
+// sword-and-shield mercenary. It is deliberately a PARTIAL chance: most
+// 2-star pulls are still procedurally generated heroes.
+const MOLMONT_2STAR_CHANCE = 0.13;
+
 export class GachaSystem {
   constructor() {
     this.history = []; // History of last 10 pulls: { name, star, class }
@@ -33,7 +43,7 @@ export class GachaSystem {
     const ownedIds = new Set(gameState.heroes.map((h) => h.id));
 
     // 1/20 chance for named hero
-    const isNamedChance = Math.random() < 0.05;
+    const isNamedChance = Math.random() < NAMED_HERO_CHANCE;
 
     if (isNamedChance) {
       if (star === 1 && !ownedIds.has('hero_velkist')) {
@@ -55,7 +65,27 @@ export class GachaSystem {
           talents: [...t.talents],
           alive: true,
         };
-      } else if (star === 3 && !ownedIds.has('hero_catio') && Math.random() < 0.1) {
+      } else if (star === 2 && !ownedIds.has('hero_molmont') && Math.random() < MOLMONT_2STAR_CHANCE) {
+        const t = HERO_TEMPLATES.MOLMONT;
+        return {
+          id: t.id,
+          name: t.name,
+          star: t.star,
+          level: 1,
+          exp: 0,
+          fatigue: 0,
+          class: t.class,
+          hair: t.hair,
+          armor: t.armor,
+          weapon: t.weapon,
+          personality: t.personality,
+          stats: { ...t.baseStats },
+          skills: t.skills.map((s) => ({ ...s, exp: 0 })),
+          talents: [...t.talents],
+          hiddenTalent: t.hiddenTalent,
+          alive: true,
+        };
+      } else if (star === 3 && !ownedIds.has('hero_catio') && Math.random() < CATIO_3STAR_CHANCE) {
         const t = HERO_TEMPLATES.CATIO;
         return {
           id: t.id,
@@ -107,6 +137,23 @@ export class GachaSystem {
     // Default: procedurally generate unique hero
     const existing = (gameState.heroes || []).concat(gameState.deadHeroes || []);
     return generateRandomHero(star, Math.random, existing);
+  }
+
+  rollHeroByStar(star) {
+    const s = Math.max(1, Math.min(5, Math.floor(Number(star) || 1)));
+    try {
+      if (!gameState) {
+        return generateRandomHero(s, Math.random, []);
+      }
+      if (!Array.isArray(gameState.heroes)) gameState.heroes = [];
+      if (!Array.isArray(gameState.deadHeroes)) gameState.deadHeroes = [];
+      return this.createHeroForStar(s);
+    } catch (e) {
+      const existing = (gameState && Array.isArray(gameState.heroes)
+        ? gameState.heroes.concat(gameState.deadHeroes || [])
+        : []);
+      return generateRandomHero(s, Math.random, existing);
+    }
   }
 
   canAfford(count) {
