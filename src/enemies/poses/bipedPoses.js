@@ -1,7 +1,7 @@
 // src/enemies/poses/bipedPoses.js
 // Biped skeletal animation pose evaluator for humanoid and non-humanoid enemies.
 import * as THREE from 'three';
-import { POSE_INFO } from '../index.js';
+import { POSE_INFO } from './poseInfo.js';
 
   export function applyBipedPose(name, t, intensity, parts, arch, bannerMesh, eyesMesh, resetRigToRest) {
     const info = POSE_INFO[name] || POSE_INFO.idle;

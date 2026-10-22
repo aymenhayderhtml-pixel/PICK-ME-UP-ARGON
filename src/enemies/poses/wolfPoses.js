@@ -1,7 +1,7 @@
 // src/enemies/poses/wolfPoses.js
 // Quadruped skeletal animation poses for wolf enemies.
 import * as THREE from 'three';
-import { POSE_INFO } from '../index.js';
+import { POSE_INFO } from './poseInfo.js';
 
 export function applyPrairieWolfPose(parts, poseName, t, intensity = 1, modelState = null) {
   const info = POSE_INFO[poseName] || POSE_INFO.idle;
