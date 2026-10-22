@@ -69,8 +69,11 @@ export const TRAINING_CONFIG = Object.freeze({
   SPAR_ANGER_ON_LOSS: 14,
 
   // --- Death / injury ------------------------------------------------------
+  // Risky training (magic / spar) can kill a hero. Iselle's supervision greatly
+  // reduces the risk but does not remove it, so a small chance stays when she
+  // is present. RISKY_DEATH_CHANCE_BASE is the unsupervised (Iselle away) rate.
   RISKY_DEATH_CHANCE_BASE: 0.005,
-  DEATH_CHANCE_WITH_ISELLE: 0.0,
+  DEATH_CHANCE_WITH_ISELLE: 0.002,
   RISKY_TRAINING_TYPES: Object.freeze(['train_magic', 'spar']),
 
   // --- Hit zones -----------------------------------------------------------
@@ -126,4 +129,37 @@ export const TRAINING_CONFIG = Object.freeze({
     quiver_handling: 'bow',
     mana_control: 'staff',
   }),
+
+  // =========================================================================
+  // PHASE 2 - FIGHT ENGINE AND UNIFIED TRAINING XP
+  // =========================================================================
+
+  // --- Combat multipliers used by the shared fight engine ------------------
+  SPAR_SKILL_XP_PER_EXCHANGE: 16,
+  UNSANCTIONED_FIGHT_XP_PER_EXCHANGE: 8,
+  SPAR_HERO_EXP_PER_EXCHANGE: 6,
+  UNSANCTIONED_FIGHT_HERO_EXP_PER_EXCHANGE: 3,
+  FIGHT_FLEE_XP_MULT: 0.25,
+  FIGHT_AIM_DAMAGE_MULT: 1.25,
+  FIGHT_CAST_DAMAGE_MULT: 1.35,
+  FIGHT_DEFEND_BLOCK_EFFICIENCY: 0.65,
+  FIGHT_RETREAT_STEP_DIST: 1.2,
+  FIGHT_ADVANCE_STEP_DIST: 1.1,
+  // How long the training yard keeps healing a fighter's wounds after a fight.
+  // A critical (head or heart) wound heals far slower.
+  FIGHT_RECOVERY_SEC: 3.0,
+
+  // --- Injuries ------------------------------------------------------------
+  // A critical zone struck in a real fight keeps a hero out for longer than a
+  // training accident.
+  FIGHT_CRITICAL_INJURY_DAYS: 3,
+  MINOR_INJURY_DAYS: 1,
+  MINOR_INJURY_HEAL_MULT: 0.5,
+
+  // --- Unified live training XP (one path for every training source) -------
+  LIVE_TRAINING_TICK_INTERVAL_SEC: 5.0,
+  LIVE_TRAINING_HITS_PER_TICK: 5,
+  LIVE_TRAINING_FATIGUE_PER_TICK: 3,
+  FACILITY_XP_BONUS_PER_LEVEL: 0.10,
+  DILIGENT_XP_MULT: 1.5,
 });

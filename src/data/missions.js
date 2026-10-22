@@ -58,7 +58,17 @@ export function getMissionInfo({ mode, floorNumber = 1, difficulty = 1 } = {}) {
     };
   }
 
-  // Floors 2, 3, 4 use Floor 2 conquest wording
+  if (floorNumber === 3) {
+    return {
+      title: 'FLOOR 3',
+      missionType: 'SUBJUGATION',
+      objective: 'ANNIHILATE ALL THE ENEMIES!',
+      line1: 'MISSION CATEGORY - SUBJUGATION',
+      line2: 'GOAL - ANNIHILATE ALL THE ENEMIES!',
+    };
+  }
+
+  // Floors 2, 4 use Floor 2 conquest wording
   return {
     title: `FLOOR ${floorNumber}`,
     missionType: 'CONQUEST',

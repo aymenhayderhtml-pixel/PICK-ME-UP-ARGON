@@ -20,17 +20,17 @@ function getNoticeContainer() {
     noticeContainer.id = 'mm-notice-stack';
     noticeContainer.style.cssText = `
       position: fixed;
-      top: 84px;
+      top: 62px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 10px;
+      gap: 6px;
       z-index: 10010;
       pointer-events: none;
       width: 100%;
-      max-width: 420px;
+      max-width: 360px;
       box-sizing: border-box;
       transition: all 0.3s ease;
     `;
@@ -109,12 +109,12 @@ function displayNoticeBox(htmlOrText, duration = 2500, options = {}) {
   box.className = 'mm-panel';
   box.style.cssText = `
     width: 100%;
-    max-width: 420px;
-    width: min(420px, 90vw);
-    padding: 12px 22px;
-    font-size: 17px;
+    max-width: 360px;
+    width: min(360px, 90vw);
+    padding: 6px 14px;
+    font-size: 13px;
     box-sizing: border-box;
-    background: rgba(11, 8, 16, 0.94);
+    background: rgba(11, 8, 16, 0.88);
     opacity: 0;
     transform: scale(0.96);
     transition: opacity 0.22s ease-out, transform 0.22s ease-out;
@@ -124,15 +124,15 @@ function displayNoticeBox(htmlOrText, duration = 2500, options = {}) {
 
   if (options.iselleSpeaker) {
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex; align-items:center; gap:12px; width:100%; text-align:left;';
+    row.style.cssText = 'display:flex; align-items:center; gap:8px; width:100%; text-align:left;';
 
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
-    canvas.style.cssText = 'width:52px; height:52px; border-radius:6px; border:1px solid var(--frame-inner); background:#171026; flex-shrink:0;';
+    canvas.width = 48;
+    canvas.height = 48;
+    canvas.style.cssText = 'width:40px; height:40px; border-radius:5px; border:1px solid var(--frame-inner); background:#171026; flex-shrink:0;';
     const ctx = canvas.getContext('2d');
     try {
-      drawIsellePortrait(ctx, options.expression || 'sweet_cruel', 64);
+      drawIsellePortrait(ctx, options.expression || 'sweet_cruel', 48);
     } catch (e) {}
     row.appendChild(canvas);
 
@@ -153,8 +153,8 @@ function displayNoticeBox(htmlOrText, duration = 2500, options = {}) {
     }
   }
 
-  // Corner ornaments scaled to 30px
-  attachOrnateCorners(box, 30);
+  // Corner ornaments scaled to 22px
+  attachOrnateCorners(box, 22);
   container.appendChild(box);
 
   requestAnimationFrame(() => {
@@ -212,7 +212,7 @@ export function showSystemMessage(text) {
 
 export function showSystemNotice(title, text) {
   if (typeof document === 'undefined') return;
-  const content = `<div><b style="color:var(--gold);">${String(title).toUpperCase()}</b><br><span style="font-size:14px;">${String(text).toUpperCase()}</span></div>`;
+  const content = `<div><b style="color:var(--gold);">${String(title).toUpperCase()}</b><br><span style="font-size:11px;">${String(text).toUpperCase()}</span></div>`;
   createNoticeBox(content, 2500, { text: `${title}: ${text}` });
 }
 
@@ -378,18 +378,7 @@ function processWalkoutQueue() {
 }
 
 // Equipment Notice for Deploy Window & Tutorial: stays at bottom-center above hint bar until player answers
-export function showEquipmentNotice(optionsOrOnSummon = {}, maybeOnLater = null) {
-  let onSummon = null;
-  let onLater = null;
-
-  if (typeof optionsOrOnSummon === 'function') {
-    onSummon = optionsOrOnSummon;
-    onLater = maybeOnLater;
-  } else if (optionsOrOnSummon && typeof optionsOrOnSummon === 'object') {
-    onSummon = optionsOrOnSummon.onSummon;
-    onLater = optionsOrOnSummon.onLater;
-  }
-
+export function showEquipmentNotice({ onSummon = null, onEnterAnyway = null } = {}) {
   if (activeEquipNotice) {
     activeEquipNotice.dismiss();
     activeEquipNotice = null;
@@ -452,7 +441,7 @@ export function showEquipmentNotice(optionsOrOnSummon = {}, maybeOnLater = null)
 
   const t2 = document.createElement('div');
   t2.style.cssText = 'color:var(--accent); font-size:13px; text-align:left; line-height:1.25;';
-  t2.textContent = 'HOW ABOUT SUMMONING EQUIPMENT FOR A SMOOTH BATTLE AHEAD?';
+  t2.textContent = 'ENTER THE FLOOR WITHOUT A WEAPON? THEY WILL FIGHT BARE-HANDED.';
   textCol.appendChild(t2);
 
   contentRow.appendChild(textCol);
@@ -467,14 +456,14 @@ export function showEquipmentNotice(optionsOrOnSummon = {}, maybeOnLater = null)
   summonBtn.style.padding = '6px 16px';
   summonBtn.style.fontSize = '13px';
 
-  const laterBtn = document.createElement('button');
-  laterBtn.className = 'mm-btn';
-  laterBtn.textContent = 'LATER';
-  laterBtn.style.padding = '6px 16px';
-  laterBtn.style.fontSize = '13px';
+  const enterAnywayBtn = document.createElement('button');
+  enterAnywayBtn.className = 'mm-btn';
+  enterAnywayBtn.textContent = 'ENTER ANYWAY';
+  enterAnywayBtn.style.padding = '6px 16px';
+  enterAnywayBtn.style.fontSize = '13px';
 
   btnRow.appendChild(summonBtn);
-  btnRow.appendChild(laterBtn);
+  btnRow.appendChild(enterAnywayBtn);
   box.appendChild(btnRow);
 
   equipWrap.appendChild(box);
@@ -492,9 +481,9 @@ export function showEquipmentNotice(optionsOrOnSummon = {}, maybeOnLater = null)
     if (onSummon) onSummon();
   });
 
-  laterBtn.addEventListener('click', () => {
+  enterAnywayBtn.addEventListener('click', () => {
     dismiss();
-    if (onLater) onLater();
+    if (onEnterAnyway) onEnterAnyway();
   });
 
   activeEquipNotice = { dismiss, box: equipWrap };

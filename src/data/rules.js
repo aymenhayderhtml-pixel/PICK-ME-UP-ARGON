@@ -2,10 +2,6 @@ import { EMOTION_CONFIG } from './emotions.config.js';
 
 export const LEVEL_CAP_PER_STAR = 10;
 export const MAX_STAR = 7;
-export const NATURAL_MAX_STAR = 6;
-export const PARTY_SIZE = 5;
-
-export const STAT_KEYS = ['str', 'agi', 'vit', 'int', 'wil'];
 
 /**
  * Growth multiplier for a star rank. Stars are only a starting point: the gap
@@ -42,10 +38,6 @@ export function getSkillInheritChance(materialStar) {
 export function getSkillXpNeeded(skillLevel) {
   return 100 * skillLevel;
 }
-
-// Training Grounds configuration
-export const TRAINING_TICK_SECONDS = 5;
-export const TRAINING_SKILL_XP_PER_TICK = 8; // At facility level 1
 
 // Star Rarity Color Palette
 export const RARITY_COLORS = {

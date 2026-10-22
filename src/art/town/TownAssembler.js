@@ -6,6 +6,7 @@ import { PALETTE } from './palette.js';
 import { buildTownShell } from './shell.js';
 import { buildTownLandmarks } from './landmarks.js';
 import { buildTownVillage } from './village.js';
+import { buildBuildingBlockers } from './collision.js';
 
 export function buildTown(layout, getGroundY, quality = 'high', options = {}) {
   const ctx = {
@@ -28,6 +29,9 @@ export function buildTown(layout, getGroundY, quality = 'high', options = {}) {
   group.add(village.group);
 
   const mergedColliders = [...shell.colliders, ...landmarks.colliders, ...village.colliders];
+  // Player-only obstacle shapes: solid props from the village plus the
+  // building walls, with every door opening left open.
+  const mergedBlockers = [...(village.blockers || []), ...buildBuildingBlockers(layout)];
   const mergedDoors = [...shell.doors, ...landmarks.doors, ...village.doors];
   const mergedLights = [...shell.lights, ...landmarks.lights, ...village.lights];
   const mergedAnchors = { ...shell.anchors, ...landmarks.anchors, ...village.anchors };
@@ -54,6 +58,7 @@ export function buildTown(layout, getGroundY, quality = 'high', options = {}) {
       village
     },
     colliders: mergedColliders,
+    blockers: mergedBlockers,
     doors: mergedDoors,
     lights: mergedLights,
     anchors: mergedAnchors,

@@ -369,6 +369,41 @@ export class GameState {
   }
 
   /**
+   * One-time migration: the three training XP paths are merged into one
+   * (src/core/TrainingEngine.js awardLiveTrainingTickXp). The manual
+   * Training Window stays as a skill-pin override.
+   *
+   * A training slot whose hero no longer exists is cleared. A slot whose
+   * skill the hero does not know yet is granted to the hero.
+   */
+  migrateTrainingXpV1() {
+    this.trainingSlots = this.trainingSlots || [null, null, null];
+    for (let i = 0; i < this.trainingSlots.length; i++) {
+      const slot = this.trainingSlots[i];
+      if (!slot) continue;
+      const hero = this.heroes.find((h) => h.id === slot.heroId);
+      if (!hero || !hero.alive) {
+        this.trainingSlots[i] = null;
+        continue;
+      }
+      if (!slot.skillId) continue;
+      const known = (hero.skills || []).some(
+        (s) => (typeof s === 'string' ? s : s.id || s.name) === slot.skillId
+      );
+      if (!known) {
+        hero.skills = hero.skills || [];
+        const def = getSkill(slot.skillId);
+        hero.skills.push({
+          id: slot.skillId,
+          name: def ? def.name : slot.skillId,
+          level: 1,
+          exp: 0,
+        });
+      }
+    }
+  }
+
+  /**
    * Ensures exactly one alive hero is the Squad Leader. Han Islat wins by
    * default; otherwise the first alive hero takes the role. Safe on an empty
    * roster.
@@ -516,11 +551,15 @@ export class GameState {
     // The daily emotion tick and the daily decision.
     // THIS IS THE SAME CODE PATH the offline login simulation uses, so a hero
     // behaves identically whether the player is watching or away.
+    // The fights are only PAIRED here: the live town plays them out in 3D
+    // with the same fight engine (src/core/TrainingEngine.js).
     const dayReport = simulateGameDay(this, {
       mode: 'live',
       rng: Math.random,
       isellePresent: true,
+      resolveFights: false,
     });
+    this.lastDayReport = dayReport;
 
     // Heroes who are still hungry after today's decisions complain about it.
     for (const hero of this.heroes) {
@@ -1078,15 +1117,23 @@ export class GameState {
         quality: 'medium',
         resolutionScale: 1,
         showFps: true,
-        controls: { attackButton: 'right', blockButton: 'left' },
+        controls: { attackButton: 'left', blockButton: 'right' },
         camera: { followSpeed: 'tight', autoTurn: true, distance: 'normal' },
         ...(data.settings || {})
       };
       if (!this.settings.controls) {
-        this.settings.controls = { attackButton: 'right', blockButton: 'left' };
+        this.settings.controls = { attackButton: 'left', blockButton: 'right' };
       }
       if (!this.settings.camera) {
         this.settings.camera = { followSpeed: 'tight', autoTurn: true, distance: 'normal' };
+      }
+
+      // Controls migration v1: the canonical layout is LEFT = ATTACK and
+      // RIGHT = BLOCK. Older saves stored the mirrored layout, which made the
+      // left click do nothing useful.
+      if (!this.flags.controlsMigrationV1) {
+        this.flags.controlsMigrationV1 = true;
+        this.settings.controls = { attackButton: 'left', blockButton: 'right' };
       }
 
       this.playerClass = data.playerClass || 'Vanguard';
@@ -1214,6 +1261,12 @@ export class GameState {
           this.facilities.training.unlocked = true;
         }
         this.flags.emotionTrainingMigrationV1 = true;
+      }
+
+      // One-time migration: the training XP paths are merged into one.
+      if (!this.flags.trainingXpMigrationV1) {
+        this.migrateTrainingXpV1();
+        this.flags.trainingXpMigrationV1 = true;
       }
 
       // The controlled hero must still exist in the roster.

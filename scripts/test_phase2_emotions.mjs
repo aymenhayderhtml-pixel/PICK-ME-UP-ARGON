@@ -97,8 +97,8 @@ async function run() {
     applyEatOutcome,
     applyRestOutcome,
     evaluateSquadLeaderOrder,
-    evaluateTensionFight,
   } = await import('../src/core/EmotionEngine.js');
+  const { evaluateTensionFight } = await import('../src/core/TrainingEngine.js');
   const { computeActivityWeights, chooseDailyActivity, simulateGameDay, simulateMultipleDays } =
     await import('../src/core/DailyDecisionEngine.js');
   const { gameState } = await import('../src/core/GameState.js');
@@ -200,14 +200,25 @@ async function run() {
     fight.occurred === true &&
       fight.stoppedBy === 'iselle' &&
       fight.lawBroken === EMOTION_CONFIG.LOBBY_LAWS.NO_OUTSIDE_FIGHTING,
-    `law=${fight.lawBroken}`);
+    `law=${fight.lawBroken} exchanges=${fight.exchanges}`);
+  check('The fight actually traded blows through the real combat engine',
+    fight.exchanges >= 1 && fight.totalDamage > 0,
+    `exchanges=${fight.exchanges} damage=${fight.totalDamage}`);
   check('A broken law lowers the offender motivation',
-    fighterA.motivationScore === 60 - EMOTION_CONFIG.LAW_BREAK_MOTIVATION_PENALTY,
-    `motivation=${fighterA.motivationScore}`);
-  check('The fight logs fought_hero, law_broken and iselle_intervened events',
-    fight.reportEvents.map((e) => e.type).join(',') ===
-      'fought_hero,law_broken,iselle_intervened',
-    fight.reportEvents.map((e) => e.type).join(','));
+    fighterA.motivationScore ===
+      60 +
+        (fight.winnerId === fighterA.id
+          ? EMOTION_CONFIG.FIGHT_WIN_MOTIVATION_GAIN
+          : EMOTION_CONFIG.FIGHT_LOSS_MOTIVATION_DELTA) -
+        EMOTION_CONFIG.LAW_BREAK_MOTIVATION_PENALTY,
+    `motivation=${fighterA.motivationScore} winner=${fight.winnerId}`);
+  const eventTypes = fight.reportEvents.map((e) => e.type);
+  check('The fight logs fought_hero, fight_ended, law_broken and iselle_intervened events',
+    eventTypes.includes('fought_hero') &&
+      eventTypes.includes('fight_ended') &&
+      eventTypes.includes('law_broken') &&
+      eventTypes.includes('iselle_intervened'),
+    eventTypes.join(','));
   check('A calm hero does not start a fight',
     evaluateTensionFight(fightState, fighterB, () => 0.5).occurred === false);
 

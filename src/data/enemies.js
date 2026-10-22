@@ -112,6 +112,30 @@ export const ENEMY_TYPES = {
     size: 1.0,
     color: 0x4a4d55,
   },
+  ARMORED_GOBLIN: {
+    id: 'goblin_armored',
+    name: 'Armored Goblin',
+    level: 4,
+    hp: 55,
+    speed: 2.8,
+    damage: 8,
+    detectionRange: 16,
+    attackRange: 1.5,
+    size: 1.05,
+    color: 0x5a8f3a,
+  },
+  goblin_armored: {
+    id: 'goblin_armored',
+    name: 'Armored Goblin',
+    level: 4,
+    hp: 55,
+    speed: 2.8,
+    damage: 8,
+    detectionRange: 16,
+    attackRange: 1.5,
+    size: 1.05,
+    color: 0x5a8f3a,
+  },
 };
 
 export function getEnemyStats(typeKey, floorNumber = 1) {

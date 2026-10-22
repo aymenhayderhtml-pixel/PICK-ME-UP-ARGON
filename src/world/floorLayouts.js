@@ -448,7 +448,7 @@ function generateForestLayout(floorNumber, seed) {
     });
   }
 
-  // Goblin camps and ruins (ForestProps placement in ForestFloor.js).
+  // Goblin camps and ruins.
   const campSpots = [];
   if (!isFloor5) {
     for (let c = 1; c < clearings.length; c++) {

@@ -17,6 +17,15 @@ export const STAGE_REWARDS = {
       { id: 'leather', name: 'LEATHER (C)', count: 3 },
     ],
   },
+  3: {
+    gold: 7000,
+    materials: [
+      { id: 'crude_iron', name: 'IRON ORE (C)', count: 2 },
+      { id: 'leather', name: 'LEATHER (C)', count: 1 },
+    ],
+    gems: 0,
+    tickets: 0,
+  },
 };
 
 /**
@@ -29,9 +38,9 @@ export function getFloorClearReward(floorNumber = 1, isFirstClear = false) {
 
   if (STAGE_REWARDS[floor]) {
     const preset = STAGE_REWARDS[floor];
-    let gems = Math.max(0, Math.floor((10 * floor) / 2));
+    let gems = preset.gems !== undefined ? preset.gems : Math.max(0, Math.floor((10 * floor) / 2));
     if (floor === 5 && isFirstClear) gems += 50;
-    const tickets = floor === 5 ? 1 : (Math.random() < 0.1 ? 1 : 0);
+    const tickets = preset.tickets !== undefined ? preset.tickets : (floor === 5 ? 1 : (Math.random() < 0.1 ? 1 : 0));
 
     return {
       gold: preset.gold,

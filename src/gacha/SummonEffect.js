@@ -5,6 +5,7 @@ import { showSystemMessage } from '../ui/Hud.js';
 import { queueHeroWalkoutNotice } from '../ui/Notices.js';
 import { createLabelSprite } from '../ui/Label.js';
 import { HubHeroNPC } from '../hub/HubHeroes.js';
+import { getAudioContext, getMasterVolume, isAudioMuted } from '../core/AudioManager.js';
 
 function createTextSprite(text, isSign = false) {
   return createLabelSprite({ text, isSign });
@@ -26,7 +27,6 @@ if (typeof window !== 'undefined') {
 export class SummonEffect {
   constructor(hubScene) {
     this.hub = hubScene;
-    this.ctx = null;
     this.isPlaying = false; // Never locks player control
     this.toastContainer = null;
     this.activeVFX = [];
@@ -34,31 +34,29 @@ export class SummonEffect {
 
   playDoorClick() {
     if (typeof window === 'undefined') return;
-    if (window.__audioMaster && window.__audioMaster.isMuted) return;
+    if (isAudioMuted()) return;
 
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      if (!this.ctx) this.ctx = new AudioCtx();
-      if (this.ctx.state === 'suspended') this.ctx.resume();
+      const ctx = getAudioContext();
+      if (!ctx) return;
 
-      const now = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
 
       osc.type = 'sine';
       osc.frequency.setValueAtTime(260, now);
       osc.frequency.exponentialRampToValueAtTime(70, now + 0.04);
 
       // Very soft short 'door open' click at 20% volume
-      const masterVol = window.__audioMaster ? window.__audioMaster.masterVolume : 0.3;
+      const masterVol = getMasterVolume();
       const vol = 0.2 * masterVol;
 
       gain.gain.setValueAtTime(vol, now);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(ctx.destination);
 
       osc.start(now);
       osc.stop(now + 0.05);

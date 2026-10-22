@@ -165,15 +165,6 @@ function getBaseRuneMaterial(grade) {
   return mat;
 }
 
-export function disposeWeaponCaches() {
-  for (const g of _geomCache.values()) g.dispose();
-  for (const m of _matCache.values()) m.dispose();
-  for (const t of _texCache.values()) t.dispose();
-  _geomCache.clear();
-  _matCache.clear();
-  _texCache.clear();
-}
-
 function prepPart(geom, hexColor, isMetal = true, wearTag = 0, edgeHex = null) {
   const g = geom.index ? geom.toNonIndexed() : geom.clone();
   g.computeVertexNormals();

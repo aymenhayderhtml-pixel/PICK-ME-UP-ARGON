@@ -8,6 +8,16 @@ export const HEAD_CLEARANCE = 2.0;
 // Maximum height of a walkable floor surface in town (excludes overhead structures/lintels/roofs)
 const MAX_FLOOR_Y = 2.15;
 
+// Ground-only movement (on by default): the character may stand on the terrain
+// and on stairs, never on a prop such as a boulder, crate or barrel, and never
+// on a raised building floor. Turn it off to restore the old behaviour, where
+// the character could climb onto any surface the walk map finds.
+export const LAND_ONLY = true;
+
+// A raised surface only counts as a stair when the ground reaches it through a
+// chain of surfaces that never rise more than this in a single step.
+const MAX_STEP_RISE = 0.6;
+
 // Building floor envelopes for continuous interior floors
 const buildingFloors = [
   { id: 'summoning_room', type: 'circle', cx: 30.0, cz: 4.0, radius: 10.4, floorY: 1.625, maxWalkY: 1.75 },
@@ -31,7 +41,7 @@ function getBuildingSpec(x, z) {
   return null;
 }
 
-function getBuildingFloorY(x, z) {
+function getRampY(x, z) {
   // Summoning Room stair ramp
   const srVx = x - 23.5, srVz = z - 11.5;
   const srAlong = srVx * (-0.655) + srVz * 0.756;
@@ -41,7 +51,10 @@ function getBuildingFloorY(x, z) {
       return 1.625 - (srAlong / 4.0) * 1.425;
     }
   }
+  return null;
+}
 
+function getBuildingFloorY(x, z) {
   const spec = getBuildingSpec(x, z);
   return spec ? spec.floorY : null;
 }
@@ -197,7 +210,12 @@ export function buildWalkHeightMap(townGroup, getGroundY, bounds = {}, spacing =
 
   function sampleSurfaces(x, z) {
     const baseGy = getGroundY(x, z);
-    const bfY = getBuildingFloorY(x, z);
+    const rampY = getRampY(x, z);
+    // Ground-only mode drops the raised building floors; the stair ramp stays
+    // because it is a stair the character is meant to climb.
+    const bfY = LAND_ONLY
+      ? null
+      : (rampY !== null ? rampY : getBuildingFloorY(x, z));
 
     const gx = Math.min(gridW - 1, Math.max(0, Math.floor((x - minX) / cellSize)));
     const gz = Math.min(gridH - 1, Math.max(0, Math.floor((z - minZ) / cellSize)));
@@ -273,13 +291,29 @@ export function buildWalkHeightMap(townGroup, getGroundY, bounds = {}, spacing =
       hit.isValid = hit.normalY >= 0.6 && hit.y <= maxFloor && hit.clearance >= 1.5;
     }
 
-    let chosenY = (bfY !== null) ? bfY : baseGy;
-    const validHits = mergedHits.filter(h => h.isValid);
-    if (validHits.length > 0) {
-      chosenY = validHits[0].y;
-    }
-    if (bfY !== null && chosenY < bfY - 0.05) {
-      chosenY = bfY;
+    let chosenY;
+    if (LAND_ONLY) {
+      // Walk the candidate stack from the ground up and keep only what the
+      // character could actually step onto. A prop (a boulder, a crate) is a
+      // single blob floating above the terrain, so the ground never reaches it
+      // and it stays unwalkable. A staircase is a stack of small steps, so the
+      // ground reaches it and it stays walkable.
+      chosenY = baseGy;
+      const ascending = mergedHits.slice().sort((a, b) => a.y - b.y);
+      for (const hit of ascending) {
+        if (!hit.isValid) continue;
+        if (hit.y - chosenY <= MAX_STEP_RISE + 0.001) chosenY = hit.y;
+      }
+      if (rampY !== null && rampY > chosenY) chosenY = rampY;
+    } else {
+      chosenY = (bfY !== null) ? bfY : baseGy;
+      const validHits = mergedHits.filter(h => h.isValid);
+      if (validHits.length > 0) {
+        chosenY = validHits[0].y;
+      }
+      if (bfY !== null && chosenY < bfY - 0.05) {
+        chosenY = bfY;
+      }
     }
 
     return { chosenY, mergedHits };

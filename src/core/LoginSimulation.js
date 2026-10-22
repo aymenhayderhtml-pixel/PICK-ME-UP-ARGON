@@ -7,7 +7,6 @@
 import { EMOTION_CONFIG } from '../data/emotions.config.js';
 import { TRAINING_CONFIG } from '../data/training.config.js';
 import { simulateMultipleDays } from './DailyDecisionEngine.js';
-import { handleHeroDeathAndDropGear } from './TrainingEngine.js';
 
 const MS_PER_HOUR = 3600000;
 
@@ -88,6 +87,29 @@ export function buildIselleReportModel(simulationResult, gameState) {
     });
   }
 
+  // The fights that happened, one entry per bout.
+  const fightsSummary = [];
+  for (const dayReport of (simulationResult && simulationResult.dayReports) || []) {
+    for (const fight of dayReport.fights || []) {
+      if (!fight || !fight.occurred) continue;
+      fightsSummary.push({
+        day: dayReport.day,
+        attackerId: fight.heroAId,
+        defenderId: fight.heroBId,
+        winnerId: fight.winnerId,
+        loserId: fight.loserId,
+        exchanges: fight.exchanges,
+        totalDamage: fight.totalDamage,
+        stoppedBy: fight.stoppedBy,
+        stopReason: fight.stopReason,
+        lawBroken: fight.lawBroken,
+        triggerReason: fight.triggerReason,
+        intimacyDelta: fight.intimacyDelta,
+        tensionDelta: fight.tensionDelta,
+      });
+    }
+  }
+
   // The summary line.
   const countType = (type) => events.filter((e) => e.type === type).length;
   const trainedCount = countType('trained');
@@ -106,6 +128,11 @@ export function buildIselleReportModel(simulationResult, gameState) {
   if (lawCount > 0) parts.push(`${lawCount} broken law${lawCount === 1 ? '' : 's'}`);
   if (diedCount > 0) parts.push(`${diedCount} death${diedCount === 1 ? '' : 's'}`);
   if (idleCount > 0) parts.push(`${idleCount} ${idleCount === 1 ? 'hero' : 'heroes'} did nothing`);
+  if (fightsSummary.length > 0) {
+    parts.push(
+      `${fightsSummary.length} unsanctioned fight${fightsSummary.length === 1 ? '' : 's'}`
+    );
+  }
 
   const summaryLine =
     parts.length > 0
@@ -125,6 +152,7 @@ export function buildIselleReportModel(simulationResult, gameState) {
     perHeroSummaries,
     idleHeroNames,
     fallenHeroes,
+    fightsSummary,
   };
 }
 
@@ -179,5 +207,3 @@ export function runOfflineLoginSimulation(gameState, nowTimestamp = Date.now(), 
 
   return report;
 }
-
-export { handleHeroDeathAndDropGear };

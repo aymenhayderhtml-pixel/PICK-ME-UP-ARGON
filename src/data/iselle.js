@@ -63,6 +63,14 @@ export const ISELLE_LINES = {
     'Look alive! The administrators are watching and they demanded immediate results.',
     'A mandatory mission has arrived! Pick your best squad and pray to the RNG gods.',
   ],
+  equipmentPrompt: [
+    'Your heroes are wandering around without a weapon, Master. Bare hands against monsters? Charming.',
+    'No equipment on the roster, Master. Summon some, or let them punch their way to the first floor.',
+    'They have nothing but their fists, Master. Arm them, or watch them get punched?',
+    'Equipment or no equipment, Master? Their funeral either way, but the paperwork differs.',
+    'A weaponless squad! How romantic. The summoning altar, or the floor without a blade?',
+    'Do you want them to fight bare-handed, Master? Because I want to watch that.',
+  ],
   idleTeasing: [
     'Still standing there doing nothing? The tower will not climb itself, Master!',
     'If you stare into the void long enough, it just looks like your win rate.',
@@ -109,7 +117,56 @@ export const ISELLE_LINES = {
     'Rules. Rules. RULES. I am going to have to make a sign.',
     'I have separated you. Try to stay separated.',
   ],
+  interveneOutside: [
+    'Stop right there! Fighting outside the ring is strictly forbidden!',
+    'Break it up this instant! Town 1377 is not a brawl pit!',
+  ],
+  interveneCritical: [
+    'Hold your blade! Strikes to the head or heart are forbidden!',
+    'Are you trying to kill your own comrade? Stand down!',
+  ],
+  interveneLowHp: [
+    'Enough! Your opponent can barely stand. Step back now!',
+    'Match halted! Attacking a critically wounded ally violates lobby law!',
+  ],
+  interveneTimeout: [
+    'Time is up! Both of you, catch your breath and let me heal those bruises.',
+  ],
 };
+
+/**
+ * The text Iselle puts in the login report when she breaks a fight up.
+ * `{heroA}`, `{heroB}`, `{offender}`, `{target}` and `{zone}` are substituted.
+ */
+export const ISELLE_INTERVENTION_REPORT_TEXT = Object.freeze({
+  unsanctioned_fight:
+    'Iselle flew into the plaza, separated {heroA} and {heroB} with a binding ray, and healed their wounds.',
+  left_ring:
+    'Iselle stopped the bout between {heroA} and {heroB} after the clash spilled outside the sparring ring.',
+  critical_hit:
+    "Iselle intervened immediately when {offender} struck a dangerous blow to {target}'s {zone}.",
+  low_hp:
+    'Iselle stepped between {heroA} and {heroB} when {target} dropped below safe health.',
+  max_duration:
+    'Iselle called time on the drawn-out bout between {heroA} and {heroB} and restored their strength.',
+  max_damage:
+    'Iselle halted the brutal exchange between {heroA} and {heroB} before permanent harm was done.',
+  fled: 'Iselle intercepted the clash after {target} broke away in terror from {offender}.',
+});
+
+/**
+ * The text of the fight events in the login report.
+ */
+export const ISELLE_FIGHT_EVENT_TEXT = Object.freeze({
+  fought_hero_anger: '{heroA} and {heroB} came to blows in the town.',
+  fought_hero_fear_hunger: '{heroA} snapped from fear and hunger and attacked {heroB} in the town.',
+  fight_ended: 'The clash between {heroA} and {heroB} ended after {exchanges} exchanges ({reason}).',
+  fight_won: '{winner} overpowered {loser} in the clash.',
+  fight_lost: '{loser} was beaten back by {winner} and lost confidence.',
+  law_broken: '{offender} broke a lobby law: {law}.',
+  sanctioned_bout:
+    '{heroA} and {heroB} completed a sanctioned bout in the ring without breaking any lobby laws.',
+});
 
 export function pickLine(category) {
   const lines = ISELLE_LINES[category] || ISELLE_LINES.idleTeasing;

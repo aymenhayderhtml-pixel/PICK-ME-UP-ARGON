@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { PALETTE } from './palette.js';
+import { getSignLayout } from './layout.js';
 
 function mulberry32(a) {
   return function() {
@@ -404,10 +405,20 @@ export function buildLandmarksWork(ctx = {}) {
     anchors[`${name}_obj`] = obj;
   }
 
-  function buildSignPlate(stoneList, glyphList, pos, rotY = 0, rng) {
-    addBox(stoneList, 2.25, 0.62, 0.14, pos.x, pos.y, pos.z, P.slate || 0x4a5560, rotY, 0, 0, 0.8, 1.05, rng);
-    addBox(stoneList, 2.4, 0.74, 0.1, pos.x, pos.y, pos.z, P.wallLit || 0xc4cbcf, rotY, 0, 0, 0.8, 1.05, rng);
-    addBox(glyphList, 1.85, 0.08, 0.16, pos.x, pos.y, pos.z, P.teal || 0x6fe0f0, rotY, 0, 0, 0.95, 1.05, rng);
+  // A zone signpost: a timber post standing on the terrain up to a slate
+  // board whose bottom sits 2m above the ground. The board only ever rotates
+  // around Y (the facing angle comes from the layout data), so it never tilts.
+  function buildSignPost(stoneList, glyphList, plan, rng) {
+    const postH = plan.post.height;
+    addBox(stoneList, plan.post.width, postH + 0.12, plan.post.width,
+      plan.x, plan.groundY + (postH + 0.12) * 0.5, plan.z,
+      P.timber || 0x2b2623, plan.rotY, 0, 0, 0.72, 1.0, rng);
+    addBox(stoneList, plan.board.width, plan.board.height, plan.board.depth,
+      plan.x, plan.boardY, plan.z, P.slate || 0x4a5560, plan.rotY, 0, 0, 0.8, 1.05, rng);
+    // Teal trim along the lower edge, clear of the text in the middle
+    addBox(glyphList, plan.board.width - 0.3, 0.06, plan.board.depth + 0.02,
+      plan.x, plan.boardY - plan.board.height * 0.5 + 0.1, plan.z,
+      P.teal || 0x6fe0f0, plan.rotY, 0, 0, 0.95, 1.05, rng);
   }
 
   function buildGeometryForQuality(q) {
@@ -436,8 +447,7 @@ export function buildLandmarksWork(ctx = {}) {
     const scCfg = layout.synthesis_chamber || {
       center: { x: 0.0, z: -32.0 },
       footprint: { type: 'circle', radius: 8.2, height: 9.0 },
-      door: { id: 'door_synthesis_chamber', position: { x: 0.0, y: 0.0, z: -23.8 }, outward: { x: 0.0, y: 0.0, z: 1.0 } },
-      signOffset: { x: 0, y: 15.0, z: 0 }
+      door: { id: 'door_synthesis_chamber', position: { x: 0.0, y: 0.0, z: -23.8 }, outward: { x: 0.0, y: 0.0, z: 1.0 } }
     };
     const scX = scCfg.center.x;
     const scZ = scCfg.center.z;
@@ -537,7 +547,7 @@ export function buildLandmarksWork(ctx = {}) {
     // Double cream door leaves
     for (const side of [-1, 1]) {
       const lx = scX + side * 0.74;
-      addBox(plasterWoodGeos, 1.36, 3.55, 0.28, lx, scFloorY + 1.78, doorZ + 0.36, P.plaster || 0xdfe3df, 0, 0, 0, 0.82, 1.06, rng);
+      addBox(plasterWoodGeos, 1.36, 3.55, 0.28, lx, scFloorY + 1.78, doorZ + 0.39, P.plaster || 0xdfe3df, 0, 0, 0, 0.82, 1.06, rng);
       // Gold trim rails, stiles & decorative panels
       addBox(metalGoldGeos, 1.4, 0.14, 0.34, lx, scFloorY + 3.45, doorZ + 0.37, P.gold || 0xd8b45a, 0, 0, 0, 0.88, 1.12, rng);
       addBox(metalGoldGeos, 1.4, 0.14, 0.34, lx, scFloorY + 1.85, doorZ + 0.37, P.gold || 0xd8b45a, 0, 0, 0, 0.88, 1.12, rng);
@@ -599,13 +609,11 @@ export function buildLandmarksWork(ctx = {}) {
     registerAnchor('synthesisDoor', new THREE.Vector3(scX, scFloorY + 1.6, doorZ + 0.45));
     anchors.door = synthDoorPos.clone();
 
-    const scSignPos = new THREE.Vector3(
-      scX + ((scCfg.signOffset && scCfg.signOffset.x) || 0),
-      scY + ((scCfg.signOffset && scCfg.signOffset.y) || 15.0),
-      scZ + ((scCfg.signOffset && scCfg.signOffset.z) || 0)
-    );
-    registerAnchor('sign_synthesis_chamber', scSignPos);
-    buildSignPlate(stoneGeos, signGlyphGeos, scSignPos, 0, rng);
+    const scSign = getSignLayout(layout, 'synthesis_chamber');
+    if (scSign) {
+      registerAnchor('sign_synthesis_chamber', new THREE.Vector3(scSign.x, scSign.boardY, scSign.z));
+      buildSignPost(stoneGeos, signGlyphGeos, scSign, rng);
+    }
 
     const scAo = new THREE.CircleGeometry(scRad + 1.5, 24);
     scAo.rotateX(-Math.PI / 2);
@@ -618,8 +626,7 @@ export function buildLandmarksWork(ctx = {}) {
     const arCfg = layout.armory || {
       center: { x: -6.0, z: -20.0 },
       footprint: { width: 10.5, height: 4.5, depth: 5.0, mainWidth: 7.0, mainDepth: 5.0, forgeWidth: 3.5, forgeDepth: 3.8 },
-      door: { id: 'door_armory', position: { x: -6.0, y: 0.0, z: -17.4 }, outward: { x: 0.0, y: 0.0, z: 1.0 } },
-      signOffset: { x: 0, y: 5.6, z: 0 }
+      door: { id: 'door_armory', position: { x: -6.0, y: 0.0, z: -17.4 }, outward: { x: 0.0, y: 0.0, z: 1.0 } }
     };
     const arX = arCfg.center.x;
     const arZ = arCfg.center.z;
@@ -668,7 +675,7 @@ export function buildLandmarksWork(ctx = {}) {
     const arDoorX = (arCfg.door && arCfg.door.position.x) || -6.0;
     const arDoorZ = arZ + mainD * 0.5;
     addBox(stoneGeos, 1.85, 2.55, 0.42, arDoorX, arY + 1.275, arDoorZ, P.wallLit || 0xc4cbcf, 0, 0, 0, 0.78, 1.06, rng);
-    addBox(plasterWoodGeos, 1.42, 2.22, 0.26, arDoorX, arY + 1.15, arDoorZ + 0.08, P.wood || 0x6a4a2e, 0, 0, 0, 0.72, 1.02, rng);
+    addBox(plasterWoodGeos, 1.42, 2.22, 0.26, arDoorX, arY + 1.15, arDoorZ + 0.10, P.wood || 0x6a4a2e, 0, 0, 0, 0.72, 1.02, rng);
     for (let b = 0; b < 3; b++) {
       addBox(metalGoldGeos, 1.48, 0.12, 0.32, arDoorX, arY + 0.55 + b * 0.68, arDoorZ + 0.09, P.slate || 0x4a5560, 0, 0, 0, 0.75, 1.05, rng);
     }
@@ -678,7 +685,7 @@ export function buildLandmarksWork(ctx = {}) {
       const wx = hallX + wxOff;
       const wz = arZ + mainD * 0.5;
       addBox(stoneGeos, 1.25, 1.25, 0.32, wx, arY + 2.45, wz, P.wallLit || 0xc4cbcf, 0, 0, 0, 0.78, 1.06, rng);
-      addBox(windowGeos, 0.95, 0.95, 0.18, wx, arY + 2.45, wz + 0.08, P.warmWindow || 0xffc27a, 0, 0, 0, 0.9, 1.05, rng);
+      addBox(windowGeos, 0.95, 0.95, 0.18, wx, arY + 2.45, wz + 0.09, P.warmWindow || 0xffc27a, 0, 0, 0, 0.9, 1.05, rng);
       for (const bar of [-0.26, 0, 0.26]) {
         addBox(metalGoldGeos, 0.06, 1.02, 0.26, wx + bar, arY + 2.45, wz + 0.12, P.timber || 0x2b2623, 0, 0, 0, 0.7, 0.95, rng);
       }
@@ -752,13 +759,11 @@ export function buildLandmarksWork(ctx = {}) {
     registerAnchor('forge', forgePos);
     registerAnchor('forge_fire', forgePos);
 
-    const arSignPos = new THREE.Vector3(
-      arX + ((arCfg.signOffset && arCfg.signOffset.x) || 0),
-      arY + ((arCfg.signOffset && arCfg.signOffset.y) || 5.6),
-      arZ + ((arCfg.signOffset && arCfg.signOffset.z) || 0)
-    );
-    registerAnchor('sign_armory', arSignPos);
-    buildSignPlate(stoneGeos, signGlyphGeos, arSignPos, 0, rng);
+    const arSign = getSignLayout(layout, 'armory');
+    if (arSign) {
+      registerAnchor('sign_armory', new THREE.Vector3(arSign.x, arSign.boardY, arSign.z));
+      buildSignPost(stoneGeos, signGlyphGeos, arSign, rng);
+    }
 
     // Required Armory Orange Forge Light Entry
     animRefs.forgeLightIdx = lights.length;
@@ -776,8 +781,7 @@ export function buildLandmarksWork(ctx = {}) {
     const tgCfg = layout.training_grounds || {
       center: { x: -24.0, z: 20.0 },
       footprint: { type: 'box', width: 16.0, depth: 16.0, height: 2.5 },
-      door: { id: 'door_training_grounds', position: { x: -18.0, y: 0.0, z: 18.0 }, outward: { x: 1.0, y: 0.0, z: 0.0 } },
-      signOffset: { x: 0, y: 4.0, z: 0 }
+      door: { id: 'door_training_grounds', position: { x: -18.0, y: 0.0, z: 18.0 }, outward: { x: 1.0, y: 0.0, z: 0.0 } }
     };
     const tgX = tgCfg.center.x;
     const tgZ = tgCfg.center.z;
@@ -1049,13 +1053,11 @@ export function buildLandmarksWork(ctx = {}) {
     doors.push({ id: (tgCfg.door && tgCfg.door.id) || 'door_training_grounds', position: tgDoorPos, outward: tgDoorOut });
     registerAnchor('door_training_grounds', tgDoorPos);
 
-    const tgSignPos = new THREE.Vector3(
-      tgX + ((tgCfg.signOffset && tgCfg.signOffset.x) || 0),
-      tgY + ((tgCfg.signOffset && tgCfg.signOffset.y) || 4.0),
-      tgZ + ((tgCfg.signOffset && tgCfg.signOffset.z) || 0)
-    );
-    registerAnchor('sign_training_grounds', tgSignPos);
-    buildSignPlate(stoneGeos, signGlyphGeos, tgSignPos, Math.PI * 0.5, rng);
+    const tgSign = getSignLayout(layout, 'training_grounds');
+    if (tgSign) {
+      registerAnchor('sign_training_grounds', new THREE.Vector3(tgSign.x, tgSign.boardY, tgSign.z));
+      buildSignPost(stoneGeos, signGlyphGeos, tgSign, rng);
+    }
 
     // =========================================================================
     // 4. MESS HALL ROW (Long Low Row of 6 Connected Houses along South Wall)
@@ -1063,8 +1065,7 @@ export function buildLandmarksWork(ctx = {}) {
     const mhCfg = layout.mess_hall_row || {
       center: { x: 8.0, z: 38.0 },
       footprint: { type: 'box', width: 22.8, depth: 4.4, height: 4.4 },
-      door: { id: 'door_mess_hall', position: { x: 8.0, y: 0.0, z: 35.8 }, outward: { x: 0.0, y: 0.0, z: -1.0 } },
-      signOffset: { x: 0, y: 5.2, z: 0 }
+      door: { id: 'door_mess_hall', position: { x: 8.0, y: 0.0, z: 35.8 }, outward: { x: 0.0, y: 0.0, z: -1.0 } }
     };
     const mhX = mhCfg.center.x;
     const mhZ = mhCfg.center.z;
@@ -1108,7 +1109,7 @@ export function buildLandmarksWork(ctx = {}) {
       const winZ = mhZ - mhD * 0.5;
       if (u !== 2) {
         addBox(stoneGeos, 1.15, 1.15, 0.24, ux, mhY + 2.15, winZ, P.wallLit || 0xc4cbcf, 0, 0, 0, 0.78, 1.05, rng);
-        addBox(windowGeos, 0.78, 0.82, 0.14, ux, mhY + 2.15, winZ - 0.04, P.warmWindow || 0xffc27a, 0, 0, 0, 0.85, 1.05, rng);
+        addBox(windowGeos, 0.78, 0.82, 0.14, ux, mhY + 2.15, winZ - 0.07, P.warmWindow || 0xffc27a, 0, 0, 0, 0.85, 1.05, rng);
         // Closed/half-shuttered wooden shutters
         addBox(plasterWoodGeos, 0.42, 0.88, 0.18, ux - 0.24, mhY + 2.15, winZ - 0.08, P.wood || 0x6a4a2e, 0.12, 0, 0, 0.74, 1.02, rng);
         addBox(plasterWoodGeos, 0.42, 0.88, 0.18, ux + 0.24, mhY + 2.15, winZ - 0.08, P.wood || 0x6a4a2e, -0.12, 0, 0, 0.74, 1.02, rng);
@@ -1121,7 +1122,7 @@ export function buildLandmarksWork(ctx = {}) {
     const mhDoorX = (mhCfg.door && mhCfg.door.position.x) || 8.0;
     const mhDoorZ = mhZ - mhD * 0.5;
     addBox(stoneGeos, 2.05, 2.55, 0.42, mhDoorX, mhY + 1.35, mhDoorZ, P.wallLit || 0xc4cbcf, 0, 0, 0, 0.78, 1.06, rng);
-    addBox(plasterWoodGeos, 1.52, 2.22, 0.26, mhDoorX, mhY + 1.22, mhDoorZ - 0.08, P.timber || 0x2b2623, 0, 0, 0, 0.7, 0.98, rng);
+    addBox(plasterWoodGeos, 1.52, 2.22, 0.26, mhDoorX, mhY + 1.22, mhDoorZ - 0.10, P.timber || 0x2b2623, 0, 0, 0, 0.7, 0.98, rng);
     // Heavy crossed iron chains & padlock across locked door
     addBox(metalGoldGeos, 1.65, 0.14, 0.32, mhDoorX, mhY + 1.32, mhDoorZ - 0.12, P.slate || 0x4a5560, 0, 0, 0.42, 0.8, 1.08, rng);
     addBox(metalGoldGeos, 1.65, 0.14, 0.32, mhDoorX, mhY + 1.32, mhDoorZ - 0.12, P.slate || 0x4a5560, 0, 0, -0.42, 0.8, 1.08, rng);
@@ -1140,22 +1141,19 @@ export function buildLandmarksWork(ctx = {}) {
     registerAnchor('door_mess_hall', mhDoorPos);
     registerAnchor('door_mess_hall_row', mhDoorPos);
 
-    const mhSignPos = new THREE.Vector3(
-      mhX + ((mhCfg.signOffset && mhCfg.signOffset.x) || 0),
-      mhY + ((mhCfg.signOffset && mhCfg.signOffset.y) || 5.2),
-      mhZ + ((mhCfg.signOffset && mhCfg.signOffset.z) || 0)
-    );
-    registerAnchor('sign_mess_hall_row', mhSignPos);
-    registerAnchor('sign_mess_hall', mhSignPos);
-    buildSignPlate(stoneGeos, signGlyphGeos, mhSignPos, Math.PI, rng);
+    const mhSign = getSignLayout(layout, 'mess_hall_row');
+    if (mhSign) {
+      registerAnchor('sign_mess_hall_row', new THREE.Vector3(mhSign.x, mhSign.boardY, mhSign.z));
+      registerAnchor('sign_mess_hall', new THREE.Vector3(mhSign.x, mhSign.boardY, mhSign.z));
+      buildSignPost(stoneGeos, signGlyphGeos, mhSign, rng);
+    }
 
     // =========================================================================
     // 5. DUNGEON BOARD (Wooden Notice Board, Shingle Roof, Pinned Papers, Hook)
     // =========================================================================
     const dbCfg = layout.dungeon_board || {
       center: { x: 6.0, z: -2.0 },
-      footprint: { type: 'box', width: 2.3, depth: 0.8, height: 3.0 },
-      signOffset: { x: 0, y: 3.4, z: 0 }
+      footprint: { type: 'box', width: 2.3, depth: 0.8, height: 3.0 }
     };
     const dbX = dbCfg.center.x;
     const dbZ = dbCfg.center.z;
@@ -1206,13 +1204,11 @@ export function buildLandmarksWork(ctx = {}) {
 
     colliders.push({ type: 'box', x: dbX, z: dbZ, w: dbW + 0.3, d: dbD + 0.4, rotY: 0 });
 
-    const dbSignPos = new THREE.Vector3(
-      dbX + ((dbCfg.signOffset && dbCfg.signOffset.x) || 0),
-      dbY + ((dbCfg.signOffset && dbCfg.signOffset.y) || 3.4),
-      dbZ + ((dbCfg.signOffset && dbCfg.signOffset.z) || 0)
-    );
-    registerAnchor('sign_dungeon_board', dbSignPos);
-    buildSignPlate(stoneGeos, signGlyphGeos, dbSignPos, 0, rng);
+    const dbSign = getSignLayout(layout, 'dungeon_board');
+    if (dbSign) {
+      registerAnchor('sign_dungeon_board', new THREE.Vector3(dbSign.x, dbSign.boardY, dbSign.z));
+      buildSignPost(stoneGeos, signGlyphGeos, dbSign, rng);
+    }
 
     // =========================================================================
     // MERGE STATIC GEOMETRIES & BUILD INSTANCED MESHES

@@ -16,6 +16,12 @@ export class DeployWindow extends SystemWindow {
 
     this.container.style.width = '780px';
     this.container.style.maxWidth = '95vw';
+    // Cap the window to the viewport: the party block scrolls internally
+    // instead of pushing the title bar and the action buttons off-screen.
+    this.container.style.maxHeight = 'calc(100vh - 40px)';
+    this.container.style.boxSizing = 'border-box';
+    // Keep the title bar at its fixed height when the window is capped.
+    this.titleBar.style.flex = '0 0 auto';
 
     this.buildUI();
   }
@@ -30,17 +36,9 @@ export class DeployWindow extends SystemWindow {
   open() {
     this.render();
     super.open();
-    if (this.hasUnarmedHeroes() && !this.equipNoticeDismissed) {
-      showEquipmentNotice({
-        onSummon: () => {
-          this.close();
-          if (this.onOpenEquipmentSummon) this.onOpenEquipmentSummon();
-        },
-        onLater: () => {
-          this.equipNoticeDismissed = true;
-        },
-      });
-    }
+    // No modal prompt here: the window already shows an inline "no
+    // equipment" banner. The notice only appears when the player actually
+    // commits to entering a floor.
   }
 
   buildUI() {
@@ -48,6 +46,21 @@ export class DeployWindow extends SystemWindow {
     this.contentElement.style.display = 'flex';
     this.contentElement.style.flexDirection = 'column';
     this.contentElement.style.gap = '14px';
+    this.contentElement.style.flex = '1 1 auto';
+    this.contentElement.style.minHeight = '0';
+
+    // Scrollable body. The party block can be taller than the viewport, so it
+    // scrolls here while the warning, the floor target and the action buttons
+    // stay pinned to the bottom of the window.
+    this.scrollArea = document.createElement('div');
+    this.scrollArea.style.flex = '1 1 auto';
+    this.scrollArea.style.minHeight = '0';
+    this.scrollArea.style.overflowY = 'auto';
+    this.scrollArea.style.overflowX = 'hidden';
+    this.scrollArea.style.display = 'flex';
+    this.scrollArea.style.flexDirection = 'column';
+    this.scrollArea.style.gap = '14px';
+    this.contentElement.appendChild(this.scrollArea);
 
     // No Equipment Gold Banner
     this.noEquipBanner = document.createElement('div');
@@ -61,7 +74,7 @@ export class DeployWindow extends SystemWindow {
     this.noEquipBanner.style.color = '#ffd700';
     this.noEquipBanner.style.fontWeight = 'bold';
     this.noEquipBanner.style.fontSize = '12px';
-    this.contentElement.appendChild(this.noEquipBanner);
+    this.scrollArea.appendChild(this.noEquipBanner);
 
     // 1. Party Slots Section (5 slots) with Combat Power
     const slotsHeader = document.createElement('div');
@@ -116,13 +129,13 @@ export class DeployWindow extends SystemWindow {
     this.powerLabel.textContent = 'Combat Power: 0';
     slotsHeader.appendChild(this.powerLabel);
 
-    this.contentElement.appendChild(slotsHeader);
+    this.scrollArea.appendChild(slotsHeader);
 
     this.slotsContainer = document.createElement('div');
     this.slotsContainer.style.display = 'grid';
     this.slotsContainer.style.gridTemplateColumns = 'repeat(5, 1fr)';
     this.slotsContainer.style.gap = '8px';
-    this.contentElement.appendChild(this.slotsContainer);
+    this.scrollArea.appendChild(this.slotsContainer);
 
     // Heart Link Bar between party slots
     this.bondsBar = document.createElement('div');
@@ -134,7 +147,7 @@ export class DeployWindow extends SystemWindow {
     this.bondsBar.style.backgroundColor = 'rgba(20, 15, 35, 0.7)';
     this.bondsBar.style.borderRadius = '6px';
     this.bondsBar.style.border = '1px solid var(--frame-inner)';
-    this.contentElement.appendChild(this.bondsBar);
+    this.scrollArea.appendChild(this.bondsBar);
 
     // 2. Available Heroes Section
     const availTitle = document.createElement('div');
@@ -142,7 +155,7 @@ export class DeployWindow extends SystemWindow {
     availTitle.style.fontWeight = 'bold';
     availTitle.style.color = '#88aacc';
     availTitle.textContent = 'AVAILABLE HEROES (CLICK TO ASSIGN):';
-    this.contentElement.appendChild(availTitle);
+    this.scrollArea.appendChild(availTitle);
 
     this.availableContainer = document.createElement('div');
     this.availableContainer.style.maxHeight = '180px';
@@ -151,7 +164,7 @@ export class DeployWindow extends SystemWindow {
     this.availableContainer.style.gridTemplateColumns = 'repeat(2, 1fr)';
     this.availableContainer.style.gap = '6px';
     this.availableContainer.style.padding = '4px';
-    this.contentElement.appendChild(this.availableContainer);
+    this.scrollArea.appendChild(this.availableContainer);
 
     // 3. Permadeath Warning Banner
     const warningBox = document.createElement('div');
@@ -163,7 +176,8 @@ export class DeployWindow extends SystemWindow {
     warningBox.style.color = '#ff4444';
     warningBox.style.fontWeight = 'bold';
     warningBox.style.fontSize = '12px';
-    warningBox.innerHTML = '⚠️ Permadeath active inside the Tower.<br><span style="color:#6fe0f0;font-size:11px;font-weight:normal;">CONTROLS &mdash; RIGHT CLICK: ATTACK | LEFT CLICK (HOLD): BLOCK | F: BASH | Q: ROLL</span>';
+    warningBox.style.flex = '0 0 auto';
+    warningBox.innerHTML = '⚠️ Permadeath active inside the Tower.<br><span style="color:#6fe0f0;font-size:11px;font-weight:normal;">CONTROLS &mdash; LEFT CLICK: ATTACK | RIGHT CLICK (HOLD): BLOCK | F: BASH | Q: ROLL</span>';
     this.contentElement.appendChild(warningBox);
 
     // 4. Floor Selector Bar
@@ -173,6 +187,7 @@ export class DeployWindow extends SystemWindow {
     this.floorSelectBar.style.gap = '8px';
     this.floorSelectBar.style.fontSize = '12px';
     this.floorSelectBar.style.color = '#88aacc';
+    this.floorSelectBar.style.flex = '0 0 auto';
     this.contentElement.appendChild(this.floorSelectBar);
 
     // 5. Bottom Enter Button Bar
@@ -181,6 +196,7 @@ export class DeployWindow extends SystemWindow {
     bottomBar.style.justifyContent = 'flex-end';
     bottomBar.style.gap = '10px';
     bottomBar.style.marginTop = '4px';
+    bottomBar.style.flex = '0 0 auto';
 
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'mm-btn';
@@ -203,8 +219,13 @@ export class DeployWindow extends SystemWindow {
             this.close();
             if (this.onOpenEquipmentSummon) this.onOpenEquipmentSummon();
           },
-          onLater: () => {
+          onEnterAnyway: () => {
+            // The player chose to go in bare-handed: deploy right away.
             this.equipNoticeDismissed = true;
+            this.close();
+            if (this.onEnterFloor) {
+              this.onEnterFloor(gameState.currentFloor || 1);
+            }
           },
         });
         return;

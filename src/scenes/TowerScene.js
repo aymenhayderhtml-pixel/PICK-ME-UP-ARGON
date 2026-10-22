@@ -63,6 +63,15 @@ const FOREST_FLOOR_LIGHTING = {
   sun: { color: 0x88aacc, intensity: 0.45, direction: { x: 20, y: 30, z: -20 } },
 };
 
+const BRIGHT_FOREST_LIGHTING = {
+  background: 0xa8d5ba,
+  fog: { color: 0xb8e0c8, near: 35, far: 140 },
+  exposure: 1.2,
+  ambient: { color: 0xf4f9f4, intensity: 1.0 },
+  hemi: { sky: 0xd6f0e0, ground: 0x4a6b38, intensity: 0.85 },
+  sun: { color: 0xfffaed, intensity: 1.3, direction: { x: 25, y: 40, z: -15 } },
+};
+
 export class TowerScene {
   constructor(renderer, input) {
     this.renderer = renderer;
@@ -531,6 +540,8 @@ export class TowerScene {
       L = FARM_FLOOR_LIGHTING;
     } else if (floor === 2) {
       L = PRAIRIE_FLOOR_LIGHTING;
+    } else if (floor === 3) {
+      L = BRIGHT_FOREST_LIGHTING;
     }
     if (this.renderer) {
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -733,6 +744,13 @@ export class TowerScene {
   }
 
   playOpeningTransition(floorNumber) {
+    if (floorNumber === 3) {
+      showNotices([
+        'CONGRATULATIONS ON COMPLETING THE 2ND FLOOR!',
+        'YOU WILL PROCEED TO THE 3RD FLOOR.',
+      ]);
+    }
+
     const overlay = document.createElement('div');
     overlay.style.position = 'fixed';
     overlay.style.top = '0';
@@ -899,18 +917,18 @@ export class TowerScene {
             showSystemMessage('[Too far to pin weapon! Must be within 6m]');
           }
         }
-      } else if (e.code === 'KeyF7') {
+      } else if (e.code === 'F7') {
         this.player.mesh.position.set(0, 0, -30);
         this.player.velocityY = 0;
         showSystemMessage('[DEBUG: Teleported to Boss Arena]');
-      } else if (e.code === 'KeyF8') {
+      } else if (e.code === 'F8') {
         if (this.boss && !this.boss.dead) {
           this.boss.hp = Math.round(this.boss.maxHp * 0.55);
           showSystemMessage(`[DEBUG: Boss HP set to 55% (${this.boss.hp}/${this.boss.maxHp})]`);
         }
-      } else if (e.code === 'KeyF5') {
+      } else if (e.code === 'F5') {
         this.enemyManager.killAllEnemies(this.scene);
-      } else if (e.code === 'KeyF6') {
+      } else if (e.code === 'F6') {
         const pPos = this.player.mesh.position;
         const spawnPos = new THREE.Vector3(pPos.x, 0, pPos.z - 5.0);
         this.enemyManager.spawnLeader(this.scene, spawnPos, this.currentFloorNumber);
@@ -1275,6 +1293,12 @@ export class TowerScene {
   update(delta) {
     if (!this.isActive || !this.forestFloor) return;
 
+    // The mouse steers the camera, so the pointer is captured while playing
+    // and released for the UI windows and the command wheel.
+    this.input.updateCursor(
+      isAnySystemWindowOpen() || Boolean(this.commandWheel && this.commandWheel.isOpen)
+    );
+
     if (this.arrivalDome) {
       this.arrivalDome.update(delta);
     }
@@ -1548,7 +1572,15 @@ export class TowerScene {
       },
       isRmbDown: () => (!windowOpen && typeof this.input.isRmbDown === 'function' && this.input.isRmbDown()),
       isLmbDown: () => (!windowOpen && typeof this.input.isLmbDown === 'function' && this.input.isLmbDown()) || (autoBlock && this.input.getActionButton?.('block') === 0),
-      consumeMouseDelta: () => (!windowOpen && typeof this.input.consumeMouseDelta === 'function' ? this.input.consumeMouseDelta() : { x: 0, y: 0 }),
+      // While a window is open, drain the real delta so the camera does not
+      // jump when the window closes, but report no movement.
+      consumeMouseDelta: () => {
+        const delta =
+          typeof this.input.consumeMouseDelta === 'function'
+            ? this.input.consumeMouseDelta()
+            : { x: 0, y: 0 };
+        return windowOpen ? { x: 0, y: 0 } : delta;
+      },
     };
     this.player.update(
       effectiveDelta,

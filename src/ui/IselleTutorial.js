@@ -32,7 +32,7 @@ export class IselleTutorial {
       },
       {
         topic: 'COMBAT CONTROLS',
-        text: `In the Tower: RIGHT CLICK: ATTACK (3-hit combo) and LEFT CLICK (HOLD): BLOCK with your shield. F for shield bash, Q to roll.`,
+        text: `In the Tower: LEFT CLICK: ATTACK (3-hit combo) and RIGHT CLICK (HOLD): BLOCK with your shield. F for shield bash, Q to roll.`,
       },
       {
         topic: 'SYNTHESIS',

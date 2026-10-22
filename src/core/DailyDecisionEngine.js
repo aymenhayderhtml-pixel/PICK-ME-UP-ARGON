@@ -12,14 +12,17 @@ import {
   applyDailyEmotionTick,
   applyEatOutcome,
   applyRestOutcome,
-  applyFearGain,
   evaluateSquadLeaderOrder,
-  evaluateTensionFight,
   getTraitModifiers,
   isHeroPanicking,
   pickTrainingTypeForHero,
 } from './EmotionEngine.js';
-import { resolveTrainingSession, resolveSparringSession } from './TrainingEngine.js';
+import {
+  resolveTrainingSession,
+  resolveSparringSession,
+  resolveEmotionFight,
+  pairDailyFights,
+} from './TrainingEngine.js';
 
 const TRAINING_ACTIVITIES = ['train_dummy', 'train_archery', 'train_magic'];
 
@@ -175,10 +178,43 @@ export function simulateGameDay(gameState, options = {}) {
     return event;
   };
 
+  // A training session may have raised the hero's level or taught a new skill;
+  // announce both so Iselle's Report can count them.
+  const pushTrainingProgression = (heroId, heroName, session) => {
+    if (session.leveledUp) {
+      push({
+        day,
+        heroId,
+        heroName,
+        type: 'level_up',
+        importance: EMOTION_CONFIG.REPORT_IMPORTANCE.level_up,
+        text: `${heroName} reached level ${session.newLevel}.`,
+        details: { level: session.newLevel },
+      });
+    }
+    for (const skill of session.newSkills || []) {
+      push({
+        day,
+        heroId,
+        heroName,
+        type: 'new_skill',
+        importance: EMOTION_CONFIG.REPORT_IMPORTANCE.new_skill,
+        text: `${heroName} learned ${skill.name}.`,
+        details: { skillId: skill.id },
+      });
+    }
+  };
+
   // 1. Daily passive emotion tick for every hero.
   for (const hero of alive) {
     applyDailyEmotionTick(hero, gameState.foodQuality);
   }
+
+  // 1b. Who turns on whom TODAY. The decision is made on the state after the
+  //     daily tick, BEFORE the routine changes anything: a hero who is angry
+  //     enough to brawl does not get to calm down with a bowl of soup first.
+  const fightPairs = pairDailyFights(gameState, alive);
+  report.fightPairs = fightPairs;
 
   // The Squad Leader is resolved before the choices so a spar can be broken
   // up by the leader.
@@ -186,7 +222,24 @@ export function simulateGameDay(gameState, options = {}) {
 
   // 2. Every hero chooses what to do today.
   const idleHeroes = [];
+  // A hero may spar at most ONCE per simulated day. This Set records every hero
+  // already committed to a spar so a partner is never picked twice.
+  const sparredHeroIds = new Set();
   for (const hero of alive) {
+    // A hero who is going to brawl spends the day fighting instead.
+    const inFight = fightPairs.some(
+      (p) => p.heroA.id === hero.id || p.heroB.id === hero.id
+    );
+    if (inFight) {
+      hero.currentActivity = 'fighting';
+      report.activities.push({
+        heroId: hero.id,
+        heroName: hero.name,
+        activity: 'fighting',
+      });
+      continue;
+    }
+
     const choice = chooseDailyActivity(hero, gameState, rng);
     const activity = choice.activity;
     hero.currentActivity = activity;
@@ -227,14 +280,18 @@ export function simulateGameDay(gameState, options = {}) {
         details: {},
       });
     } else if (activity === 'spar') {
-      // Sparring needs a partner who is willing and able.
-      const partner = alive.find(
-        (o) =>
-          o.id !== hero.id &&
-          o.alive &&
-          !isHeroPanicking(o) &&
-          !(o.injury && o.injury.severity === 'serious')
-      );
+      // Sparring needs a partner who is willing, able, and not already sparred
+      // today. The current hero is also skipped if they already sparred today.
+      const partner = sparredHeroIds.has(hero.id)
+        ? null
+        : alive.find(
+            (o) =>
+              o.id !== hero.id &&
+              o.alive &&
+              !isHeroPanicking(o) &&
+              !(o.injury && o.injury.severity === 'serious') &&
+              !sparredHeroIds.has(o.id)
+          );
       if (!partner) {
         // Nobody to spar with: the hero does nothing instead.
         idleHeroes.push(hero);
@@ -246,7 +303,7 @@ export function simulateGameDay(gameState, options = {}) {
           type: 'did_nothing',
           importance: EMOTION_CONFIG.REPORT_IMPORTANCE.did_nothing,
           text: `${hero.name} found nobody to spar with and did nothing today.`,
-          details: { reason: 'no_partner' },
+          details: { reason: sparredHeroIds.has(hero.id) ? 'already_sparred' : 'no_partner' },
         });
       } else {
         const spar = resolveSparringSession(hero, partner, gameState, {
@@ -255,8 +312,13 @@ export function simulateGameDay(gameState, options = {}) {
           leader,
         });
         if (spar) {
+          // Neither hero may spar again this day.
+          sparredHeroIds.add(hero.id);
+          sparredHeroIds.add(partner.id);
           report.spars = report.spars || [];
           report.spars.push(spar);
+          // The fight engine already produced the fight report events.
+          for (const event of spar.reportEvents || []) push(event);
           push({
             day,
             heroId: hero.id,
@@ -266,41 +328,17 @@ export function simulateGameDay(gameState, options = {}) {
             text: `${hero.name} sparred with ${partner.name}.`,
             details: { trainingType: 'spar', opponentId: partner.id, stoppedBy: spar.stoppedBy },
           });
-          if (spar.stoppedBy === 'iselle') {
+          for (const inj of spar.injuries || []) {
+            const victim = alive.find((h) => h.id === inj.heroId);
             push({
               day,
-              heroId: hero.id,
-              heroName: hero.name,
-              type: 'iselle_intervened',
-              importance: EMOTION_CONFIG.REPORT_IMPORTANCE.iselle_intervened,
-              text: `Iselle stepped in and separated ${hero.name} and ${partner.name}.`,
-              details: { reason: spar.stopReason, opponentId: partner.id },
+              heroId: inj.heroId,
+              heroName: victim ? victim.name : 'Unknown',
+              type: 'injured',
+              importance: EMOTION_CONFIG.REPORT_IMPORTANCE.injured,
+              text: `${victim ? victim.name : 'A hero'} took a serious ${inj.zone} wound.`,
+              details: { zone: inj.zone, severity: inj.severity },
             });
-            if (spar.lawBroken) {
-              push({
-                day,
-                heroId: hero.id,
-                heroName: hero.name,
-                type: 'law_broken',
-                importance: EMOTION_CONFIG.REPORT_IMPORTANCE.law_broken,
-                text: `${hero.name} broke a lobby law: ${spar.lawBroken}.`,
-                details: { law: spar.lawBroken },
-              });
-            }
-          }
-          if (spar.injuries && spar.injuries.length > 0) {
-            for (const inj of spar.injuries) {
-              const victim = alive.find((h) => h.id === inj.heroId);
-              push({
-                day,
-                heroId: inj.heroId,
-                heroName: victim ? victim.name : 'Unknown',
-                type: 'injured',
-                importance: EMOTION_CONFIG.REPORT_IMPORTANCE.injured,
-                text: `${victim ? victim.name : 'A hero'} took a serious ${inj.zone} wound.`,
-                details: { zone: inj.zone, severity: inj.severity },
-              });
-            }
           }
         }
       }
@@ -353,6 +391,7 @@ export function simulateGameDay(gameState, options = {}) {
             details: { cause: session.deathCause },
           });
         }
+        pushTrainingProgression(hero.id, hero.name, session);
       }
     }
 
@@ -409,18 +448,32 @@ export function simulateGameDay(gameState, options = {}) {
                 });
               }
             }
+            pushTrainingProgression(target.id, target.name, session);
           }
         }
       }
     }
   }
 
-  // 4. Heroes with enough anger and tension start unsanctioned fights.
-  for (const hero of alive) {
-    const fight = evaluateTensionFight(gameState, hero, rng);
-    if (fight.occurred) {
-      report.fights.push(fight);
-      for (const event of fight.reportEvents) push(event);
+  // 4. The fights of the day are resolved.
+  //
+  //    In the LIVE town the fight is played out in 3D by the sparring
+  //    controller, so the pairs are only recorded here. In the OFFLINE
+  //    simulation there is nobody watching, so the fights are resolved
+  //    numerically with the very same fight engine.
+  if (options.resolveFights === false) {
+    report.pendingFights = fightPairs;
+  } else {
+    for (const pair of fightPairs) {
+      const fight = resolveEmotionFight(pair.heroA, pair.heroB, gameState, {
+        rng,
+        triggerReason: pair.triggerReason,
+        leaderDistance: 999,
+      });
+      if (fight && fight.occurred) {
+        report.fights.push(fight);
+        for (const event of fight.reportEvents || []) push(event);
+      }
     }
   }
 

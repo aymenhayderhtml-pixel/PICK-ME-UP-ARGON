@@ -1,8 +1,7 @@
 // src/combat/CombatData.js
 // Universal Combat Engine Phase 1 - Master Combat Data Tables
 
-import { FIRE_SPELLS, MANA_CONFIG, calculateMaxMana } from './spells.config.js';
-export { FIRE_SPELLS, MANA_CONFIG, calculateMaxMana };
+import { FIRE_SPELLS } from './spells.config.js';
 
 export const GRADE_MULTS = Object.freeze({
   E: 0.8,
@@ -336,10 +335,6 @@ export const SQUAD_SKILLS_TABLE = Object.freeze([
     description: 'Calls down a devastating meteor with super-armor.'
   }
 ]);
-
-export function getSpellData(spellId) {
-  return SPELLS_TABLE[spellId] || null;
-}
 
 export function getMoveFrameData(weaponKind, moveName) {
   const key = `${weaponKind}.${moveName}`;

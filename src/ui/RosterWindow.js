@@ -33,6 +33,12 @@ export class RosterWindow extends SystemWindow {
 
     this.container.style.width = '880px';
     this.container.style.maxWidth = '95vw';
+    // Cap the window to the viewport: the roster columns scroll internally
+    // instead of pushing the window off the top and bottom of the screen.
+    this.container.style.maxHeight = 'calc(100vh - 40px)';
+    this.container.style.boxSizing = 'border-box';
+    // Keep the title bar at its fixed height when the window is capped.
+    this.titleBar.style.flex = '0 0 auto';
 
     this.currentTab = 'active'; // 'active' | 'equipment' | 'fallen'
     this.sortBy = 'star'; // 'star' | 'level' | 'name'
@@ -78,6 +84,9 @@ export class RosterWindow extends SystemWindow {
     this.contentElement.style.display = 'flex';
     this.contentElement.style.flexDirection = 'column';
     this.contentElement.style.gap = '10px';
+    this.contentElement.style.flex = '1 1 auto';
+    this.contentElement.style.minHeight = '0';
+    this.contentElement.style.overflow = 'hidden';
 
     // 1. Top Tabs & Controls Bar
     this.topBar = document.createElement('div');
@@ -86,6 +95,7 @@ export class RosterWindow extends SystemWindow {
     this.topBar.style.alignItems = 'center';
     this.topBar.style.borderBottom = '1px solid var(--frame-inner)';
     this.topBar.style.paddingBottom = '8px';
+    this.topBar.style.flex = '0 0 auto';
     this.contentElement.appendChild(this.topBar);
 
     this.tabsContainer = document.createElement('div');
@@ -120,7 +130,9 @@ export class RosterWindow extends SystemWindow {
     this.mainSplit = document.createElement('div');
     this.mainSplit.style.display = 'flex';
     this.mainSplit.style.gap = '16px';
-    this.mainSplit.style.minHeight = '420px';
+    this.mainSplit.style.flex = '1 1 auto';
+    this.mainSplit.style.minHeight = '0';
+    this.mainSplit.style.minWidth = '0';
     this.contentElement.appendChild(this.mainSplit);
 
     // 3. Bottom Action Bar (Stats count & New Game Hold button)
@@ -131,6 +143,7 @@ export class RosterWindow extends SystemWindow {
     this.bottomBar.style.borderTop = '1px solid var(--frame-inner)';
     this.bottomBar.style.paddingTop = '10px';
     this.bottomBar.style.marginTop = '4px';
+    this.bottomBar.style.flex = '0 0 auto';
     this.contentElement.appendChild(this.bottomBar);
 
     this.summaryText = document.createElement('div');
@@ -272,10 +285,11 @@ export class RosterWindow extends SystemWindow {
   renderEquipmentTab() {
     const leftPanel = document.createElement('div');
     leftPanel.style.width = '240px';
+    leftPanel.style.flex = '0 0 240px';
     leftPanel.style.display = 'flex';
     leftPanel.style.flexDirection = 'column';
     leftPanel.style.gap = '6px';
-    leftPanel.style.maxHeight = '420px';
+    leftPanel.style.minHeight = '0';
     leftPanel.style.overflowY = 'auto';
 
     gameState.heroes.forEach((h) => {
@@ -299,7 +313,11 @@ export class RosterWindow extends SystemWindow {
     this.mainSplit.appendChild(leftPanel);
 
     const rightPanel = document.createElement('div');
-    rightPanel.style.flex = '1';
+    rightPanel.style.flex = '1 1 auto';
+    rightPanel.style.minWidth = '0';
+    rightPanel.style.minHeight = '0';
+    rightPanel.style.boxSizing = 'border-box';
+    rightPanel.style.overflowY = 'auto';
     rightPanel.style.backgroundColor = 'rgba(8, 16, 32, 0.7)';
     rightPanel.style.border = '1px solid var(--frame-inner)';
     rightPanel.style.borderRadius = '6px';
@@ -313,8 +331,8 @@ export class RosterWindow extends SystemWindow {
 
   renderFallenTab() {
     const listWrap = document.createElement('div');
-    listWrap.style.flex = '1';
-    listWrap.style.maxHeight = '420px';
+    listWrap.style.flex = '1 1 auto';
+    listWrap.style.minHeight = '0';
     listWrap.style.overflowY = 'auto';
     listWrap.style.display = 'flex';
     listWrap.style.flexDirection = 'column';
@@ -360,6 +378,8 @@ export class RosterWindow extends SystemWindow {
     // 1. Left List Container
     const leftPanel = document.createElement('div');
     leftPanel.style.width = '300px';
+    leftPanel.style.flex = '0 0 300px';
+    leftPanel.style.minHeight = '0';
     leftPanel.style.display = 'flex';
     leftPanel.style.flexDirection = 'column';
     leftPanel.style.gap = '8px';
@@ -368,7 +388,10 @@ export class RosterWindow extends SystemWindow {
     const sortBar = document.createElement('div');
     sortBar.style.display = 'flex';
     sortBar.style.gap = '4px';
+    sortBar.style.rowGap = '4px';
+    sortBar.style.flexWrap = 'wrap';
     sortBar.style.alignItems = 'center';
+    sortBar.style.flex = '0 0 auto';
 
     const sortLabel = document.createElement('span');
     sortLabel.textContent = 'Sort:';
@@ -465,7 +488,8 @@ export class RosterWindow extends SystemWindow {
     });
 
     const listScroll = document.createElement('div');
-    listScroll.style.maxHeight = '390px';
+    listScroll.style.flex = '1 1 auto';
+    listScroll.style.minHeight = '0';
     listScroll.style.overflowY = 'auto';
     listScroll.style.display = 'flex';
     listScroll.style.flexDirection = 'column';
@@ -580,7 +604,10 @@ export class RosterWindow extends SystemWindow {
 
     // 2. Right Detail Panel
     const rightPanel = document.createElement('div');
-    rightPanel.style.flex = '1';
+    rightPanel.style.flex = '1 1 auto';
+    rightPanel.style.minWidth = '0';
+    rightPanel.style.minHeight = '0';
+    rightPanel.style.boxSizing = 'border-box';
     rightPanel.style.backgroundColor = 'rgba(8, 16, 32, 0.7)';
     rightPanel.style.border = '1px solid var(--frame-inner)';
     rightPanel.style.borderRadius = '6px';
@@ -588,6 +615,17 @@ export class RosterWindow extends SystemWindow {
     rightPanel.style.display = 'flex';
     rightPanel.style.flexDirection = 'column';
     rightPanel.style.gap = '12px';
+
+    // Scrollable body for the hero sheet. Keeping it separate from the panel
+    // lets the action buttons stay pinned to the bottom of the panel.
+    const detailBody = document.createElement('div');
+    detailBody.style.flex = '1 1 auto';
+    detailBody.style.minHeight = '0';
+    detailBody.style.overflowY = 'auto';
+    detailBody.style.display = 'flex';
+    detailBody.style.flexDirection = 'column';
+    detailBody.style.gap = '12px';
+    rightPanel.appendChild(detailBody);
 
     const selHero = gameState.heroes.find((h) => h.id === this.selectedHeroId) || heroes[0];
     if (selHero) {
@@ -636,7 +674,7 @@ export class RosterWindow extends SystemWindow {
           </div>
         </div>
       `;
-      rightPanel.appendChild(header);
+      detailBody.appendChild(header);
 
       // EXP Bar
       const expContainer = document.createElement('div');
@@ -668,7 +706,7 @@ export class RosterWindow extends SystemWindow {
       expFill.style.backgroundColor = 'var(--accent)';
       expBarBg.appendChild(expFill);
       expContainer.appendChild(expBarBg);
-      rightPanel.appendChild(expContainer);
+      detailBody.appendChild(expContainer);
 
       // Stress bar (purple)
       const stressVal = Math.round(selHero.stress || 0);
@@ -698,7 +736,7 @@ export class RosterWindow extends SystemWindow {
       stressFill.style.backgroundColor = stressVal >= 80 ? '#e879f9' : '#a84bff';
       stressBarBg.appendChild(stressFill);
       stressContainer.appendChild(stressBarBg);
-      rightPanel.appendChild(stressContainer);
+      detailBody.appendChild(stressContainer);
 
       // Three Groups Visual Bars (Mentality, Skills, Physical)
       const groupsData = getHeroThreeGroups(selHero);
@@ -750,7 +788,7 @@ export class RosterWindow extends SystemWindow {
 
         groupsPanel.appendChild(gBox);
       });
-      rightPanel.appendChild(groupsPanel);
+      detailBody.appendChild(groupsPanel);
 
       // Stats Grid (STR, INT, HP, AGI, WIL)
       const statsGrid = document.createElement('div');
@@ -780,7 +818,7 @@ export class RosterWindow extends SystemWindow {
         `;
         statsGrid.appendChild(box);
       });
-      rightPanel.appendChild(statsGrid);
+      detailBody.appendChild(statsGrid);
 
       // Talents Row
       const talentsWrap = document.createElement('div');
@@ -826,7 +864,7 @@ export class RosterWindow extends SystemWindow {
           });
         }
       }
-      rightPanel.appendChild(talentsWrap);
+      detailBody.appendChild(talentsWrap);
 
       // Skills List with level & skill XP bar
       const skillsContainer = document.createElement('div');
@@ -879,12 +917,12 @@ export class RosterWindow extends SystemWindow {
 
         skillsContainer.appendChild(skRow);
       });
-      rightPanel.appendChild(skillsContainer);
+      detailBody.appendChild(skillsContainer);
 
       // --- Emotion, training and activity panels (Phase 6) -----------------
-      rightPanel.appendChild(createEmotionBarsSection(selHero));
-      rightPanel.appendChild(createSkillsAndCombiningSection(selHero));
-      rightPanel.appendChild(createActivityHistorySection(selHero));
+      detailBody.appendChild(createEmotionBarsSection(selHero));
+      detailBody.appendChild(createSkillsAndCombiningSection(selHero));
+      detailBody.appendChild(createActivityHistorySection(selHero));
 
       // Top 3 Bonds List
       const bondsWrap = document.createElement('div');
@@ -929,7 +967,7 @@ export class RosterWindow extends SystemWindow {
         });
         bondsWrap.appendChild(bRow);
       }
-      rightPanel.appendChild(bondsWrap);
+      detailBody.appendChild(bondsWrap);
 
       // Party Slot Status
       const inParty = gameState.isInParty(selHero.id);
@@ -942,13 +980,13 @@ export class RosterWindow extends SystemWindow {
       partyStatus.innerHTML = inParty
         ? `<span style="color:#00ffcc; font-weight:bold;">Deploy Status: In Party (Slot ${slot} &bull; ${formation.toUpperCase()})</span>`
         : `<span style="color:#888888;">Deploy Status: Standby in Dormitory</span>`;
-      rightPanel.appendChild(partyStatus);
+      detailBody.appendChild(partyStatus);
 
       // Actions Row: Party Button, Promote Button, Synthesize Button
       const actionsRow = document.createElement('div');
       actionsRow.style.display = 'flex';
       actionsRow.style.gap = '8px';
-      actionsRow.style.marginTop = 'auto';
+      actionsRow.style.flex = '0 0 auto';
 
       // Party Toggle Button
       const partyBtn = document.createElement('button');

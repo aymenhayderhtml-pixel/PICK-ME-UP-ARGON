@@ -30,3 +30,6 @@ docs/screenshots_v1/
 docs/screenshots_v2/
 docs/screenshots_slice2/
 docs/screenshots_slice3/
+
+# Rewritten on every dev-server load by the /screenshot middleware in vite.config.js
+screenshot_hub.png

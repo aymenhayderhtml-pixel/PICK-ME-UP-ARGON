@@ -9,15 +9,15 @@ function createTextSprite(text, isSign = false) {
 import { showSystemMessage } from '../ui/Hud.js';
 import { showHeroDeathNotice, showSystemNotice } from '../ui/Notices.js';
 import { spawnSparks } from '../combat/Combat.js';
-import { addSkillExp, rollStatFromSkill } from '../data/skills.js';
+import { rollStatFromSkill } from '../data/skills.js';
 import { HeroRig } from '../art/HeroRig.js';
 import { generateLook } from '../art/looks.js';
+import { LAYOUT } from '../art/town/layout.js';
 import { getHeroLoadout } from '../core/loadout.js';
 import { onEquipmentChanged } from '../core/equipmentEvents.js';
 import { PunishmentEffect } from './PunishmentEffect.js';
-import { TRAINING_CONFIG } from '../data/training.config.js';
+import { awardLiveTrainingTickXp } from '../core/TrainingEngine.js';
 
-const LIVE_ACTION_XP_PER_HIT = TRAINING_CONFIG.LIVE_ACTION_XP_PER_HIT;
 
 const DORM_DOOR = new THREE.Vector3(-18, 0, -4);
 const DUMMY_STANDS = [
@@ -252,14 +252,22 @@ export class HubHeroNPC {
   }
 
   startArrivalBehavior() {
-    const sy = this.getGroundY ? this.getGroundY(23.5, 11.5) : 3.4;
-    this.mesh.position.set(23.5, sy, 11.5);
+    // Walk out of the Summoning Room the way a person would: down the ramp
+    // (the stairs) and over the Landing Area steps. The route comes from the
+    // town layout, so the gacha walkout, the tutorial walkout and the nav grid
+    // all use the same stair path instead of a straight line across the
+    // ramp railing.
+    const route = (LAYOUT.zones.summoning_room?.doorCorridor || []).slice(1);
+    const landing = { x: 20.0, z: 26.0 };
+    const startX = route.length ? route[0].x : 23.5;
+    const startZ = route.length ? route[0].z : 11.5;
+    const groundAt = (x, z) => (this.getGroundY ? this.getGroundY(x, z) : 0);
+    const sy = groundAt(startX, startZ);
+    this.mesh.position.set(startX, sy, startZ);
 
     this.corridorQueue = [
-      new THREE.Vector3(23.5, this.getGroundY ? this.getGroundY(23.5, 11.5) : 3.4, 11.5),
-      new THREE.Vector3(21.5, this.getGroundY ? this.getGroundY(21.5, 14.0) : 1.5, 14.0),
-      new THREE.Vector3(20.0, this.getGroundY ? this.getGroundY(20.0, 18.0) : 0.0, 18.0),
-      new THREE.Vector3(20.0, this.getGroundY ? this.getGroundY(20.0, 26.0) : 0.0, 26.0),
+      ...route.map((p) => new THREE.Vector3(p.x, groundAt(p.x, p.z), p.z)),
+      new THREE.Vector3(landing.x, groundAt(landing.x, landing.z), landing.z),
     ];
     this.corridorIndex = 0;
     this.state = 'walk_corridor';
@@ -292,11 +300,23 @@ export class HubHeroNPC {
     });
   }
 
-  showSpeechBubble(text, duration = 3.5) {
-    if (this.speechBubble) {
-      this.mesh.remove(this.speechBubble);
-      this.speechBubble = null;
+  /**
+   * Removes the current speech bubble from its parent and disposes its canvas
+   * texture and material so repeated bubbles do not leak GPU memory.
+   */
+  disposeSpeechBubble() {
+    if (!this.speechBubble) return;
+    const bubble = this.speechBubble;
+    this.speechBubble = null;
+    if (bubble.parent) bubble.parent.remove(bubble);
+    if (bubble.material) {
+      if (bubble.material.map) bubble.material.map.dispose();
+      bubble.material.dispose();
     }
+  }
+
+  showSpeechBubble(text, duration = 3.5) {
+    this.disposeSpeechBubble();
     this.speechBubble = createSpeechBubbleSprite(text, false);
     this.speechBubble.position.set(0, 3.1, 0);
     this.mesh.add(this.speechBubble);
@@ -304,10 +324,7 @@ export class HubHeroNPC {
   }
 
   showAngryBubble(duration = 2.0) {
-    if (this.speechBubble) {
-      this.mesh.remove(this.speechBubble);
-      this.speechBubble = null;
-    }
+    this.disposeSpeechBubble();
     this.speechBubble = createSpeechBubbleSprite('!', true);
     this.speechBubble.position.set(0, 3.1, 0);
     this.mesh.add(this.speechBubble);
@@ -565,13 +582,19 @@ export class HubHeroNPC {
             : this.dailyActivity === 'train_archery'
               ? 'archery'
               : 'magic';
+        // A manual Training Window slot pins the skill that is trained.
+        const pinnedSlot = (gameState.trainingSlots || []).find(
+          (s) => s && s.heroId === this.heroData.id
+        );
+        const defaultSkillId =
+          this.dailyActivity === 'train_dummy'
+            ? 'basic_swordsmanship'
+            : this.dailyActivity === 'train_archery'
+              ? 'basic_archery'
+              : 'basic_fire_magic';
+        const trainedSkillId = (pinnedSlot && pinnedSlot.skillId) || defaultSkillId;
         this.trainingSkill = {
-          id:
-            this.dailyActivity === 'train_dummy'
-              ? 'basic_swordsmanship'
-              : this.dailyActivity === 'train_archery'
-                ? 'basic_archery'
-                : 'basic_fire_magic',
+          id: trainedSkillId,
           name: 'Training',
           level: 1,
           exp: 0,
@@ -588,6 +611,12 @@ export class HubHeroNPC {
             slot.target.z - this.mesh.position.z
           );
         });
+        return true;
+      }
+
+      case 'fighting': {
+        // The sparring controller drives the brawl. The NPC only has to hold
+        // its ground until the fight starts.
         return true;
       }
 
@@ -647,6 +676,12 @@ export class HubHeroNPC {
         clearInterval(fadeInterval);
         showHeroDeathNotice(this.heroData, 'Suicide due to stress');
         this.destroy();
+        // Remove the dead avatar from the manager so it is no longer ticked as
+        // a zombie, and free its remaining meshes.
+        if (this.heroesManager) {
+          this.heroesManager.npcs = this.heroesManager.npcs.filter((n) => n !== this);
+        }
+        this.disposeMeshes();
         gameState.killHero(heroId, gameState.currentFloor || 1, 'Suicide due to stress');
         gameState.saveToLocalStorage();
       }
@@ -714,8 +749,7 @@ export class HubHeroNPC {
     if (this.speechBubbleTimer > 0) {
       this.speechBubbleTimer -= delta;
       if (this.speechBubbleTimer <= 0 && this.speechBubble) {
-        this.mesh.remove(this.speechBubble);
-        this.speechBubble = null;
+        this.disposeSpeechBubble();
       }
     }
 
@@ -829,34 +863,33 @@ export class HubHeroNPC {
 
       this.updateRigPose(delta, { action: trainPose, actionTime: this.animTime, mood: 'neutral' }, camera, hanPos);
 
-      // Every 5s: skill EXP (x1.5 for diligent) & +3 fatigue
+      // Every 5s: ONE training XP tick through the shared engine. The engine
+      // applies the 5 second cooldown, so the manual Training Window and this
+      // autonomous path can never award the same tick twice.
       if (this.trainingExpTimer >= 5.0) {
         this.trainingExpTimer -= 5.0;
-        const tgLevel = (gameState.facilities?.training?.level) || 1;
-        const isDiligent = this.heroData.motivation === 'diligent';
-        // Live action XP: the per-strike value of the zone times the number of
-        // strikes in a 5 second window. All numbers live in the config.
-        const perHit = LIVE_ACTION_XP_PER_HIT[this.trainingZone] ?? LIVE_ACTION_XP_PER_HIT.dummy;
-        const expGain = Math.round(perHit * 5 * (1 + (tgLevel - 1) * 0.10) * (isDiligent ? 1.5 : 1.0));
-        this.heroData.fatigue = Math.min(100, (this.heroData.fatigue || 0) + 3);
+        const result = awardLiveTrainingTickXp(
+          this.heroData,
+          this.trainingZone,
+          this.trainingSkill ? this.trainingSkill.id : null,
+          gameState,
+          Date.now()
+        );
 
-        if (this.trainingSkill) {
-          addSkillExp(this.heroData, this.trainingSkill.id, expGain);
+        if (result.awarded) {
           gameState.checkTalentReveal(this.heroData);
         }
 
-        if (gameState.trainingSlots && gameState.trainingSlots[this.trainingSlot]) {
-          gameState.trainingSlots[this.trainingSlot].expGained = (gameState.trainingSlots[this.trainingSlot].expGained || 0) + expGain;
-        }
-
         // Sparks fly off whatever the hero is hitting.
-        if (this.trainingTargetPos) {
-          spawnSparks(this.scene, this.trainingTargetPos, 0xffaa44, 4);
-        } else {
-          const dummyZ = 18.0;
-          const dummyX = [-26.4, -24.0, -21.6][this.trainingSlot] || this.mesh.position.x;
-          const dummyY = (getGroundY ? getGroundY(dummyX, dummyZ) : 0) + 1.0;
-          spawnSparks(this.scene, new THREE.Vector3(dummyX, dummyY, dummyZ), 0xffaa44, 4);
+        if (result.awarded) {
+          if (this.trainingTargetPos) {
+            spawnSparks(this.scene, this.trainingTargetPos, 0xffaa44, 4);
+          } else {
+            const dummyZ = 18.0;
+            const dummyX = [-26.4, -24.0, -21.6][this.trainingSlot] || this.mesh.position.x;
+            const dummyY = (getGroundY ? getGroundY(dummyX, dummyZ) : 0) + 1.0;
+            spawnSparks(this.scene, new THREE.Vector3(dummyX, dummyY, dummyZ), 0xffaa44, 4);
+          }
         }
       }
 
@@ -1029,11 +1062,32 @@ export class HubHeroNPC {
     enforceGround();
   }
 
+  /** Disposes the label sprite and every geometry/material under the mesh. */
+  disposeMeshes() {
+    if (this.labelSprite) {
+      if (this.labelSprite.material) {
+        if (this.labelSprite.material.map) this.labelSprite.material.map.dispose();
+        this.labelSprite.material.dispose();
+      }
+      this.labelSprite = null;
+    }
+    if (this.mesh) {
+      this.mesh.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (child.material.map) child.material.map.dispose();
+          child.material.dispose();
+        }
+      });
+    }
+  }
+
   destroy() {
     if (this.trainingSlot !== null && gameState.trainingSlots) {
       gameState.trainingSlots[this.trainingSlot] = null;
       this.trainingSlot = null;
     }
+    this.disposeSpeechBubble();
     if (this.rig) {
       this.rig.dispose();
     }

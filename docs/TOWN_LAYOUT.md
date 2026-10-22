@@ -31,7 +31,7 @@ Single source of truth reference for the hub town layout in *Pick Me Up: Infinit
 | `pad_synthesis` | 0.0 | -32.0 | 10.0 m | +1.2 m | Elevated Synthesis Chamber terrace |
 | `pad_landing` | 20.0 | 26.0 | 14.0 m | 0.0 m | Flat Landing Area plaza |
 | `pad_town_square` | 14.0 | -8.0 | 12.0 m | 0.0 m | Flat Town Square central hub |
-| `pad_rift` | 27.0 | -27.0 | 8.0 m | 0.0 m | Space-Time Rift portal gate area |
+| `pad_rift` | 31.0 | -31.0 | 8.0 m | 0.0 m | Space-Time Rift portal gate area |
 | `pad_armory` | -6.0 | -20.0 | 8.0 m | 0.0 m | Armory and forge grounds |
 | `pad_residences` | -26.0 | -4.0 | 15.0 m | 0.0 m | Cottage cluster plateau |
 | `pad_training` | -24.0 | 20.0 | 13.0 m | 0.0 m | Packed dirt training field |
@@ -47,7 +47,7 @@ Single source of truth reference for the hub town layout in *Pick Me Up: Infinit
 | `landing_area` | Landing Area | (20.0, 26.0) | Circle R = 8.0m (terrace R = 14m) | 0.0 | (20.0, 0.0, 16.0) | (0, 0, -1) | 8.0 m | LANDING AREA |
 | `summoning_room` | Summoning Room | (30.0, 4.0) | Cylinder R = 10.0m, H = 11.0m | 0.0 | (23.5, 1.8, 11.5) | (-0.41, 0, 0.91) | 8.5 m | SUMMONING ROOM |
 | `town_square` | Town Square | (14.0, -8.0) | Circle R = 11.0m (wheel emblem) | 0.0 | *Open Plaza* | *None* | 8.0 m | TOWN SQUARE |
-| `space_time_rift` | Space-Time Rift | (27.0, -27.0) | Box 6.5 × 10.0 × 2.5m | 0.0 | (27.0, 0.0, -25.5) | (0, 0, 1) | 4.5 m | SPACE-TIME RIFT |
+| `space_time_rift` | Space-Time Rift | (32.53, -32.53) | Box 6.5 × 10.0 × 2.5m | 0.0 | (31.11, 0.0, -31.11) | (-0.71, 0, 0.71) | 4.5 m | SPACE-TIME RIFT |
 | `synthesis_chamber`| Synthesis Chamber | (0.0, -32.0) | Cylinder R = 8.2m, H = 9.0m | 0.0 | (0.0, 0.0, -23.8) | (0, 0, 1) | 7.5 m | SYNTHESIS CHAMBER |
 | `armory` | Armory | (-6.0, -20.0) | Box 10.5 × 4.5 × 5.0m (with forge) | 0.0 | (-6.0, 0.0, -17.4) | (0, 0, 1) | 4.5 m | ARMORY |
 | `training_grounds` | Training Grounds | (-24.0, 20.0) | Box 16.0 × 2.5 × 16.0m | 0.0 | (-18.0, 0.0, 18.0) | (1, 0, 0) | 8.5 m | TRAINING GROUNDS |
@@ -92,7 +92,7 @@ Every cottage is half-timbered with white plaster walls, dark timber corner post
 | :--- | :---: | :---: | :---: | :--- |
 | `road_square_landing` | (14.0, -8.0) | (20.0, 26.0) | 4.8 m | Town Square to Landing Area |
 | `road_square_summoning` | (14.0, -8.0) | (26.0, 4.0) | 4.5 m | Town Square to Summoning Room Stair |
-| `road_square_rift` | (14.0, -8.0) | (27.0, -27.0) | 5.0 m | Town Square to Space-Time Rift Gate |
+| `road_square_rift` | (14.0, -8.0) | (29.5, -29.5) | 5.0 m | Town Square to Space-Time Rift Gate |
 | `road_square_synthesis` | (14.0, -8.0) | (0.0, -32.0) | 4.5 m | Town Square to Synthesis Chamber |
 | `road_square_armory` | (14.0, -8.0) | (-6.0, -20.0) | 4.2 m | Town Square to Armory & Forge |
 | `road_square_residences`| (14.0, -8.0) | (-26.0, -4.0) | 5.0 m | Town Square to Residences Entrance |
@@ -110,7 +110,7 @@ Every building entryway defines 3 waypoints: `[Inside Point, Door Point, Outside
 | :--- | :---: | :---: | :---: |
 | `landing_area` | (20.0, 26.0) | (20.0, 16.0) | (20.0, 13.0) |
 | `summoning_room` | (30.0, 4.0) | (23.5, 11.5) | (19.5, 20.0) |
-| `space_time_rift` | (27.0, -27.0) | (27.0, -25.5) | (27.0, -23.0) |
+| `space_time_rift` | (32.53, -32.53) | (31.11, -31.11) | (28.5, -28.5) |
 | `synthesis_chamber`| (0.0, -32.0) | (0.0, -23.8) | (0.0, -20.0) |
 | `armory` | (-6.0, -20.0) | (-6.0, -17.4) | (-6.0, -14.0) |
 | `training_grounds` | (-24.0, 20.0) | (-18.0, 18.0) | (-15.0, 18.0) |

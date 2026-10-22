@@ -271,11 +271,6 @@ export function getItemIcon(item) {
   return canvas;
 }
 
-export function getItemIconDataUrl(item) {
-  const canvas = getItemIcon(item);
-  return canvas.toDataURL();
-}
-
 export class ItemPreviewViewer {
   constructor(size = 140) {
     this.size = size;

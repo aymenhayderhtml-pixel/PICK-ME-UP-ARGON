@@ -1,36 +1,11 @@
 import * as THREE from 'three';
+import { getAudioContext } from '../core/AudioManager.js';
 
 // 1. WebAudio Synthesizer for Parry Ping
-let audioCtx = null;
-let hasUserGesture = false;
-
-if (typeof window !== 'undefined') {
-  const markGesture = () => {
-    hasUserGesture = true;
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(() => {});
-    }
-  };
-  window.addEventListener('pointerdown', markGesture, { once: true, passive: true });
-  window.addEventListener('keydown', markGesture, { once: true, passive: true });
-}
-
 export function playParrySound() {
   try {
-    if (typeof window === 'undefined' || !hasUserGesture) return;
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
-
-    if (!audioCtx) {
-      try {
-        audioCtx = new AudioContextClass();
-      } catch (e) {
-        return;
-      }
-    }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(() => {});
-    }
+    const audioCtx = getAudioContext();
+    if (!audioCtx) return;
 
     const t = audioCtx.currentTime;
     const osc = audioCtx.createOscillator();
@@ -137,62 +112,3 @@ export function spawnSparks(scene, position, color = 0xffea00, count = 16) {
   requestAnimationFrame(anim);
 }
 
-// 4. Splinter Particle Burst when Item Breaks
-export function spawnSplinters(scene, position, color = 0x8b5a2b, count = 18) {
-  if (!scene || !position) return;
-
-  const splinters = [];
-  const geo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
-
-  for (let i = 0; i < count; i++) {
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(
-      position.x + (Math.random() - 0.5) * 0.3,
-      position.y + (Math.random() - 0.5) * 0.3,
-      position.z + (Math.random() - 0.5) * 0.3
-    );
-    scene.add(mesh);
-
-    const angle = Math.random() * Math.PI * 2;
-    const speed = 2.5 + Math.random() * 4.5;
-    splinters.push({
-      mesh,
-      vx: Math.cos(angle) * speed,
-      vy: 2.0 + Math.random() * 4.0,
-      vz: Math.sin(angle) * speed,
-      rx: (Math.random() - 0.5) * 12,
-      ry: (Math.random() - 0.5) * 12,
-    });
-  }
-
-  let elapsed = 0;
-  const duration = 0.5;
-
-  const anim = () => {
-    elapsed += 0.016;
-    const p = Math.min(1.0, elapsed / duration);
-
-    for (const sp of splinters) {
-      sp.mesh.position.x += sp.vx * 0.016;
-      sp.mesh.position.y += sp.vy * 0.016;
-      sp.mesh.position.z += sp.vz * 0.016;
-      sp.vy -= 14.0 * 0.016; // Heavy gravity
-
-      sp.mesh.rotation.x += sp.rx * 0.016;
-      sp.mesh.rotation.y += sp.ry * 0.016;
-      sp.mesh.scale.setScalar(Math.max(0.1, 1.0 - p));
-    }
-
-    if (p < 1.0) {
-      requestAnimationFrame(anim);
-    } else {
-      for (const sp of splinters) {
-        scene.remove(sp.mesh);
-      }
-      geo.dispose();
-      mat.dispose();
-    }
-  };
-  requestAnimationFrame(anim);
-}

@@ -157,12 +157,16 @@ export const EMOTION_CONFIG = Object.freeze({
     iselle_intervened: 90,
     law_broken: 88,
     fought_hero: 85,
+    fight_ended: 84,
+    fight_won: 83,
+    fight_lost: 82,
     injured: 80,
     skill_combined: 75,
     new_skill: 70,
     level_up: 65,
     leader_ordered: 55,
     got_scared: 45,
+    sanctioned_bout: 42,
     trained: 40,
     ate: 25,
     rested: 20,
@@ -170,6 +174,144 @@ export const EMOTION_CONFIG = Object.freeze({
   }),
   REPORT_HISTORY_MAX: 5,
   ACTIVITY_HISTORY_MAX: 10,
+
+  // =========================================================================
+  // PHASE 2 - FIGHT AI AND EMOTION-DRIVEN FIGHTS
+  // =========================================================================
+
+  // --- Fight trigger -------------------------------------------------------
+  // Condition A: anger at or above this, against a high tension or low
+  // intimacy rival. Condition B: fear AND hunger both high.
+  FIGHT_FEAR_THRESHOLD: 55,
+  FIGHT_HUNGER_THRESHOLD: 65,
+  MAX_FIGHTS_PER_HERO_PER_DAY: 1,
+  MAX_TOWN_FIGHTS_PER_DAY: 2,
+  FIGHT_NO_PARTNER_ANGER_GAIN: 5,
+
+  // Town plaza positions for an unsanctioned fight. They are deliberately
+  // outside the sparring ring (centre -18.7, 23.3) so a fight there always
+  // breaks NO_OUTSIDE_FIGHTING.
+  UNSANCTIONED_FIGHT_SPOT_A: Object.freeze({ x: -8.5, z: 14.0 }),
+  UNSANCTIONED_FIGHT_SPOT_B: Object.freeze({ x: -6.7, z: 14.0 }),
+
+  // --- Fight AI ------------------------------------------------------------
+  FIGHT_AI_DECISION_INTERVAL_SEC: 0.9,
+  FIGHT_AI_MIN_DWELL_SEC: 1.8,
+  FIGHT_AI_HYSTERESIS_RATIO: 1.35,
+  FIGHT_AI_CURRENT_ACTION_STICKINESS_MULT: 1.25,
+
+  FIGHT_DEFAULT_MANA: 100,
+  FIGHT_CAST_MIN_MANA: 20,
+  FIGHT_CAST_MANA_COST: 20,
+
+  // Fallback weapon per hero class, used when the hero carries no weapon.
+  FIGHT_CLASS_DEFAULT_WEAPON: Object.freeze({
+    vanguard: 'sword',
+    'vanguard tank': 'sword',
+    knight: 'sword',
+    berserker: 'sword',
+    valkyrie: 'spear',
+    scout: 'bow',
+    mage: 'staff',
+    'fire mage': 'staff',
+    healer: 'staff',
+    artisan: 'sword',
+    novice: 'sword',
+  }),
+
+  // Base action weights, engagement range and low HP flee scaling per weapon.
+  FIGHT_WEAPON_STYLES: Object.freeze({
+    sword: Object.freeze({
+      id: 'sword', preferredRange: 1.8, tooCloseRange: 0.8, lowHpFleeMult: 1.0,
+      baseWeights: Object.freeze({ attack: 48, defend: 28, retreat: 8, cast: 0, aim: 0, switch_target: 0, flee: 4 }),
+    }),
+    spear: Object.freeze({
+      id: 'spear', preferredRange: 2.4, tooCloseRange: 1.0, lowHpFleeMult: 1.0,
+      baseWeights: Object.freeze({ attack: 50, defend: 26, retreat: 10, cast: 0, aim: 0, switch_target: 0, flee: 4 }),
+    }),
+    dagger: Object.freeze({
+      id: 'dagger', preferredRange: 1.4, tooCloseRange: 0.6, lowHpFleeMult: 1.15,
+      baseWeights: Object.freeze({ attack: 54, defend: 20, retreat: 12, cast: 0, aim: 0, switch_target: 0, flee: 6 }),
+    }),
+    shield: Object.freeze({
+      id: 'shield', preferredRange: 1.6, tooCloseRange: 0.7, lowHpFleeMult: 0.8,
+      baseWeights: Object.freeze({ attack: 34, defend: 44, retreat: 8, cast: 0, aim: 0, switch_target: 0, flee: 3 }),
+    }),
+    bow: Object.freeze({
+      id: 'bow', preferredRange: 6.5, tooCloseRange: 2.8, lowHpFleeMult: 1.65,
+      baseWeights: Object.freeze({ attack: 10, defend: 10, retreat: 18, cast: 0, aim: 52, switch_target: 0, flee: 8 }),
+    }),
+    staff: Object.freeze({
+      id: 'staff', preferredRange: 6.0, tooCloseRange: 2.5, lowHpFleeMult: 1.35,
+      baseWeights: Object.freeze({ attack: 8, defend: 14, retreat: 18, cast: 54, aim: 0, switch_target: 0, flee: 6 }),
+    }),
+  }),
+
+  // --- Fight AI weight modifiers -------------------------------------------
+  FIGHT_LOW_HP_RATIO: 0.35,
+  FIGHT_LOW_HP_DEFEND_BONUS: 30,
+  FIGHT_LOW_HP_RETREAT_BONUS: 35,
+  FIGHT_LOW_HP_FLEE_BONUS: 45,
+  FIGHT_LOW_HP_ATTACK_PENALTY: 0.6,
+  FIGHT_LOW_HP_ATTACK_MIN_MULT: 0.25,
+
+  FIGHT_FEAR_RETREAT_BONUS: 35,
+  FIGHT_FEAR_FLEE_BONUS: 40,
+  FIGHT_HIGH_FEAR_FLEE_SURGE: 20,
+  FIGHT_FEAR_ATTACK_PENALTY: 0.65,
+  FIGHT_FEAR_ATTACK_MIN_MULT: 0.2,
+
+  FIGHT_PANIC_FLEE_BONUS: 60,
+  FIGHT_PANIC_RETREAT_BONUS: 30,
+
+  FIGHT_ANGER_ATTACK_BONUS_MULT: 0.85,
+  FIGHT_ANGER_DEFEND_PENALTY: 0.55,
+  FIGHT_ANGER_DEFEND_MIN_MULT: 0.3,
+  FIGHT_ANGER_RETREAT_PENALTY: 0.65,
+  FIGHT_ANGER_RETREAT_MIN_MULT: 0.2,
+
+  FIGHT_SWITCH_TARGET_BASE_WEIGHT: 8,
+  FIGHT_ANGER_SWITCH_TARGET_BONUS: 28,
+
+  FIGHT_MENTALITY_DEFEND_BONUS: 25,
+  FIGHT_MENTALITY_AIM_BONUS: 25,
+  FIGHT_LOW_MENTALITY_FLEE_BONUS: 30,
+
+  FIGHT_RANGE_CLOSE_RETALIATE_BONUS: 30,
+  FIGHT_OUT_OF_RANGE_ATTACK_BONUS: 18,
+  FIGHT_SANCTIONED_FLEE_MULT: 0.5,
+
+  FIGHT_TARGET_LOW_HP_WEIGHT: 60,
+  FIGHT_TARGET_CLOSE_DIST_WEIGHT: 40,
+
+  FIGHT_FLEE_SPEED_MULT: 1.25,
+  FIGHT_FLEE_FATIGUE_GAIN: 10,
+  FIGHT_FLEE_FEAR_GAIN: 8,
+  FIGHT_FATIGUE_GAIN: 20,
+
+  // --- Iselle fight intervention (Phase 2) ---------------------------------
+  ISELLE_UNSANCTIONED_MIN_DETECT_SEC: 4.5,
+  ISELLE_INTERVENE_MOVE_SPEED: 4.5,
+  ISELLE_SEPARATION_DISTANCE: 2.4,
+  ISELLE_INTERVENE_WALK_DURATION_SEC: 0.8,
+  ISELLE_INTERVENE_BEAM_DURATION_SEC: 0.6,
+  ISELLE_INTERVENE_HEAL_DURATION_SEC: 0.8,
+  ISELLE_INTERVENE_RELEASE_DELAY_SEC: 0.3,
+  ISELLE_INTERVENE_TOTAL_DURATION_SEC: 2.5,
+
+  // --- Fight consequences ---------------------------------------------------
+  FIGHT_WIN_MOTIVATION_GAIN: 6,
+  FIGHT_LOSS_MOTIVATION_DELTA: -8,
+  FIGHT_DRAW_MOTIVATION_DELTA: -2,
+  FIGHT_WIN_FEAR_GAIN: 0,
+  FIGHT_DRAW_FEAR_GAIN: 6,
+  FIGHT_WIN_ANGER_DELTA: -10,
+  FIGHT_UNSANCTIONED_INTIMACY_DELTA: -8,
+  FIGHT_UNSANCTIONED_TENSION_GAIN: 12,
+  FIGHT_CLEAN_SPAR_INTIMACY_GAIN: 5,
+  FIGHT_CLEAN_SPAR_TENSION_DELTA: -6,
+  FIGHT_INTENSE_SPAR_INTIMACY_GAIN: 2,
+  FIGHT_INTENSE_SPAR_TENSION_GAIN: 4,
 });
 
 /**

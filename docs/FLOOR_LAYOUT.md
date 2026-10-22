@@ -1,9 +1,10 @@
 # FLOOR LAYOUT
 
 `src/world/floorLayouts.js` is the single source of truth for the walkable geometry of
-tower floors. `FarmFloor.js` (floor 1) and `ForestFloor.js` (floors 2 to 5) build their
-scene geometry, colliders, spawn data and walkability from the layout returned by
-`generateFloorLayout(floorNumber, seed)` instead of hardcoding positions. The module is
+tower floors. `src/world/TowerFloor.js` builds the scene geometry, colliders, spawn data and
+walkability of every floor from the layout returned by
+`generateFloorLayout(floorNumber, seed)` instead of hardcoding positions; the biome
+art modules in `src/art/floors/` build the dressing on top of the same layout. The module is
 pure JavaScript (no THREE import); positions are plain `{ x, z }` objects, so the layout
 can be dumped, tested and consumed by art modules without touching the renderer.
 
@@ -38,10 +39,10 @@ is deterministic.
 | `ambushSpots` | `{ x, z }[]` | Spots where enemies can hide for ambushes (flanks of clearings and chokes). | Enemy AI, art markers |
 | `startPosition` | `{ x, z }` | Player spawn. | TowerScene, party slots |
 | `exitPosition` | `{ x, z }` | Floor exit / stairs. | Exit gate, TowerScene |
-| `exitGate` | `{ position, rotationY, width }` | Exit barrier gate. Opens when the floor is cleared. | ForestFloor/FarmFloor gate mesh |
+| `exitGate` | `{ position, rotationY, width }` | Exit barrier gate. Opens when the floor is cleared. | TowerFloor gate mesh |
 | `entranceBarrier` | `{ position, rotationY, width }` | Barrier behind the entrance that seals once the player commits. | Entrance gate mesh |
 | `bossArena` | `null` or `{ center, radius, pillars, wallSegments, entrance }` | Floor 5 only. `pillars` are `{ id, x, z, radius, height }`, `wallSegments` are `{ x, z, length, rotationY }` (ruined walls with two outer gaps), `entrance` is `{ position, rotationY, width }` for the arena gap. | Pillar destruction, arena art |
-| `campSpots` | `{ x, z, radius, type }[]` | Decorative/progression spots. `type` is `'camp'` (goblin camp), `'ruin'` (broken walls), `'farm'` (farmhouse area), `'well'` or `'temple'` (floor 1 landmarks). | Props (ForestProps, farm props) |
+| `campSpots` | `{ x, z, radius, type }[]` | Decorative/progression spots. `type` is `'camp'` (goblin camp), `'ruin'` (broken walls), `'farm'` (farmhouse area), `'well'` or `'temple'` (floor 1 landmarks). | Props (tower props, farm props) |
 | `obstacles` | `{ x, z, radius }[]` | Static circular colliders that block movement (fence posts, tree trunks, columns, farmhouse, well, hay bales, choke trees). Included so `walkable` can be reconstructed exactly. | Colliders, prop placement, walkability |
 | `walkable(x, z)` | `(number, number) => boolean` | Static walkability of the generated layout. | Floor `isWalkable` wrappers |
 | `getGroundY(x, z)` | `(number, number) => number` | Ground height. Currently returns 0 for every floor (all floors are flat), kept for future heightmaps. | Ground, movement |
@@ -1213,5 +1214,5 @@ then clearing centres, then midpoints, then spawn points (per clearing, per spaw
 ambush spots, then the choke flankers. Changing the number or order of `rng()` calls
 shifts every downstream value and therefore the whole floor - treat the order as part of
 the layout contract. The scene-level decoration streams (trees, mud patches, fireflies in
-`ForestFloor.js`) continue after the layout consumes its share, so those visuals depend
+`src/world/TowerFloor.js`) continue after the layout consumes its share, so those visuals depend
 on this order implicitly (that is accepted; gameplay does not).

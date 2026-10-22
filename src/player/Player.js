@@ -90,6 +90,20 @@ export class Player {
     this.gravity = 20;
     this.animTime = 0;
 
+    // Town obstacle collision (hub only). The walk-height map decides where
+    // the hero STANDS; LAND_ONLY drops every prop from it, so these shapes
+    // are what actually stop him (fences, tree trunks, boulders, walls).
+    this.townBlockers = [];
+    this.blockerRadius = 0.4;
+    this.blockerSkin = 0.02;
+    this.blockerCellSize = 4.0;
+    this.blockerPasses = 2;
+    this.blockerGrid = null;
+    this.blockerGridW = 0;
+    this.blockerGridH = 0;
+    this.blockerGridMinX = 0;
+    this.blockerGridMinZ = 0;
+
     // Combat Stats & Resources
     this.hp = 100;
     this.maxHp = 100;
@@ -941,6 +955,188 @@ export class Player {
     this.mesh.position.z += dirZ * (force * 0.15);
   }
 
+  /**
+   * Installs the town obstacle shapes (hub only). The list never changes
+   * while the hub is loaded, so the broadphase grid is built once here.
+   *
+   * @param {Array} blockers Data-only shapes: { type:'circle', x, z, r } or
+   *        { type:'box', x, z, hx, hz, rot } (rot is a Three.js Y rotation).
+   * @param {Object} config { radius, skin, cellSize, passes }
+   */
+  setTownBlockers(blockers, config) {
+    this.townBlockers = Array.isArray(blockers) ? blockers : [];
+    const cfg = config || {};
+    this.blockerRadius = cfg.radius ?? 0.4;
+    this.blockerSkin = cfg.skin ?? 0.02;
+    this.blockerCellSize = cfg.cellSize ?? 4.0;
+    this.blockerPasses = cfg.passes ?? 2;
+    this.buildBlockerGrid();
+  }
+
+  /** Uniform grid broadphase: every shape is filed under the cells it covers. */
+  buildBlockerGrid() {
+    this.blockerGrid = null;
+    this.blockerGridW = 0;
+    this.blockerGridH = 0;
+
+    const list = this.townBlockers;
+    if (!list || list.length === 0) return;
+
+    const cs = this.blockerCellSize;
+    const pad = this.blockerRadius + this.blockerSkin;
+    let minX = Infinity;
+    let minZ = Infinity;
+    let maxX = -Infinity;
+    let maxZ = -Infinity;
+
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      let ex = 0;
+      let ez = 0;
+      if (c.type === 'box') {
+        const rot = c.rot || 0;
+        const ac = Math.abs(Math.cos(rot));
+        const as = Math.abs(Math.sin(rot));
+        ex = c.hx * ac + c.hz * as;
+        ez = c.hx * as + c.hz * ac;
+      }
+      ex += pad;
+      ez += pad;
+      if (c.x - ex < minX) minX = c.x - ex;
+      if (c.x + ex > maxX) maxX = c.x + ex;
+      if (c.z - ez < minZ) minZ = c.z - ez;
+      if (c.z + ez > maxZ) maxZ = c.z + ez;
+    }
+
+    this.blockerGridMinX = minX - cs;
+    this.blockerGridMinZ = minZ - cs;
+    const w = Math.max(1, Math.ceil((maxX - minX) / cs) + 2);
+    const h = Math.max(1, Math.ceil((maxZ - minZ) / cs) + 2);
+    this.blockerGridW = w;
+    this.blockerGridH = h;
+
+    const grid = new Array(w * h);
+    for (let i = 0; i < grid.length; i++) grid[i] = [];
+    this.blockerGrid = grid;
+
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      let ex = 0;
+      let ez = 0;
+      if (c.type === 'box') {
+        const rot = c.rot || 0;
+        const ac = Math.abs(Math.cos(rot));
+        const as = Math.abs(Math.sin(rot));
+        ex = c.hx * ac + c.hz * as;
+        ez = c.hx * as + c.hz * ac;
+      }
+      ex += pad;
+      ez += pad;
+
+      const gx0 = Math.max(0, Math.floor((c.x - ex - this.blockerGridMinX) / cs));
+      const gx1 = Math.min(w - 1, Math.floor((c.x + ex - this.blockerGridMinX) / cs));
+      const gz0 = Math.max(0, Math.floor((c.z - ez - this.blockerGridMinZ) / cs));
+      const gz1 = Math.min(h - 1, Math.floor((c.z + ez - this.blockerGridMinZ) / cs));
+
+      for (let gz = gz0; gz <= gz1; gz++) {
+        for (let gx = gx0; gx <= gx1; gx++) {
+          grid[gz * w + gx].push(c);
+        }
+      }
+    }
+  }
+
+  /**
+   * Pushes the hero out of every town obstacle he overlaps and re-tests once
+   * more, so he slides along a fence or a tree instead of sticking to it.
+   * Zero allocation: every value below is a local number.
+   */
+  resolveBlockerCollision() {
+    if (!this.townBlockers || this.townBlockers.length === 0) return;
+    const grid = this.blockerGrid;
+    if (!grid) return;
+
+    const pos = this.mesh.position;
+    let px = pos.x;
+    let pz = pos.z;
+    const rr = this.blockerRadius + this.blockerSkin;
+
+    for (let pass = 0; pass < this.blockerPasses; pass++) {
+      const gx = Math.floor((px - this.blockerGridMinX) / this.blockerCellSize);
+      const gz = Math.floor((pz - this.blockerGridMinZ) / this.blockerCellSize);
+      if (gx < 0 || gz < 0 || gx >= this.blockerGridW || gz >= this.blockerGridH) return;
+      const cell = grid[gz * this.blockerGridW + gx];
+      let hit = false;
+
+      for (let i = 0; i < cell.length; i++) {
+        const c = cell[i];
+
+        if (c.type === 'circle') {
+          const dx = px - c.x;
+          const dz = pz - c.z;
+          const d2 = dx * dx + dz * dz;
+          const cr = c.r + rr;
+          if (d2 >= cr * cr) continue;
+          const d = Math.sqrt(d2);
+          if (d > 1e-5) {
+            const s = cr / d;
+            px = c.x + dx * s;
+            pz = c.z + dz * s;
+          } else {
+            px = c.x + cr;
+            pz = c.z;
+          }
+          hit = true;
+          continue;
+        }
+
+        // Oriented box: world -> box local, push out, local -> world.
+        const rot = c.rot || 0;
+        const cos = Math.cos(rot);
+        const sin = Math.sin(rot);
+        const dx = px - c.x;
+        const dz = pz - c.z;
+        const lx = dx * cos - dz * sin;
+        const lz = dx * sin + dz * cos;
+        const hx = c.hx;
+        const hz = c.hz;
+        const qx = lx < -hx ? -hx : (lx > hx ? hx : lx);
+        const qz = lz < -hz ? -hz : (lz > hz ? hz : lz);
+        let ox = lx - qx;
+        let oz = lz - qz;
+        const d2 = ox * ox + oz * oz;
+        if (d2 >= rr * rr) continue;
+
+        if (d2 > 1e-9) {
+          const d = Math.sqrt(d2);
+          const push = (rr - d) / d;
+          ox *= push;
+          oz *= push;
+        } else {
+          // The centre is inside the box: leave through the nearest face.
+          const faceX = hx - Math.abs(lx);
+          const faceZ = hz - Math.abs(lz);
+          if (faceX < faceZ) {
+            ox = (lx >= 0 ? 1 : -1) * (faceX + rr);
+            oz = 0;
+          } else {
+            ox = 0;
+            oz = (lz >= 0 ? 1 : -1) * (faceZ + rr);
+          }
+        }
+
+        px += ox * cos + oz * sin;
+        pz += -ox * sin + oz * cos;
+        hit = true;
+      }
+
+      if (!hit) break;
+    }
+
+    pos.x = px;
+    pos.z = pz;
+  }
+
   startRoll(input, cameraYaw) {
     if (this.dead || this.isRolling || this.rollCooldown > 0 || this.stamina < 25 || this.guardBreakTimer > 0) {
       return false;
@@ -1342,6 +1538,7 @@ export class Player {
       if (canMoveTo(dungeon, this.mesh.position.x, nextZ, 0.4)) {
         this.mesh.position.z = nextZ;
       }
+      this.resolveBlockerCollision();
       return;
     }
 
@@ -1359,6 +1556,7 @@ export class Player {
       if (canMoveTo(dungeon, this.mesh.position.x, nextZ, 0.4)) {
         this.mesh.position.z = nextZ;
       }
+      this.resolveBlockerCollision();
 
       this.mesh.rotation.y = Math.atan2(this.rollDir.x, this.rollDir.z);
       this.rig.update(delta, { action: 'roll', actionTime: Math.min(0.4, this.rollTimeElapsed) });
@@ -1474,10 +1672,21 @@ export class Player {
         this.mesh.position.z = nextZ;
       }
 
+      // Town obstacles (fences, tree trunks, boulders, building walls): the
+      // hero is pushed out of them so he slides along instead of walking
+      // through.
+      this.resolveBlockerCollision();
+
       if (this.isAiming) {
         this.mesh.rotation.y = cameraYaw + Math.PI;
       } else if (!this.isBlocking) {
-        const targetRotation = Math.atan2(moveX, moveZ);
+        // A/D on their own is a strafe: the body keeps facing the camera
+        // forward so the slide stays on one axis instead of the character
+        // turning sideways (and the view swinging with it).
+        const isPureStrafe = (left || right) && !forward && !backward;
+        const targetRotation = isPureStrafe
+          ? cameraYaw + Math.PI
+          : Math.atan2(moveX, moveZ);
         let diff = targetRotation - this.mesh.rotation.y;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
@@ -1492,6 +1701,14 @@ export class Player {
     } else if (this.isAiming) {
       // Stand-still aim lock to crosshair ray
       this.mesh.rotation.y = cameraYaw + Math.PI;
+    } else {
+      // Idle: the body holds the camera forward, so turning the camera does
+      // not make the character spin on the spot.
+      const targetRotation = cameraYaw + Math.PI;
+      let diff = targetRotation - this.mesh.rotation.y;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      this.mesh.rotation.y += diff * Math.min(1, 14 * delta);
     }
 
     // Determine animation pose and mood

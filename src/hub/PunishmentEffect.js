@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { showHeroDeathNotice } from '../ui/Notices.js';
 import { pickLine } from '../data/iselle.js';
+import { getAudioContext, isAudioMuted } from '../core/AudioManager.js';
 
 export class PunishmentEffect {
   constructor(scene) {
@@ -182,10 +183,9 @@ export class PunishmentEffect {
 
     // Sound Zap
     try {
-      if (typeof window !== 'undefined' && !window.__audioMaster?.isMuted) {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (AudioCtx) {
-          const ctx = window.__tinkAudioCtx || new AudioCtx();
+      if (typeof window !== 'undefined' && !isAudioMuted()) {
+        const ctx = getAudioContext();
+        if (ctx) {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
           osc.type = 'sawtooth';

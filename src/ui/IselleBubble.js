@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { drawIsellePortrait } from '../art/iselle.js';
 import { isAnySystemWindowOpen } from './Hud.js';
+import { getAudioContext, isAudioMuted } from '../core/AudioManager.js';
 
 let bubbleContainer = null;
 let currentBubble = null;
@@ -30,16 +31,9 @@ function getBubbleContainer() {
 function playTinkSound() {
   try {
     if (typeof window === 'undefined') return;
-    if (window.__audioMaster?.isMuted || localStorage.getItem('pm_muted') === 'true') return;
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    if (!window.__tinkAudioCtx) {
-      window.__tinkAudioCtx = new AudioCtx();
-    }
-    const ctx = window.__tinkAudioCtx;
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
+    if (isAudioMuted()) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';

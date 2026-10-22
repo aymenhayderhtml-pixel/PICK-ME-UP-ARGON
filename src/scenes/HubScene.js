@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LAYOUT } from '../art/town/layout.js';
+import { LAYOUT, PLAYER_COLLISION, SHOW_COLLIDERS, getSignLayout } from '../art/town/layout.js';
 import { getGroundY } from '../art/town/ground.js';
 import { buildTown } from '../art/town/TownAssembler.js';
 import { Iselle } from '../hub/Iselle.js';
@@ -24,6 +24,7 @@ import { DungeonBoardWindow } from '../ui/DungeonBoardWindow.js';
 import { OptionsWindow } from '../ui/OptionsWindow.js';
 import { IselleReportWindow } from '../ui/IselleReportWindow.js';
 import { runOfflineLoginSimulation } from '../core/LoginSimulation.js';
+import { getAudioContext, getMasterVolume, isAudioMuted } from '../core/AudioManager.js';
 import { TownSparringController } from '../hub/TownSparringController.js';
 import { applyEatOutcome } from '../core/EmotionEngine.js';
 import { TrainingManager } from '../hub/TrainingManager.js';
@@ -37,7 +38,7 @@ import { spawnHitSparks } from '../fx/WeaponFX.js';
 import { AccountCreationScreen } from '../ui/AccountCreationScreen.js';
 import { IselleTutorial } from '../ui/IselleTutorial.js';
 import { createHeroFromTemplate } from '../data/heroes.js';
-import { createLabelSprite, updateLabels } from '../ui/Label.js';
+import { createSignLabelMesh, disposeSignLabelMesh, updateLabels } from '../ui/Label.js';
 import { NavGrid } from '../hub/NavGrid.js';
 import { buildWalkHeightMap, updateUndergroundGuard } from '../art/town/WalkHeight.js';
 import { GroundDebug } from '../debug/GroundDebug.js';
@@ -82,11 +83,16 @@ export class HubScene {
     this.pointLightTimer = 0;
 
     // 2. Camera setup
+    // The near plane is 0.3 (not 0.1): the town floor is covered in flat
+    // decals a few millimetres apart, and the depth buffer is far too coarse
+    // at 0.1 for them not to z-fight. The camera never comes closer than
+    // 1.2 units to the hero, so nothing is clipped. The far plane stays
+    // capped at 460 on purpose (see the CODEMAP gotcha on the town z-fight).
     this.camera = new THREE.PerspectiveCamera(
       60,
       window.innerWidth / window.innerHeight,
-      0.1,
-      1000
+      0.3,
+      460
     );
 
     // Cinematic Intro Flyover State
@@ -95,10 +101,16 @@ export class HubScene {
     this.introFlyoverDuration = 6.0;
     this.flyoverHasPlayed = false;
 
+    // Set when the player chooses to enter a floor with unarmed heroes.
+    this.allowUnarmedDeploy = false;
+
     // 3. Town container & navigation grid
     this.town = null;
     this.townColliders = [];
-    this.signSprites = [];
+    // Player-only obstacle shapes (fences, tree trunks, boulders, walls)
+    this.townBlockers = [];
+    this.colliderDebugGroup = null;
+    this.signLabels = [];
     this.navGrid = new NavGrid(this.getGroundY);
 
     // 4. Player (spawned at Landing Area (20, 26))
@@ -300,9 +312,6 @@ export class HubScene {
     document.body.appendChild(this.whiteFlashEl);
 
     // Performance & Adaptive Quality
-    this.fpsTimer = 0;
-    this.fpsFrames = 0;
-    this.currentFps = 60;
     this.fps6sTimer = 0;
     this.fps6sFrames = 0;
     this.adaptiveQualityLowered = false;
@@ -319,16 +328,14 @@ export class HubScene {
 
   playAnvilClang() {
     try {
-      if (window.__audioMaster && window.__audioMaster.isMuted) return;
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      if (!this.audioCtx) this.audioCtx = new AudioCtx();
-      if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
-      const t = this.audioCtx.currentTime;
+      if (isAudioMuted()) return;
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const t = ctx.currentTime;
 
-      const osc1 = this.audioCtx.createOscillator();
-      const osc2 = this.audioCtx.createOscillator();
-      const gain = this.audioCtx.createGain();
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
 
       osc1.type = 'triangle';
       osc1.frequency.setValueAtTime(840, t);
@@ -338,13 +345,13 @@ export class HubScene {
       osc2.frequency.setValueAtTime(1680, t);
       osc2.frequency.exponentialRampToValueAtTime(540, t + 0.25);
 
-      const masterVol = window.__audioMaster ? window.__audioMaster.masterVolume : 0.3;
+      const masterVol = getMasterVolume();
       gain.gain.setValueAtTime(0.25 * masterVol, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
 
       osc1.connect(gain);
       osc2.connect(gain);
-      gain.connect(this.audioCtx.destination);
+      gain.connect(ctx.destination);
 
       osc1.start(t);
       osc2.start(t);
@@ -597,28 +604,28 @@ export class HubScene {
         return;
       }
 
-      if (e.code === 'KeyF9') {
+      if (e.code === 'F9') {
         gameState.gems += 1000;
         this.hud.updateCurrency(gameState.gold, gameState.gems, gameState.freeTickets);
         showSystemMessage('[DEBUG: +1,000 Gems Added!]');
         return;
       }
 
-      if (e.code === 'KeyF10') {
+      if (e.code === 'F10') {
         gameState.gold += 50000;
         this.hud.updateCurrency(gameState.gold, gameState.gems, gameState.freeTickets);
         showSystemMessage('[DEBUG: +50,000 Gold Added!]');
         return;
       }
 
-      if (e.code === 'KeyF11') {
+      if (e.code === 'F11') {
         gameState.addMaterial('awakening_stone', 1);
         this.hud.updateCurrency(gameState.gold, gameState.gems, gameState.freeTickets);
         showSystemMessage('[DEBUG: +1 Awakening Stone Added!]');
         return;
       }
 
-      if (e.code === 'KeyF12') {
+      if (e.code === 'F12') {
         gameState.addMaterial('goblin_hide', 20);
         gameState.addMaterial('crude_iron', 20);
         gameState.addMaterial('goblin_tooth', 20);
@@ -662,11 +669,7 @@ export class HubScene {
               showSystemMessage('[The Armory is locked. Clear Floor 5 to unlock.]');
             }
           } else if (b.id === 'space_time_rift' || b.isGate || b.name === 'Space-Time Rift' || b.name === 'Tower Gate') {
-            if (this.isTowerGateLocked()) {
-              showSystemMessage('[EQUIP YOUR HEROES FIRST]');
-              return;
-            }
-            this.playRiftFlash(() => this.deployWindow.open());
+            this.requestTowerDeploy();
           } else if (b.id === 'dungeon_board' || b.name === 'Dungeon Board') {
             this.dungeonBoardWindow.open();
           } else if (b.id === 'mess_hall_row' || b.name === 'Mess Hall') {
@@ -680,11 +683,7 @@ export class HubScene {
           }
         }
       } else if (e.code === 'KeyT') {
-        if (this.isTowerGateLocked()) {
-          showSystemMessage('[EQUIP YOUR HEROES FIRST]');
-          return;
-        }
-        this.playRiftFlash(() => this.deployWindow.open());
+        this.requestTowerDeploy();
       } else if (e.code === 'F2') {
         const inputVal = window.prompt(
           '[DEBUG] Enter floor number to set currentFloor (1-100):',
@@ -705,7 +704,32 @@ export class HubScene {
     });
   }
 
+  /**
+   * Opens the deploy window. When the heroes are unarmed the player is asked:
+   * summon equipment, or walk in bare-handed.
+   */
+  requestTowerDeploy() {
+    if (!this.isTowerGateLocked()) {
+      this.playRiftFlash(() => this.deployWindow.open());
+      return;
+    }
+    showEquipmentNotice({
+      onSummon: () => {
+        this.summonWindow.open('equipment');
+      },
+      onEnterAnyway: () => {
+        this.allowUnarmedDeploy = true;
+        // The player already answered: do not ask again at ENTER FLOOR.
+        if (this.deployWindow) this.deployWindow.equipNoticeDismissed = true;
+        this.playRiftFlash(() => this.deployWindow.open());
+      },
+    });
+  }
+
   isTowerGateLocked() {
+    if (this.allowUnarmedDeploy) {
+      return false;
+    }
     if (gameState.flags?.tutorialDone) {
       return false;
     }
@@ -722,25 +746,28 @@ export class HubScene {
     return false;
   }
 
-  createSignSprites() {
-    for (const s of this.signSprites) {
-      this.scene.remove(s);
-      if (s.material?.map) s.material.map.dispose();
-      if (s.material) s.material.dispose();
+  // Landmark sign labels. Each one is a flat plane glued to the front face of
+  // its signpost board (0.03m proud of the board), so the text is centred on
+  // the board, never mirrored, never clipped and never hidden behind it.
+  createSignLabels() {
+    for (const m of this.signLabels) {
+      this.scene.remove(m);
+      disposeSignLabelMesh(m);
     }
-    this.signSprites = [];
+    this.signLabels = [];
 
-    for (const [id, z] of Object.entries(LAYOUT.zones)) {
-      const anchorKey = `sign_${id}`;
-      const altKey = `sign_${id.replace('_row', '')}`;
-      let pos = this.town?.anchors?.[anchorKey] || this.town?.anchors?.[altKey];
-      if (!pos) {
-        pos = new THREE.Vector3(z.center.x, this.getWalkY(z.center.x, z.center.z) + 3.0, z.center.z);
-      }
-      const sprite = createLabelSprite({ text: z.name.toUpperCase(), isSign: true });
-      sprite.position.copy(pos);
-      this.scene.add(sprite);
-      this.signSprites.push(sprite);
+    for (const id of Object.keys(LAYOUT.zones)) {
+      const plan = getSignLayout(LAYOUT, id);
+      if (!plan) continue;
+      const mesh = createSignLabelMesh({
+        text: plan.text,
+        width: plan.label.width,
+        height: plan.label.height
+      });
+      mesh.position.set(plan.labelX, plan.boardY, plan.labelZ);
+      mesh.rotation.y = plan.rotY;
+      this.scene.add(mesh);
+      this.signLabels.push(mesh);
     }
   }
 
@@ -752,10 +779,18 @@ export class HubScene {
     this.town = buildTown(LAYOUT, this.getGroundY, quality);
     this.scene.add(this.town.group);
     this.townColliders = this.town.colliders || [];
+    this.townBlockers = this.town.blockers || [];
+
+    // Player obstacle collision: the walk-height map only decides where the
+    // hero stands, these shapes are what stop him.
+    this.player.setTownBlockers(this.townBlockers, PLAYER_COLLISION);
 
     // Build WalkHeight map from town geometry
     if (this.walkHeightMap) this.walkHeightMap.dispose();
     this.walkHeightMap = buildWalkHeightMap(this.town.group, this.getGroundY, { minX: -50, maxX: 50, minZ: -50, maxZ: 50 }, 0.5);
+
+    // Debug wireframe of the player collision shapes (SHOW_COLLIDERS)
+    if (SHOW_COLLIDERS) this.buildColliderDebug();
 
     // Camera segment colliders
     this.thirdPersonCamera.setColliders(this.townColliders);
@@ -789,8 +824,8 @@ export class HubScene {
       LAYOUT.zones.training_grounds?.trainingZones?.sparring_ring?.radius || 2.2
     );
 
-    // Create landmark sign sprites
-    this.createSignSprites();
+    // Create landmark sign labels
+    this.createSignLabels();
 
     // Initial resolution & time of day lighting
     const resScale = gameState.settings?.resolutionScale ?? 1;
@@ -888,6 +923,24 @@ export class HubScene {
         0xa8f4ff,
         18
       );
+    }
+  }
+
+  /**
+   * Plays out the emotion-driven brawls of the day in the open.
+   * These fights are unsanctioned: they happen in the town plaza, so
+   * NO_OUTSIDE_FIGHTING is broken and Iselle has to break them up.
+   */
+  startPendingTownFights(pairs) {
+    for (const pair of pairs) {
+      const npcA = this.heroesManager.npcs.find(
+        (n) => n.heroData && n.heroData.id === pair.heroA.id
+      );
+      const npcB = this.heroesManager.npcs.find(
+        (n) => n.heroData && n.heroData.id === pair.heroB.id
+      );
+      if (!npcA || !npcB) continue;
+      this.sparringController.startSpar(npcA, npcB, false);
     }
   }
 
@@ -1067,13 +1120,12 @@ export class HubScene {
   }
 
   showIselleEquipmentPrompt() {
+    // Just Iselle talking: the modal notice only appears when the player
+    // actually heads for a floor without a weapon.
     if (this.iselle) {
       this.iselle.overrideTarget = new THREE.Vector3(20, 3.2, 26);
       this.iselle.say('equipmentPrompt', { force: true });
     }
-    showEquipmentNotice(() => {
-      this.summonWindow.open('equipment');
-    });
   }
 
   playJennaAaronWalkout() {
@@ -1118,6 +1170,62 @@ export class HubScene {
         npc.showSpeechBubble(idx === 0 ? 'I am Jenna... where is this?' : 'I am Aaron. I will protect you!', 3.5);
       }, idx * 1800);
     });
+  }
+
+  /**
+   * Draws the player collision shapes as wireframes. Enabled with
+   * SHOW_COLLIDERS in src/art/town/layout.js. Built once when the hub loads.
+   */
+  buildColliderDebug() {
+    this.clearColliderDebug();
+
+    const group = new THREE.Group();
+    group.name = 'TownColliderDebug';
+
+    const circleMat = new THREE.MeshBasicMaterial({
+      color: 0xff5533,
+      transparent: true,
+      opacity: 0.65,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const boxMat = new THREE.MeshBasicMaterial({
+      color: 0x33aaff,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false
+    });
+
+    for (const c of this.townBlockers) {
+      const y = this.getGroundY(c.x, c.z);
+      if (c.type === 'circle') {
+        const geo = new THREE.RingGeometry(Math.max(0.03, c.r - 0.07), c.r + 0.07, 32);
+        geo.rotateX(-Math.PI / 2);
+        const mesh = new THREE.Mesh(geo, circleMat);
+        mesh.position.set(c.x, y + 0.06, c.z);
+        group.add(mesh);
+      } else {
+        const geo = new THREE.BoxGeometry(c.hx * 2, 0.5, c.hz * 2);
+        const mesh = new THREE.Mesh(geo, boxMat);
+        mesh.position.set(c.x, y + 0.25, c.z);
+        mesh.rotation.y = c.rot || 0;
+        group.add(mesh);
+      }
+    }
+
+    this.scene.add(group);
+    this.colliderDebugGroup = group;
+  }
+
+  clearColliderDebug() {
+    if (!this.colliderDebugGroup) return;
+    this.scene.remove(this.colliderDebugGroup);
+    this.colliderDebugGroup.traverse((child) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) child.material.dispose();
+    });
+    this.colliderDebugGroup = null;
   }
 
   toggleWalkHeightDebug() {
@@ -1179,6 +1287,7 @@ export class HubScene {
     this.hud.hide();
     this.heroesManager.clear();
     this.trainingManager.clear();
+    if (this.sparringController) this.sparringController.clearQueue();
 
     if (this.groundDebug) {
       this.groundDebug.dispose();
@@ -1203,12 +1312,16 @@ export class HubScene {
       this.town = null;
     }
 
-    for (const s of this.signSprites) {
-      this.scene.remove(s);
-      if (s.material?.map) s.material.map.dispose();
-      if (s.material) s.material.dispose();
+    // The town obstacles are gone with the town.
+    this.player.setTownBlockers([], PLAYER_COLLISION);
+    this.townBlockers = [];
+    this.clearColliderDebug();
+
+    for (const m of this.signLabels) {
+      this.scene.remove(m);
+      disposeSignLabelMesh(m);
     }
-    this.signSprites = [];
+    this.signLabels = [];
 
     for (const pl of this.pointLightPool) {
       pl.visible = false;
@@ -1404,6 +1517,10 @@ export class HubScene {
     const time = performance.now() * 0.001;
     const windowOpen = isAnySystemWindowOpen();
 
+    // The mouse steers the camera, so the pointer is hidden while playing
+    // and restored for the UI windows and the tutorial dialogue.
+    this.input.updateCursor(windowOpen);
+
     // 1. Tick Day Cycle & Phase
     gameState.tickDay(delta);
     const dayPhase = gameState.dayPhase;
@@ -1427,15 +1544,7 @@ export class HubScene {
       this.updatePointLightPool();
     }
 
-    // 3. FPS tracking & adaptive quality
-    this.fpsFrames++;
-    this.fpsTimer += delta;
-    if (this.fpsTimer >= 0.5) {
-      this.currentFps = Math.round(this.fpsFrames / this.fpsTimer);
-      this.fpsFrames = 0;
-      this.fpsTimer = 0;
-      this.hud.updateFps(this.currentFps, gameState.settings?.showFps);
-    }
+    // 3. Adaptive quality
     this.checkAdaptiveQuality(delta);
     if (this.hud.showF3) {
       this.updateF3DebugStats();
@@ -1543,7 +1652,7 @@ export class HubScene {
       this.iselle.update(delta, time, this.player.mesh.position, this.getWalkY, this.camera);
       this.heroesManager.update(delta, this.getWalkY, this.player.mesh.position, isNight, this, this.camera);
       this.trainingManager.update(delta, this.getWalkY);
-      updateLabels(this.camera, this.heroesManager.getLabelSprites(), this.signSprites);
+      updateLabels(this.camera, this.heroesManager.getLabelSprites());
       return;
     }
 
@@ -1553,7 +1662,7 @@ export class HubScene {
       this.iselle.update(delta, time, this.player.mesh.position, this.getWalkY, this.camera);
       this.heroesManager.update(delta, this.getWalkY, this.player.mesh.position, isNight, this, this.camera);
       this.trainingManager.update(delta, this.getWalkY);
-      updateLabels(this.camera, this.heroesManager.getLabelSprites(), this.signSprites);
+      updateLabels(this.camera, this.heroesManager.getLabelSprites());
       return;
     }
 
@@ -1590,7 +1699,12 @@ export class HubScene {
             isActionDown: () => false,
             isLmbDown: () => false,
             isRmbDown: () => false,
-            consumeMouseDelta: () => ({ x: 0, y: 0 }),
+            // Drain the real delta so the camera does not jump when the
+            // window closes, but report no movement while it is open.
+            consumeMouseDelta: () => {
+              this.input.consumeMouseDelta();
+              return { x: 0, y: 0 };
+            },
           }
         : this.input;
       this.player.update(delta, effectiveInput, cameraYaw, this.collisionDungeon, this.thirdPersonCamera);
@@ -1622,11 +1736,19 @@ export class HubScene {
     // activity that was chosen for them.
     if (gameState.dayCount !== this._lastActivityDay) {
       this._lastActivityDay = gameState.dayCount;
+      // Drop any fights queued from the previous day before scheduling today's.
+      this.sparringController.clearQueue();
       this.heroesManager.assignDailyActivities(
         LAYOUT.zones.training_grounds?.trainingZones,
         this.town?.anchors,
         this.sparringController
       );
+      // The heroes who turned on each other fight it out in the open, in
+      // full view, with the same fight engine the offline simulation uses.
+      const pending = gameState.lastDayReport && gameState.lastDayReport.pendingFights;
+      if (pending && pending.length > 0) {
+        this.startPendingTownFights(pending);
+      }
     }
 
     // Live sparring inside the training yard.
@@ -1646,7 +1768,7 @@ export class HubScene {
         this.player.mesh,
         ...this.heroesManager.npcs.map((n) => n.mesh),
       ]);
-      updateLabels(this.camera, this.heroesManager.getLabelSprites(), this.signSprites);
+      updateLabels(this.camera, this.heroesManager.getLabelSprites());
     }
 
     // 12. UI Updates
@@ -1658,7 +1780,7 @@ export class HubScene {
     if (nearBuilding && !windowOpen) {
       if (nearBuilding.id === 'space_time_rift' || nearBuilding.isGate) {
         if (this.isTowerGateLocked()) {
-          this.hud.setPrompt('Press E: Space-Time Rift (EQUIP YOUR HEROES FIRST)');
+          this.hud.setPrompt('Press E: Space-Time Rift (HEROES UNARMED)');
         } else {
           this.hud.setPrompt('Press E: Space-Time Rift');
         }

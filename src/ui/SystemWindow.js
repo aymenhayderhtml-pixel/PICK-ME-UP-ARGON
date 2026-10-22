@@ -1,17 +1,13 @@
 import { attachOrnateCorners } from './ornaments.js';
-export {
-  showSystemMessage,
-  showNotices,
-  showStatusNotice,
-  showHeroDeathNotice,
-  showEquipmentNotice,
-  clearSystemMessages,
-} from './Notices.js';
+export { showSystemMessage } from './Notices.js';
 
 export class SystemWindow {
   constructor(title = 'SYSTEM') {
     this.container = document.createElement('div');
     this.container.classList.add('mm-panel');
+    // Marks the root of a system window so the input layer can tell a wheel
+    // over the UI from a wheel over the game canvas.
+    this.container.classList.add('mm-system-window');
     this.container.style.position = 'fixed';
     this.container.style.top = '50%';
     this.container.style.left = '50%';
@@ -71,6 +67,19 @@ export class SystemWindow {
     this.contentElement.style.fontSize = '13px';
     this.contentElement.style.lineHeight = '1.5';
     this.container.appendChild(this.contentElement);
+
+    // The third-person camera zooms on every 'wheel' event that reaches
+    // `window`, so a wheel over this window would zoom the camera behind
+    // the UI. Stopping the propagation here keeps the wheel in the window.
+    // Passive, and never preventDefault: the scrollable lists inside keep
+    // scrolling natively.
+    this.container.addEventListener(
+      'wheel',
+      (e) => {
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
 
     document.body.appendChild(this.container);
   }

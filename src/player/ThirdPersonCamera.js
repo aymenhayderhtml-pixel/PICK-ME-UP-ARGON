@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { gameState } from '../core/GameState.js';
 
-function testSegmentColliders(x0, z0, dirX, dirZ, maxDist2D, colliders) {
+export function testSegmentColliders(x0, z0, dirX, dirZ, maxDist2D, colliders) {
   let closestDist = maxDist2D;
   for (let i = 0; i < colliders.length; i++) {
     const c = colliders[i];
@@ -11,7 +11,14 @@ function testSegmentColliders(x0, z0, dirX, dirZ, maxDist2D, colliders) {
       const b = 2 * (vx * dirX + vz * dirZ);
       const cVal = vx * vx + vz * vz - c.r * c.r;
       if (cVal < 0) {
-        return 0;
+        // The segment starts inside the circle: the camera may not travel
+        // past the far side of it.
+        const disc = b * b - 4 * cVal;
+        const tExit = (-b + Math.sqrt(Math.max(0, disc))) * 0.5;
+        if (tExit > 0 && tExit < closestDist) {
+          closestDist = tExit;
+        }
+        continue;
       }
       const disc = b * b - 4 * cVal;
       if (disc >= 0) {
@@ -71,6 +78,11 @@ function testSegmentColliders(x0, z0, dirX, dirZ, maxDist2D, colliders) {
 
       if (tMin > 0 && tMin < closestDist) {
         closestDist = tMin;
+      } else if (tMin <= 0 && tMax > 0 && tMax < closestDist) {
+        // The segment starts inside the box (the player stands in a doorway
+        // or inside a room): the camera may not travel past the far face, so
+        // it can never pass through the wall.
+        closestDist = tMax;
       }
     }
   }
@@ -83,21 +95,18 @@ export class ThirdPersonCamera {
     this.target = target;
     this.yaw = 0;
     this.pitch = 0.3;
+    this.pitchLift = 0;
     this.distance = 6.0;
     this.sensitivity = 0.002;
     this.colliders = [];
     this.raycaster = new THREE.Raycaster();
     this.currentDistance = this.distance;
-    this.groundClearance = 1.2;
+    this.groundClearance = 1.4;
 
     // Follow smoothing state
     this.currentLookAt = new THREE.Vector3();
     this.lookAheadOffset = new THREE.Vector3();
     this.isInitialized = false;
-
-    // Auto-turn state
-    this.arrowKeyCooldown = 0;
-    this.isColliding = false;
 
     // Aim Mode state
     this.isAiming = false;
@@ -177,12 +186,6 @@ export class ThirdPersonCamera {
     return 6.0; // 'normal' default
   }
 
-  isCommandWheelOpen() {
-    if (typeof document === 'undefined') return false;
-    const wheel = document.getElementById('pm-command-wheel') || document.getElementById('command-wheel');
-    return Boolean(wheel && wheel.style.display !== 'none' && wheel.style.opacity !== '0');
-  }
-
   update(delta, input = null) {
     if (delta <= 0) delta = 0.016;
 
@@ -194,86 +197,46 @@ export class ThirdPersonCamera {
     }
 
     // Arrow keys control camera yaw & pitch
-    let arrowUsed = false;
     if (input && typeof input.isDown === 'function') {
       if (input.isDown('ArrowLeft')) {
         this.yaw += 1.8 * delta;
-        arrowUsed = true;
       }
       if (input.isDown('ArrowRight')) {
         this.yaw -= 1.8 * delta;
-        arrowUsed = true;
       }
       if (input.isDown('ArrowUp')) {
         this.pitch = Math.min(1.0, this.pitch + 1.8 * delta);
-        arrowUsed = true;
       }
       if (input.isDown('ArrowDown')) {
         this.pitch = Math.max(-0.3, this.pitch - 1.8 * delta);
-        arrowUsed = true;
       }
     }
 
-    if (arrowUsed) {
-      this.arrowKeyCooldown = 1.5;
-    } else if (this.arrowKeyCooldown > 0) {
-      this.arrowKeyCooldown = Math.max(0, this.arrowKeyCooldown - delta);
-    }
-
-    // Mouse Look (Aiming or Mouse Drag or Pointer Lock)
+    // Mouse Look: the cursor is hidden while playing, so any mouse movement
+    // over the canvas steers the camera. UI windows replace the input with a
+    // stub that reports no movement, so the camera never spins over a menu.
     if (input && typeof input.consumeMouseDelta === 'function') {
       const mDelta = input.consumeMouseDelta();
       if (mDelta && (mDelta.x !== 0 || mDelta.y !== 0)) {
-        const isDragging = (typeof input.isMouseButtonDown === 'function' && (input.isMouseButtonDown(0) || input.isMouseButtonDown(1) || input.isMouseButtonDown(2)));
-        const isPointerLocked = typeof document !== 'undefined' && Boolean(document.pointerLockElement);
-        if (this.isAiming || isDragging || isPointerLocked) {
-          this.handleMouse(mDelta.x, mDelta.y);
-          this.arrowKeyCooldown = 1.0;
-        }
+        this.handleMouse(mDelta.x, mDelta.y);
       }
     }
 
     if (!this.target) return;
 
+    // Effective pitch: the player's pitch plus the collision lift. The lift
+    // raises the camera over an obstacle instead of letting it clip into the
+    // geometry.
+    const pitch = Math.max(-0.65, Math.min(0.85, this.pitch + this.pitchLift));
+
     // Target position
     const targetPos = this.target.position;
     const charFacing = this.target.rotation ? this.target.rotation.y : 0;
 
-    // Auto-turn logic (disabled while aiming)
-    const autoTurnSetting = gameState?.settings?.camera?.autoTurn ?? true;
-    const isWheelOpen = this.isCommandWheelOpen();
-
-    if (!this.isAiming && autoTurnSetting && !isWheelOpen && !this.isColliding && this.arrowKeyCooldown <= 0 && input && typeof input.isDown === 'function') {
-      const hasForward = input.isDown('KeyW');
-      const hasBackward = input.isDown('KeyS');
-      const hasLeft = input.isDown('KeyA');
-      const hasRight = input.isDown('KeyD');
-
-      if (hasForward || hasBackward) {
-        // Behind the character is charFacing - Math.PI
-        let behindAngle = charFacing - Math.PI;
-        let angleDiff = behindAngle - this.yaw;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-
-        const thresholdRad = 15 * (Math.PI / 180); // 15 degrees
-        if (Math.abs(angleDiff) > thresholdRad) {
-          const normAngle = Math.min(1.0, Math.abs(angleDiff) / (Math.PI * 0.75));
-          const eased = Math.sin(normAngle * Math.PI * 0.5);
-          const turnRate = 2.2 * Math.max(0.2, eased);
-          const step = Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), turnRate * delta);
-          this.yaw += step;
-        }
-      } else if (hasLeft || hasRight) {
-        // Pure strafe turns camera at slower rate (0.8 rad/s)
-        const strafeRate = 0.8 * delta;
-        if (hasLeft) {
-          this.yaw += strafeRate;
-        } else if (hasRight) {
-          this.yaw -= strafeRate;
-        }
-      }
-    }
+    // Camera orientation is driven by the mouse (or the arrow keys), never by
+    // the movement keys. W/A/S/D translate the character along fixed
+    // camera-relative axes, so A/D no longer swings the camera around the
+    // character (which used to send the player travelling in a circle).
 
     // Keep yaw normalized in [-PI, PI]
     while (this.yaw < -Math.PI) this.yaw += Math.PI * 2;
@@ -339,9 +302,9 @@ export class ThirdPersonCamera {
     lookAtPos.y += this.currentUpOffset * 0.5;
 
     const effDist = this.isAiming ? targetDistance : this.distance;
-    const horizontalDistance = effDist * Math.cos(this.pitch);
+    const horizontalDistance = effDist * Math.cos(pitch);
     const offsetX = Math.sin(this.yaw) * horizontalDistance + Math.cos(this.yaw) * this.currentRightOffset;
-    const offsetY = Math.sin(this.pitch) * effDist + this.currentUpOffset;
+    const offsetY = Math.sin(pitch) * effDist + this.currentUpOffset;
     const offsetZ = Math.cos(this.yaw) * horizontalDistance - Math.sin(this.yaw) * this.currentRightOffset;
 
     const fullCamOffset = new THREE.Vector3(offsetX, offsetY, offsetZ);
@@ -349,14 +312,14 @@ export class ThirdPersonCamera {
     // Camera collision detection
     if (this.colliders && this.colliders.length > 0) {
       if (this.colliders[0] && (this.colliders[0].type === 'circle' || this.colliders[0].type === 'box')) {
-        const cosPitch = Math.max(0.1, Math.cos(this.pitch));
+        const cosPitch = Math.max(0.1, Math.cos(pitch));
         const maxDist2D = this.distance * cosPitch;
         const dir2DX = offsetX / (horizontalDistance || 1e-5);
         const dir2DZ = offsetZ / (horizontalDistance || 1e-5);
         const hit2D = testSegmentColliders(lookAtPos.x, lookAtPos.z, dir2DX, dir2DZ, maxDist2D, this.colliders);
         if (hit2D < maxDist2D) {
           const hit3D = hit2D / cosPitch;
-          targetDistance = Math.max(1.5, hit3D - 0.4);
+          targetDistance = Math.max(1.2, hit3D - 0.55);
         }
       } else {
         const rayDir = fullCamOffset.clone().normalize();
@@ -369,7 +332,11 @@ export class ThirdPersonCamera {
       }
     }
 
-    this.isColliding = targetDistance < this.distance - 0.25;
+    // When the camera is blocked, lift it so it looks over the obstacle
+    // instead of clipping into the wall or the ground.
+    const blockedRatio = Math.max(0, (this.distance - targetDistance) / this.distance);
+    const liftTarget = Math.min(0.5, blockedRatio * 0.8);
+    this.pitchLift = THREE.MathUtils.lerp(this.pitchLift, liftTarget, Math.min(1, 5 * delta));
 
     // Smooth distance adjustment
     this.currentDistance = THREE.MathUtils.lerp(
@@ -378,9 +345,9 @@ export class ThirdPersonCamera {
       Math.min(1, 12 * delta)
     );
 
-    const actualHorizontal = this.currentDistance * Math.cos(this.pitch);
+    const actualHorizontal = this.currentDistance * Math.cos(pitch);
     const actualOffsetX = Math.sin(this.yaw) * actualHorizontal;
-    const actualOffsetY = Math.sin(this.pitch) * this.currentDistance;
+    const actualOffsetY = Math.sin(pitch) * this.currentDistance;
     const actualOffsetZ = Math.cos(this.yaw) * actualHorizontal;
 
     const desiredPosition = new THREE.Vector3(

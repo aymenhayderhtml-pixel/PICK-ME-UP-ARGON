@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { PALETTE } from './palette.js';
+import { getSignLayout } from './layout.js';
+import { FLOOR_DECAL_LAYERS } from './layout.js';
 
 function mulberry32(a) {
   return function() {
@@ -245,6 +247,18 @@ function createArchBlockGeo(innerR, outerR, height, startAngle, endAngle, segs, 
   return pg;
 }
 
+// Places a flat floor decal on its decal layer so that it never shares a
+// plane with the floor it is inlaid in. `floorY` is the Y of that floor,
+// `height` the thickness of the decal, `layer` one entry of
+// FLOOR_DECAL_LAYERS. A decal thick enough to reach the layer height is
+// embedded in the floor (only its top face shows, so the inlay relief does
+// not change); a thinner decal is lifted off the floor by the layer's
+// `lift`, which keeps it flush with the surface.
+function decalCenterY(floorY, height, layer) {
+  if (height >= layer.top) return floorY + layer.top - height * 0.5;
+  return floorY + layer.lift + height * 0.5;
+}
+
 export function buildLandmarksMain(ctx = {}) {
   const layout = ctx.layout || {};
   const getGroundY = typeof ctx.getGroundY === 'function' ? ctx.getGroundY : () => 0;
@@ -270,7 +284,12 @@ export function buildLandmarksMain(ctx = {}) {
     color: 0xffffff,
     roughness: 0.92,
     metalness: 0.02,
-    vertexColors: true
+    vertexColors: true,
+    // The mossy floor joints are a decal layer of their own: the depth bias
+    // keeps them winning against the paving they lie on.
+    polygonOffset: true,
+    polygonOffsetFactor: FLOOR_DECAL_LAYERS.moss.polygonOffsetFactor,
+    polygonOffsetUnits: FLOOR_DECAL_LAYERS.moss.polygonOffsetUnits
   });
 
   const matGlyph = new THREE.MeshStandardMaterial({
@@ -280,6 +299,23 @@ export function buildLandmarksMain(ctx = {}) {
     roughness: 0.3,
     metalness: 0.1,
     vertexColors: true
+  });
+
+  // The glowing lines inlaid in the floors. They are a separate mesh from
+  // the raised glyphs (wall runes, sign plates) so they can be drawn after
+  // the ground without writing depth: two flat surfaces on the same plane
+  // z-fight, and the crawling edges show up as hatched stripes.
+  const matFloorGlyph = new THREE.MeshStandardMaterial({
+    color: P.teal || 0x6fe0f0,
+    emissive: P.teal || 0x6fe0f0,
+    emissiveIntensity: 1.45,
+    roughness: 0.3,
+    metalness: 0.1,
+    vertexColors: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: FLOOR_DECAL_LAYERS.inlay.polygonOffsetFactor,
+    polygonOffsetUnits: FLOOR_DECAL_LAYERS.inlay.polygonOffsetUnits
   });
 
   const matSphere = new THREE.MeshStandardMaterial({
@@ -324,14 +360,15 @@ export function buildLandmarksMain(ctx = {}) {
     opacity: 0.42,
     depthWrite: false,
     polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1
+    polygonOffsetFactor: FLOOR_DECAL_LAYERS.patch.polygonOffsetFactor,
+    polygonOffsetUnits: FLOOR_DECAL_LAYERS.patch.polygonOffsetUnits
   });
 
   const materials = [
     matStone,
     matMoss,
     matGlyph,
+    matFloorGlyph,
     matSphere,
     matSphereRing,
     matPortal,
@@ -388,10 +425,20 @@ export function buildLandmarksMain(ctx = {}) {
     anchors[`${name}_obj`] = obj;
   }
 
-  function buildSignPlate(stoneList, glyphList, pos, rotY = 0, rng) {
-    addBox(stoneList, 2.2, 0.62, 0.14, pos.x, pos.y, pos.z, P.slate || 0x4a5560, rotY, 0, 0, 0.8, 1.05, rng);
-    addBox(stoneList, 2.34, 0.74, 0.1, pos.x, pos.y, pos.z, P.wallLit || 0xc4cbcf, rotY, 0, 0, 0.8, 1.05, rng);
-    addBox(glyphList, 1.8, 0.08, 0.16, pos.x, pos.y, pos.z, P.teal || 0x6fe0f0, rotY, 0, 0, 0.95, 1.05, rng);
+  // A zone signpost: a timber post standing on the terrain up to a slate
+  // board whose bottom sits 2m above the ground. The board only ever rotates
+  // around Y (the facing angle comes from the layout data), so it never tilts.
+  function buildSignPost(stoneList, glyphList, plan, rng) {
+    const postH = plan.post.height;
+    addBox(stoneList, plan.post.width, postH + 0.12, plan.post.width,
+      plan.x, plan.groundY + (postH + 0.12) * 0.5, plan.z,
+      P.timber || 0x2b2623, plan.rotY, 0, 0, 0.72, 1.0, rng);
+    addBox(stoneList, plan.board.width, plan.board.height, plan.board.depth,
+      plan.x, plan.boardY, plan.z, P.slate || 0x4a5560, plan.rotY, 0, 0, 0.8, 1.05, rng);
+    // Teal trim along the lower edge, clear of the text in the middle
+    addBox(glyphList, plan.board.width - 0.3, 0.06, plan.board.depth + 0.02,
+      plan.x, plan.boardY - plan.board.height * 0.5 + 0.1, plan.z,
+      P.teal || 0x6fe0f0, plan.rotY, 0, 0, 0.95, 1.05, rng);
   }
 
   function buildGeometryForQuality(q) {
@@ -402,6 +449,7 @@ export function buildLandmarksMain(ctx = {}) {
     const stoneGeos = [];
     const mossGeos = [];
     const glyphGeos = [];
+    const floorGlyphGeos = [];
     const aoGeos = [];
     const shaftGeos = [];
     const columnMatrices = [];
@@ -415,8 +463,7 @@ export function buildLandmarksMain(ctx = {}) {
     const laCfg = layout.landing_area || {
       center: { x: 20.0, z: 26.0 },
       footprint: { radius: 8.0, terraceRadius: 14.0 },
-      door: { id: 'door_landing_area', position: { x: 20.0, y: 0.0, z: 16.0 }, outward: { x: 0.0, y: 0.0, z: -1.0 } },
-      signOffset: { x: 0, y: 6.0, z: 0 }
+      door: { id: 'door_landing_area', position: { x: 20.0, y: 0.0, z: 16.0 }, outward: { x: 0.0, y: 0.0, z: -1.0 } }
     };
     const laX = laCfg.center.x;
     const laZ = laCfg.center.z;
@@ -453,7 +500,10 @@ export function buildLandmarksMain(ctx = {}) {
 
         if (w % 3 === 0) {
           const mossH = 0.03; // No thicker than 0.04
-          const mossY = slabTopY - mossH * 0.5;
+          // The moss joint is a decal layer of its own: its top face used to
+          // land exactly on the flagstone top, and two coplanar surfaces
+          // z-fight (the moss edges crawled in stripes).
+          const mossY = decalCenterY(slabTopY, mossH, FLOOR_DECAL_LAYERS.moss);
           addBox(mossGeos, arcW * 0.65, mossH, 0.22, laX + Math.cos(aMid) * rIn, mossY, laZ + Math.sin(aMid) * rIn, P.moss || 0x5f8a4a, -aMid + Math.PI / 2, 0, 0, 0.75, 1.05, rng);
         }
       }
@@ -461,7 +511,9 @@ export function buildLandmarksMain(ctx = {}) {
 
     // Bright summoning glyph inlaid in Landing Area floor (non-concentric geometric star + rune marks)
     const glyphH = 0.016;
-    const glyphY = slabTopY + 0.012; // 0.012 above slabs, no slab overlapping
+    // The star lines are inlaid in the flagstones, on their own decal layer
+    // so that they never share a plane with the stone they lie on.
+    const glyphY = decalCenterY(slabTopY, glyphH, FLOOR_DECAL_LAYERS.inlay);
     const starPoints = 8;
     for (let i = 0; i < starPoints; i++) {
       const a = (i / starPoints) * Math.PI * 2;
@@ -474,12 +526,12 @@ export function buildLandmarksMain(ctx = {}) {
       const mz = (z1 + z2) * 0.5;
       const len = Math.hypot(x2 - x1, z2 - z1);
       const ang = Math.atan2(x2 - x1, z2 - z1);
-      addBox(glyphGeos, 0.11, glyphH, len, mx, glyphY, mz, P.teal || 0x6fe0f0, ang, 0, 0, 0.95, 1.05, rng);
+      addBox(floorGlyphGeos, 0.11, glyphH, len, mx, glyphY, mz, P.teal || 0x6fe0f0, ang, 0, 0, 0.95, 1.05, rng);
 
       // Outer rune ticks and diamond nodes
       const rx = laX + Math.cos(a) * (laRad - 0.55);
       const rz = laZ + Math.sin(a) * (laRad - 0.55);
-      addBox(glyphGeos, 0.42, glyphH, 0.42, rx, glyphY, rz, P.sphereCyan || 0xa8f4ff, a + Math.PI / 4, 0, 0, 0.95, 1.05, rng);
+      addBox(floorGlyphGeos, 0.42, glyphH, 0.42, rx, glyphY, rz, P.sphereCyan || 0xa8f4ff, a + Math.PI / 4, 0, 0, 0.95, 1.05, rng);
     }
     // Octagonal outer border segments (avoids concentric ring patterns)
     for (let i = 0; i < 16; i++) {
@@ -492,7 +544,7 @@ export function buildLandmarksMain(ctx = {}) {
       const z2 = laZ + Math.sin(a2) * rB;
       const len = Math.hypot(x2 - x1, z2 - z1);
       const ang = Math.atan2(x2 - x1, z2 - z1);
-      addBox(glyphGeos, 0.14, glyphH, len + 0.06, (x1 + x2) * 0.5, glyphY, (z1 + z2) * 0.5, P.teal || 0x6fe0f0, ang, 0, 0, 0.95, 1.05, rng);
+      addBox(floorGlyphGeos, 0.14, glyphH, len + 0.06, (x1 + x2) * 0.5, glyphY, (z1 + z2) * 0.5, P.teal || 0x6fe0f0, ang, 0, 0, 0.95, 1.05, rng);
     }
 
     // 4 broken tall pillars around Landing Area with fallen drums and moss caps
@@ -546,13 +598,11 @@ export function buildLandmarksMain(ctx = {}) {
       doors.push({ id: laCfg.door.id, position: dp, outward: dw });
       registerAnchor('door_landing_area', dp);
     }
-    const laSignPos = new THREE.Vector3(
-      laX + ((laCfg.signOffset && laCfg.signOffset.x) || 0),
-      laY + ((laCfg.signOffset && laCfg.signOffset.y) || 6.0),
-      laZ + ((laCfg.signOffset && laCfg.signOffset.z) || 0)
-    );
-    registerAnchor('sign_landing_area', laSignPos);
-    buildSignPlate(stoneGeos, glyphGeos, laSignPos, 0, rng);
+    const laSign = getSignLayout(layout, 'landing_area');
+    if (laSign) {
+      registerAnchor('sign_landing_area', new THREE.Vector3(laSign.x, laSign.boardY, laSign.z));
+      buildSignPost(stoneGeos, glyphGeos, laSign, rng);
+    }
 
     // =========================================================================
     // 2. SUMMONING ROOM (HERO BUILDING)
@@ -560,8 +610,7 @@ export function buildLandmarksMain(ctx = {}) {
     const srCfg = layout.summoning_room || {
       center: { x: 30.0, z: 4.0 },
       footprint: { radius: 10.0, height: 11.0, wallRadius: 10.2 },
-      door: { id: 'door_summoning_room', position: { x: 23.5, y: 1.8, z: 11.5 }, outward: { x: -0.4138, y: 0.0, z: 0.9104 } },
-      signOffset: { x: 0, y: 13.0, z: 0 }
+      door: { id: 'door_summoning_room', position: { x: 23.5, y: 1.8, z: 11.5 }, outward: { x: -0.4138, y: 0.0, z: 0.9104 } }
     };
     const srX = srCfg.center.x;
     const srZ = srCfg.center.z;
@@ -584,6 +633,11 @@ export function buildLandmarksMain(ctx = {}) {
 
     // Courtyard radial stone slabs and glowing glyph channels
     const courtBlocks = q === 'low' ? 16 : q === 'medium' ? 24 : 32;
+    // The courtyard slabs are the floor the glyph channels are inlaid in.
+    const courtSlabH = 0.14;
+    const courtTopY = srFloorY + 0.02 + courtSlabH * 0.5;
+    const courtGlyphH = 0.06;
+    const courtGlyphY = decalCenterY(courtTopY, courtGlyphH, FLOOR_DECAL_LAYERS.inlay);
     for (let i = 0; i < courtBlocks; i++) {
       const a = (i / courtBlocks) * Math.PI * 2;
       for (let rStep = 0; rStep < 3; rStep++) {
@@ -592,14 +646,14 @@ export function buildLandmarksMain(ctx = {}) {
         const bz = srZ + Math.sin(a) * radMid;
         const bw = (Math.PI * 2 * radMid) / courtBlocks - 0.08;
         const col = (i + rStep) % 2 === 0 ? (P.wallLit || 0xc4cbcf) : (P.groundBase || 0xa9b6ba);
-        addBox(stoneGeos, bw, 0.14, 1.98, bx, srFloorY + 0.02, bz, col, -a + Math.PI / 2, 0, 0, 0.82, 1.05, rng);
+        addBox(stoneGeos, bw, courtSlabH, 1.98, bx, srFloorY + 0.02, bz, col, -a + Math.PI / 2, 0, 0, 0.82, 1.05, rng);
       }
       if (i % 4 === 0) {
         // 8 radial glowing glyph rays in courtyard floor
         const rayLen = srRad - 2.6;
         const rx = srX + Math.cos(a) * (2.2 + rayLen * 0.5);
         const rz = srZ + Math.sin(a) * (2.2 + rayLen * 0.5);
-        addBox(glyphGeos, 0.14, 0.06, rayLen, rx, srFloorY + 0.07, rz, P.teal || 0x6fe0f0, -a + Math.PI / 2, 0, 0, 0.95, 1.05, rng);
+        addBox(floorGlyphGeos, 0.14, courtGlyphH, rayLen, rx, courtGlyphY, rz, P.teal || 0x6fe0f0, -a + Math.PI / 2, 0, 0, 0.95, 1.05, rng);
       }
       // Octagonal glyph chord in courtyard
       if (i % 2 === 0) {
@@ -611,7 +665,7 @@ export function buildLandmarksMain(ctx = {}) {
         const z2 = srZ + Math.sin(aNext) * rG;
         const clen = Math.hypot(x2 - x1, z2 - z1);
         const cang = Math.atan2(x2 - x1, z2 - z1);
-        addBox(glyphGeos, 0.12, 0.06, clen, (x1 + x2) * 0.5, srFloorY + 0.07, (z1 + z2) * 0.5, P.sphereCyan || 0xa8f4ff, cang, 0, 0, 0.95, 1.05, rng);
+        addBox(floorGlyphGeos, 0.12, courtGlyphH, clen, (x1 + x2) * 0.5, courtGlyphY, (z1 + z2) * 0.5, P.sphereCyan || 0xa8f4ff, cang, 0, 0, 0.95, 1.05, rng);
       }
     }
 
@@ -844,7 +898,9 @@ export function buildLandmarksMain(ctx = {}) {
     // Baked AO decal under pedestal and stairs
     const srAoGeo = new THREE.CircleGeometry(srWallRad + 1.6, 24);
     srAoGeo.rotateX(-Math.PI / 2);
-    srAoGeo.translate(srX, srGroundY + 0.03, srZ);
+    // The AO disc is a flat decal on the terrain: it sits on the patch layer
+    // so that it never shares a plane with the ground.
+    srAoGeo.translate(srX, srGroundY + FLOOR_DECAL_LAYERS.patch.top, srZ);
     aoGeos.push(srAoGeo);
 
     // Summoning Room Anchors, Door, and Desired Light
@@ -860,13 +916,11 @@ export function buildLandmarksMain(ctx = {}) {
       registerAnchor('door_summoning_room', dp);
       anchors.door = dp.clone();
     }
-    const srSignPos = new THREE.Vector3(
-      srX + ((srCfg.signOffset && srCfg.signOffset.x) || 0),
-      srGroundY + ((srCfg.signOffset && srCfg.signOffset.y) || 13.0),
-      srZ + ((srCfg.signOffset && srCfg.signOffset.z) || 0)
-    );
-    registerAnchor('sign_summoning_room', srSignPos);
-    buildSignPlate(stoneGeos, glyphGeos, srSignPos, gateRot, rng);
+    const srSign = getSignLayout(layout, 'summoning_room');
+    if (srSign) {
+      registerAnchor('sign_summoning_room', new THREE.Vector3(srSign.x, srSign.boardY, srSign.z));
+      buildSignPost(stoneGeos, glyphGeos, srSign, rng);
+    }
 
     lights.push({
       position: sphereCenter.clone(),
@@ -881,8 +935,7 @@ export function buildLandmarksMain(ctx = {}) {
     // =========================================================================
     const tsCfg = layout.town_square || {
       center: { x: 14.0, z: -8.0 },
-      footprint: { radius: 11.0 },
-      signOffset: { x: 0, y: 4.0, z: 0 }
+      footprint: { radius: 11.0 }
     };
     const tsX = tsCfg.center.x;
     const tsZ = tsCfg.center.z;
@@ -894,6 +947,18 @@ export function buildLandmarksMain(ctx = {}) {
     addCyl(stoneGeos, tsRad, tsRad + 0.25, 0.18, tsSegs, tsX, tsY + 0.09, tsZ, P.groundBase || 0xa9b6ba, 0, 0, 0, 0.78, 1.04, rng);
 
     // Wheel Emblem inlaid in the floor: 2 concentric stone rings, 8 spokes, central hub
+    // The rings, the spokes and the flagstone patches all overlap in plan, so
+    // each one gets its own decal layer: on a shared plane their top faces
+    // z-fight and the edges crawl in hatched stripes.
+    const tsTopY = tsY + 0.18; // the pavement base top face
+    const ringH = 0.12;
+    const spokeH = 0.13;
+    const lightSpokeH = 0.14;
+    const patchH = 0.12;
+    const ringY = decalCenterY(tsTopY, ringH, FLOOR_DECAL_LAYERS.line);
+    const spokeY = decalCenterY(tsTopY, spokeH, FLOOR_DECAL_LAYERS.patch);
+    const lightSpokeY = decalCenterY(tsTopY, lightSpokeH, FLOOR_DECAL_LAYERS.lineTop);
+    const patchY = decalCenterY(tsTopY, patchH, FLOOR_DECAL_LAYERS.patch);
     const wheelRingRadii = [
       { rIn: 4.4, rOut: 5.2, segs: q === 'low' ? 16 : 24 },
       { rIn: 8.8, rOut: 9.7, segs: q === 'low' ? 20 : 32 }
@@ -904,7 +969,7 @@ export function buildLandmarksMain(ctx = {}) {
         const a0 = i * stepA;
         const a1 = (i + 0.96) * stepA;
         const col = i % 2 === 0 ? (P.groundDark || 0x68767c) : (P.plaster || 0xdfe3df);
-        stoneGeos.push(createArchBlockGeo(wr.rIn, wr.rOut, 0.12, a0, a1, 1, col, tsY + 0.14, tsX, tsZ, rng));
+        stoneGeos.push(createArchBlockGeo(wr.rIn, wr.rOut, ringH, a0, a1, 1, col, ringY - ringH * 0.5, tsX, tsZ, rng));
       }
     }
 
@@ -914,15 +979,15 @@ export function buildLandmarksMain(ctx = {}) {
       const sLen = 7.7;
       const sx = tsX + Math.cos(sa) * (1.8 + sLen * 0.5);
       const sz = tsZ + Math.sin(sa) * (1.8 + sLen * 0.5);
-      addBox(stoneGeos, 0.68, 0.13, sLen, sx, tsY + 0.19, sz, P.groundDark || 0x68767c, -sa + Math.PI / 2, 0, 0, 0.78, 1.04, rng);
-      addBox(stoneGeos, 0.26, 0.14, sLen - 0.2, sx, tsY + 0.2, sz, P.wallLit || 0xc4cbcf, -sa + Math.PI / 2, 0, 0, 0.85, 1.08, rng);
+      addBox(stoneGeos, 0.68, spokeH, sLen, sx, spokeY, sz, P.groundDark || 0x68767c, -sa + Math.PI / 2, 0, 0, 0.78, 1.04, rng);
+      addBox(stoneGeos, 0.26, lightSpokeH, sLen - 0.2, sx, lightSpokeY, sz, P.wallLit || 0xc4cbcf, -sa + Math.PI / 2, 0, 0, 0.85, 1.08, rng);
 
       // Geometric diamond flagstones in the 8 sectors between spokes
       const midA = sa + Math.PI / 8;
       for (const dRad of [3.1, 6.4, 7.6]) {
         const dx = tsX + Math.cos(midA) * dRad;
         const dz = tsZ + Math.sin(midA) * dRad;
-        addBox(stoneGeos, 1.25, 0.12, 1.25, dx, tsY + 0.19, dz, P.wallShade || 0x8e9da3, -midA + Math.PI / 4, 0, 0, 0.8, 1.05, rng);
+        addBox(stoneGeos, 1.25, patchH, 1.25, dx, patchY, dz, P.wallShade || 0x8e9da3, -midA + Math.PI / 4, 0, 0, 0.8, 1.05, rng);
       }
     }
 
@@ -967,13 +1032,11 @@ export function buildLandmarksMain(ctx = {}) {
       });
     }
 
-    const tsSignPos = new THREE.Vector3(
-      tsX + ((tsCfg.signOffset && tsCfg.signOffset.x) || 0),
-      tsY + ((tsCfg.signOffset && tsCfg.signOffset.y) || 4.0),
-      tsZ + ((tsCfg.signOffset && tsCfg.signOffset.z) || 0)
-    );
-    registerAnchor('sign_town_square', tsSignPos);
-    buildSignPlate(stoneGeos, glyphGeos, tsSignPos, 0, rng);
+    const tsSign = getSignLayout(layout, 'town_square');
+    if (tsSign) {
+      registerAnchor('sign_town_square', new THREE.Vector3(tsSign.x, tsSign.boardY, tsSign.z));
+      buildSignPost(stoneGeos, glyphGeos, tsSign, rng);
+    }
 
     // =========================================================================
     // 4. SPACE-TIME RIFT
@@ -1004,7 +1067,10 @@ export function buildLandmarksMain(ctx = {}) {
     }
 
     addMergedMesh(stoneGeos, matStone, 'landmarksMain_stone');
-    addMergedMesh(mossGeos, matMoss, 'landmarksMain_moss');
+    addMergedMesh(mossGeos, matMoss, 'landmarksMain_moss', FLOOR_DECAL_LAYERS.moss.renderOrder);
+    // The glowing floor lines are drawn after the ground (and after the moss
+    // joints) so that they always win the depth test against the floor.
+    addMergedMesh(floorGlyphGeos, matFloorGlyph, 'landmarksMain_floorGlyphs', FLOOR_DECAL_LAYERS.inlay.renderOrder);
     addMergedMesh(glyphGeos, matGlyph, 'landmarksMain_glyphs');
     addMergedMesh(shaftGeos, matShaft, 'landmarksMain_shafts', 2);
 

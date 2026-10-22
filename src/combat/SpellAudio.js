@@ -2,37 +2,7 @@
 // Procedural WebAudio synthesizer for Fire Mage spells, mana potions, and fizzles.
 // Zero external sound assets: pure oscillator & gain nodes.
 
-let audioCtx = null;
-let hasUserGesture = false;
-
-if (typeof window !== 'undefined') {
-  const markGesture = () => {
-    hasUserGesture = true;
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(() => {});
-    }
-  };
-  window.addEventListener('pointerdown', markGesture, { once: true, passive: true });
-  window.addEventListener('keydown', markGesture, { once: true, passive: true });
-}
-
-function getAudioContext() {
-  if (typeof window === 'undefined' || !hasUserGesture) return null;
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return null;
-
-  if (!audioCtx) {
-    try {
-      audioCtx = new AudioContextClass();
-    } catch (e) {
-      return null;
-    }
-  }
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume().catch(() => {});
-  }
-  return audioCtx;
-}
+import { getAudioContext } from '../core/AudioManager.js';
 
 /**
  * Plays synthesized sound cue for a specific fire spell.

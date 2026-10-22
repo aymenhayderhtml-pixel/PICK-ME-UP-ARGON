@@ -1,12 +1,17 @@
 {
-  "name": "pick-me-up--2-",
+  "name": "pick-me-up-infinite-gacha",
   "version": "0.0.0",
   "private": true,
+  "description": "A 3D browser gacha action-RPG built with Three.js, based on the manhua Pick Me Up: Infinite Gacha.",
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node scripts/check_codemap.mjs && node scripts/test_phase1_migration.mjs && node scripts/test_phase2_emotions.mjs && node scripts/test_phase3_training_30days.mjs && node scripts/test_phase4_login_report.mjs && node scripts/test_phase5_town_training.mjs && node scripts/test_phase6_ui_and_integration.mjs && node scripts/test_phase7_fight_ai.mjs && node scripts/test_phase8_emotion_fights.mjs && node scripts/test_phase9_consequences_and_report.mjs && node scripts/test_phase10_training_xp_merge.mjs && node scripts/test_phase11_bugfixes.mjs",
     "test:spells": "node scripts/test_spells.mjs",
     "test:integration": "node scripts/test_integration.mjs",
     "test:loadout": "node scripts/test_loadout.mjs",
@@ -15,7 +20,17 @@
     "test:phase3": "node scripts/test_phase3_training_30days.mjs",
     "test:phase4": "node scripts/test_phase4_login_report.mjs",
     "test:phase5": "node scripts/test_phase5_town_training.mjs",
-    "test:phase6": "node scripts/test_phase6_ui_and_integration.mjs"
+    "test:phase6": "node scripts/test_phase6_ui_and_integration.mjs",
+    "test:phase7": "node scripts/test_phase7_fight_ai.mjs",
+    "test:phase8": "node scripts/test_phase8_emotion_fights.mjs",
+    "test:phase9": "node scripts/test_phase9_consequences_and_report.mjs",
+    "test:phase10": "node scripts/test_phase10_training_xp_merge.mjs",
+    "test:phase11": "node scripts/test_phase11_bugfixes.mjs",
+    "test:camera": "node scripts/test_camera_collision.mjs",
+    "test:layouts": "node test-floor-layouts.mjs",
+    "test:rig": "node test-rig-locomotion.mjs",
+    "test:walkheight": "node test-walkheight.mjs",
+    "test:walkbuildings": "node test-walk-buildings.mjs"
   },
   "devDependencies": {
     "vite": "^8.3.0"

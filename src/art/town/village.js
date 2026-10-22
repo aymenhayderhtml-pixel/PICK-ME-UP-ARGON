@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { PALETTE as DEFAULT_PALETTE } from './palette.js';
+import { LAYOUT, PROP_COLLIDERS, getSignLayout } from './layout.js';
 
 const COTTAGE_SPECS = [
   { id: 'cottage_1', row: 1, x: -33.0, z: -14.0, doorX: -33.8, doorZ: -12.19, corrZ: -10.8, variant: 0 },
@@ -418,7 +419,7 @@ function buildCottageArchetypes(PAL) {
       makePart(box, -0.8, 0.28, 1.92, 0, 0, 0, 1.52, 0.18, 0.34, PAL.stoneMid, PAL.stoneLit, PAL.stoneCrevice, 0.75),
       // Recessed lighter stone doorframe & wood door leaf (no black void)
       makePart(box, -0.8, 1.38, 1.78, 0, 0, 0, 1.48, 2.26, 0.18, PAL.stoneShade, PAL.stoneLit, PAL.stoneCrevice, 0.75),
-      makePart(box, -0.8, 1.36, 1.81, 0, 0, 0, 1.28, 2.12, 0.12, PAL.wood, 0x825c3a, 0x45301d, 0.76),
+      makePart(box, -0.8, 1.36, 1.83, 0, 0, 0, 1.28, 2.12, 0.12, PAL.wood, 0x825c3a, 0x45301d, 0.76),
       // Iron straps & handle ring
       makePart(box, -0.8, 1.85, 1.88, 0, 0, 0, 1.16, 0.07, 0.04, PAL.iron, PAL.stoneShade, PAL.iron, 0.8),
       makePart(box, -0.8, 0.90, 1.88, 0, 0, 0, 1.16, 0.07, 0.04, PAL.iron, PAL.stoneShade, PAL.iron, 0.8),
@@ -804,7 +805,7 @@ function buildRoadsAndCurbs(getY, PAL) {
   };
 }
 
-function buildUniqueVillageStructures(getY, PAL, colliders, anchors) {
+function buildUniqueVillageStructures(getY, PAL, colliders, anchors, blockers, layout) {
   const box = new THREE.BoxGeometry(1, 1, 1);
   const cyl = new THREE.CylinderGeometry(1, 1, 1, 10);
   const rock = new THREE.IcosahedronGeometry(1, 1);
@@ -825,7 +826,7 @@ function buildUniqueVillageStructures(getY, PAL, colliders, anchors) {
     // Overhead Timber & Slate Arch Beam at y = gy + 4.05 (plenty of headroom)
     makePart(box, gx, gy + 3.95, gz, 0, 0, 0, 0.42, 0.32, 5.4, PAL.timber, 0x3d3632, 0x1c1816, 0.8),
     makePart(box, gx, gy + 4.25, gz, 0, 0, 0, 0.68, 0.22, 5.6, PAL.slate, 0x677582, 0x333c44, 0.85),
-    // Sign Plate Geometry at (-18.0, gy + 4.0, -4.0)
+    // Decorative plaque on the arch (the readable zone sign is the signpost below)
     makePart(box, gx + 0.22, gy + 3.55, gz, 0, 0, 0, 0.14, 0.56, 1.85, PAL.plaqueFrame, PAL.stoneLit, PAL.iron, 0.85),
     makePart(box, gx + 0.26, gy + 3.55, gz, 0, 0, 0, 0.10, 0.44, 1.68, PAL.plaqueBronze, PAL.teal, 0x2c3834, 0.88)
   );
@@ -833,7 +834,25 @@ function buildUniqueVillageStructures(getY, PAL, colliders, anchors) {
     { type: 'circle', x: gx, z: gz - 2.25, r: 0.52 },
     { type: 'circle', x: gx, z: gz + 2.25, r: 0.52 }
   );
-  anchors['sign_residences'] = new THREE.Vector3(gx, gy + 4.0, gz);
+
+  // Residences signpost: post on the ground, board 2m above it, facing the road
+  const resSign = getSignLayout(layout, 'residences');
+  if (resSign) {
+    const postH = resSign.post.height;
+    parts.push(
+      makePart(box, resSign.x, resSign.groundY + (postH + 0.12) * 0.5, resSign.z,
+        0, resSign.rotY, 0, resSign.post.width, postH + 0.12, resSign.post.width,
+        PAL.timber, 0x3d3632, 0x1c1816, 0.72),
+      makePart(box, resSign.x, resSign.boardY, resSign.z,
+        0, resSign.rotY, 0, resSign.board.width, resSign.board.height, resSign.board.depth,
+        PAL.slate, 0x677582, 0x333c44, 0.8),
+      // Teal trim along the lower edge, clear of the text in the middle
+      makePart(box, resSign.x, resSign.boardY - resSign.board.height * 0.5 + 0.1, resSign.z,
+        0, resSign.rotY, 0, resSign.board.width - 0.3, 0.06, resSign.board.depth + 0.02,
+        PAL.teal, 0xb8f8ff, 0x6fe0f0, 0.95)
+    );
+    anchors['sign_residences'] = new THREE.Vector3(resSign.x, resSign.boardY, resSign.z);
+  }
 
   // 2. Two Village Stone Wells with Timber Roofs & Buckets
   const wells = [
@@ -975,6 +994,10 @@ function buildUniqueVillageStructures(getY, PAL, colliders, anchors) {
       makePart(rock, rx, ry + sc * 0.35, rz, 0.3, rx * 0.5, 0.2, sc * 1.1, sc * 0.75, sc * 0.95, PAL.stoneMid, PAL.moss, PAL.stoneCrevice, 0.68)
     );
     colliders.push({ type: 'circle', x: rx, z: rz, r: sc * 0.85 });
+    // The player collides with the boulder itself, not with the camera list.
+    if (blockers) {
+      blockers.push({ type: 'circle', x: rx, z: rz, r: sc * PROP_COLLIDERS.boulder });
+    }
   }
 
   box.dispose();
@@ -1001,6 +1024,8 @@ function generateLayoutPlacements(getY, PAL) {
   const grass = [];
   const pebbles = [];
   const propColliders = [];
+  // Player-only obstacle shapes (see src/art/town/collision.js for the format).
+  const blockers = [];
 
   // 1. Per-Cottage Hedged Gardens, Flower Beds, Trees & Side Props
   for (let i = 0; i < COTTAGE_SPECS.length; i++) {
@@ -1088,6 +1113,9 @@ function generateLayoutPlacements(getY, PAL) {
     const dx = fl.x2 - fl.x1;
     const dz = fl.z2 - fl.z1;
     const rotY = Math.atan2(dx, dz) + Math.PI / 2;
+    const lineLen = Math.hypot(dx, dz);
+    const spacing = lineLen / fl.count;
+    const placed = [];
     for (let s = 0; s < fl.count; s++) {
       const t = (s + 0.5) / fl.count;
       const fx = fl.x1 + dx * t;
@@ -1095,6 +1123,37 @@ function generateLayoutPlacements(getY, PAL) {
       if (!isClearOfDoors(fx, fz, 0.6) || !isClearOfRoads(fx, fz, 0.4)) continue;
       fences.push({ x: fx, y: getY(fx, fz), z: fz, rotY, sc: 1.0 });
       propColliders.push({ type: 'box', x: fx, z: fz, w: 1.8, d: 0.25, rotY });
+      placed.push({ x: fx, z: fz });
+    }
+
+    // One blocker per straight fence run (never one per post): consecutive
+    // fences form a single wall, a skipped fence ends the run.
+    const maxGap = spacing * 1.6;
+    let runStart = 0;
+    while (runStart < placed.length) {
+      let runEnd = runStart;
+      while (runEnd + 1 < placed.length) {
+        const gap = Math.hypot(
+          placed[runEnd + 1].x - placed[runEnd].x,
+          placed[runEnd + 1].z - placed[runEnd].z
+        );
+        if (gap > maxGap) break;
+        runEnd++;
+      }
+      const a = placed[runStart];
+      const b = placed[runEnd];
+      const runLen = Math.hypot(b.x - a.x, b.z - a.z);
+      blockers.push({
+        type: 'box',
+        x: (a.x + b.x) * 0.5,
+        z: (a.z + b.z) * 0.5,
+        hx: runLen * 0.5 + PROP_COLLIDERS.fenceHalfLength,
+        hz: PROP_COLLIDERS.fenceHalfThickness,
+        // The long axis follows the fence line (a lone fence has no direction
+        // of its own): rot so the box axis (cos rot, -sin rot) points along it.
+        rot: Math.atan2(-dz / lineLen, dx / lineLen)
+      });
+      runStart = runEnd + 1;
     }
   }
 
@@ -1191,6 +1250,16 @@ function generateLayoutPlacements(getY, PAL) {
     if (t.hasCollider) {
       propColliders.push({ type: 'circle', x: t.x, z: t.z, r: 0.42 * t.sc });
     }
+    // The player collides with the trunk only, never with the leaves.
+    blockers.push({ type: 'circle', x: t.x, z: t.z, r: PROP_COLLIDERS.treeTrunk * t.sc });
+  }
+
+  // Solid props the hero cannot walk through.
+  for (const b of barrels) {
+    blockers.push({ type: 'circle', x: b.x, z: b.z, r: PROP_COLLIDERS.barrel * b.sc });
+  }
+  for (const c of crates) {
+    blockers.push({ type: 'circle', x: c.x, z: c.z, r: PROP_COLLIDERS.crate * c.sc });
   }
 
   // 4. Ground Detail: 1650 Grass Tufts & 450 Pebbles/Fallen Leaves scattered near roads, walls, cottages, and trees
@@ -1271,7 +1340,8 @@ function generateLayoutPlacements(getY, PAL) {
     trees,
     grass,
     pebbles,
-    propColliders
+    propColliders,
+    blockers
   };
 }
 
@@ -1307,6 +1377,7 @@ function makeInstanced(geom, mat, items, colorCallback) {
 export function buildTownVillage(ctx = {}) {
   const PAL = { ...DEFAULT_PALETTE, ...(ctx.PALETTE || {}) };
   const getY = typeof ctx.getGroundY === 'function' ? ctx.getGroundY : () => 0;
+  const layout = ctx.layout || LAYOUT;
   let currentQuality = ctx.quality || 'high';
   const isNightInit = ctx.time === 'night' || ctx.time === 'dusk';
 
@@ -1365,6 +1436,8 @@ export function buildTownVillage(ctx = {}) {
   const geometries = [];
 
   const colliders = [];
+  // Player-only obstacle shapes (fences, tree trunks, boulders, barrels, crates).
+  const blockers = [];
   const doors = [];
   const anchors = {};
   const lights = [];
@@ -1376,7 +1449,7 @@ export function buildTownVillage(ctx = {}) {
   roadMesh.name = 'VillageRoads';
   group.add(roadMesh);
 
-  const { uniqueOpaque, uniqueLanternGlow } = buildUniqueVillageStructures(getY, PAL, colliders, anchors);
+  const { uniqueOpaque, uniqueLanternGlow } = buildUniqueVillageStructures(getY, PAL, colliders, anchors, blockers, layout);
   geometries.push(uniqueOpaque, uniqueLanternGlow);
   const uniqueMesh = new THREE.Mesh(uniqueOpaque, matArchitecture);
   uniqueMesh.name = 'VillageUniqueStructures';
@@ -1464,6 +1537,9 @@ export function buildTownVillage(ctx = {}) {
   const placements = generateLayoutPlacements(getY, PAL);
   for (const pc of placements.propColliders) {
     colliders.push(pc);
+  }
+  for (const pb of placements.blockers) {
+    blockers.push(pb);
   }
 
   const treesByVariant = [[], [], []];
@@ -1766,6 +1842,7 @@ export function buildTownVillage(ctx = {}) {
   return {
     group,
     colliders,
+    blockers,
     doors,
     anchors,
     lights,

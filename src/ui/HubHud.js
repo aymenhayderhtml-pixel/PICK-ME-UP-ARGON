@@ -14,10 +14,20 @@ export class HubHud {
     this.container.style.display = 'none';
 
     // 1. Top-Left: Currency Panel (Gold, Gems, Free Tickets)
+    // The currency readout and the day badge share a flex row, so the badge
+    // always sits right after the text instead of at a hardcoded offset that
+    // a longer readout (more gold, more tickets) slides underneath.
+    this.topLeftBar = document.createElement('div');
+    this.topLeftBar.style.position = 'absolute';
+    this.topLeftBar.style.top = '12px';
+    this.topLeftBar.style.left = '12px';
+    this.topLeftBar.style.display = 'flex';
+    this.topLeftBar.style.alignItems = 'center';
+    this.topLeftBar.style.gap = '10px';
+    this.topLeftBar.style.zIndex = '10002'; // Above sign sprites
+    this.container.appendChild(this.topLeftBar);
+
     this.currencyBox = document.createElement('div');
-    this.currencyBox.style.position = 'absolute';
-    this.currencyBox.style.top = '12px';
-    this.currencyBox.style.left = '12px';
     this.currencyBox.style.backgroundColor = 'rgba(11, 8, 16, 0.9)';
     this.currencyBox.style.border = '1px solid var(--frame-inner)';
     this.currencyBox.style.boxShadow = '0 0 12px var(--glow)';
@@ -25,14 +35,11 @@ export class HubHud {
     this.currencyBox.style.padding = '8px 14px';
     this.currencyBox.style.color = 'var(--text)';
     this.currencyBox.style.fontSize = '13px';
-    this.currencyBox.style.zIndex = '10002'; // Above sign sprites
-    this.container.appendChild(this.currencyBox);
+    this.currencyBox.style.whiteSpace = 'nowrap';
+    this.topLeftBar.appendChild(this.currencyBox);
 
     // 1b. Day Badge next to Currency
     this.dayBadge = document.createElement('div');
-    this.dayBadge.style.position = 'absolute';
-    this.dayBadge.style.top = '12px';
-    this.dayBadge.style.left = '310px';
     this.dayBadge.style.backgroundColor = 'rgba(11, 8, 16, 0.9)';
     this.dayBadge.style.border = '1px solid var(--frame-inner)';
     this.dayBadge.style.boxShadow = '0 0 12px var(--glow)';
@@ -42,27 +49,11 @@ export class HubHud {
     this.dayBadge.style.fontSize = '13px';
     this.dayBadge.style.fontWeight = 'bold';
     this.dayBadge.style.letterSpacing = '1px';
-    this.dayBadge.style.zIndex = '10002';
+    this.dayBadge.style.whiteSpace = 'nowrap';
     this.dayBadge.textContent = 'DAY 1';
-    this.container.appendChild(this.dayBadge);
+    this.topLeftBar.appendChild(this.dayBadge);
 
-    // 1c. FPS Badge
-    this.fpsBadge = document.createElement('div');
-    this.fpsBadge.style.position = 'absolute';
-    this.fpsBadge.style.top = '12px';
-    this.fpsBadge.style.left = '400px';
-    this.fpsBadge.style.backgroundColor = 'rgba(11, 8, 16, 0.9)';
-    this.fpsBadge.style.border = '1px solid var(--frame-inner)';
-    this.fpsBadge.style.borderRadius = '6px';
-    this.fpsBadge.style.padding = '8px 12px';
-    this.fpsBadge.style.color = '#6fe0f0';
-    this.fpsBadge.style.fontSize = '13px';
-    this.fpsBadge.style.fontWeight = 'bold';
-    this.fpsBadge.style.zIndex = '10002';
-    this.fpsBadge.style.display = 'none';
-    this.container.appendChild(this.fpsBadge);
-
-    // 1d. F3 Diagnostics Overlay
+    // 1c. F3 Diagnostics Overlay
     this.showF3 = false;
     this.f3DebugBox = document.createElement('div');
     this.f3DebugBox.style.position = 'absolute';
@@ -134,7 +125,7 @@ export class HubHud {
     // 5. Bottom Hotkey Hints: sits bottom: 12px
     this.bottomHints = document.createElement('div');
     this.bottomHints.textContent =
-      'WASD Move | Arrow Keys Rotate/Pitch Camera | Wheel Zoom | E Interact | R Roster | O Options | T Enter Tower | M Mute | ? Toggle Hints';
+      'WASD Move | MOUSE Rotate Camera (Click to Capture) | Arrow Keys Rotate/Pitch | Wheel Zoom | E Interact | R Roster | O Options | T Enter Tower | M Mute | ? Toggle Hints';
     this.bottomHints.style.position = 'absolute';
     this.bottomHints.style.bottom = '12px';
     this.bottomHints.style.left = '50%';
@@ -318,15 +309,6 @@ export class HubHud {
     this.showF3 = !this.showF3;
     this.f3DebugBox.style.display = this.showF3 ? 'block' : 'none';
     return this.showF3;
-  }
-
-  updateFps(fps, show) {
-    if (show) {
-      this.fpsBadge.style.display = 'block';
-      this.fpsBadge.textContent = `${fps} FPS`;
-    } else {
-      this.fpsBadge.style.display = 'none';
-    }
   }
 
   updateF3(text) {

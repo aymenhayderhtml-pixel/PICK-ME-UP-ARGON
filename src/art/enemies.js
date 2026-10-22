@@ -6,6 +6,7 @@ export const ENEMY_TYPES = [
   'goblin_archer',
   'goblin_shaman',
   'goblin_leader',
+  'goblin_armored',
   'hobgoblin_chief',
   'prairie_wolf',
   'orc_warrior',
@@ -51,16 +52,6 @@ const CACHES = {
   mats: new Map(),
   textures: new Map()
 };
-
-export function disposeEnemyCaches() {
-  for (const g of CACHES.geoms.values()) g.dispose();
-  for (const m of CACHES.mats.values()) m.dispose();
-  for (const t of CACHES.textures.values()) t.dispose();
-  CACHES.geoms.clear();
-  CACHES.mats.clear();
-  CACHES.textures.clear();
-  disposePrairieWolfCache();
-}
 
 function mulberry32(a) {
   return function () {
@@ -270,7 +261,9 @@ function buildCurvedBladeGeom(len, width, curve) {
   const pos = g.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const y = pos.getY(i) + len * 0.5;
-    const t = y / len;
+    // BoxGeometry rounds the bottom row to a tiny negative y (e.g. -1.8e-9),
+    // so t can dip below 0 and Math.pow(negative, 1.65) would be NaN.
+    const t = Math.min(1, Math.max(0, y / len));
     const z = pos.getZ(i);
     const taper = 1 - Math.pow(t, 1.65) * 0.88;
     const bend = t * t * curve;
@@ -457,6 +450,22 @@ const ARCHETYPES = {
     shoulderR: true,
     hasBanner: true
   },
+  goblin_armored: {
+    height: 1.20,
+    skinHex: 0x6a6a2e,
+    legLen: 0.25,
+    torsoH: 0.36,
+    torsoWTop: 0.18,
+    torsoWBot: 0.12,
+    armLen: 0.26,
+    headScale: 0.25,
+    hunch: 0.58,
+    kneeBend: 0.34,
+    hasHelm: true,
+    shoulderL: true,
+    shoulderR: true,
+    hasChestPlate: true,
+  },
   hobgoblin_chief: {
     height: 2.70,
     skinHex: 0x6a7a3a,
@@ -576,6 +585,10 @@ function getTypeGeometries(type, arch, wVariant, armorTier) {
     chestGearParts.push(placeGeom(strap, darkLeather, 0, torsoH * 0.62, 0.02, 0.5, 0.6, 0.7));
     const buckle = new THREE.BoxGeometry(0.055, 0.055, 0.03);
     chestGearParts.push(placeGeom(buckle, goldHex, 0, torsoH * 0.62, arch.torsoWTop * 0.68));
+  }
+  if (arch.hasChestPlate) {
+    const plate = new THREE.BoxGeometry(arch.torsoWTop * 0.95, torsoH * 0.70, 0.08);
+    chestGearParts.push(placeGeom(plate, darkIron, 0, torsoH * 0.55, arch.torsoWTop * 0.42));
   }
   if (arch.hasBoneNecklace) {
     const neckRing = new THREE.TorusGeometry(arch.torsoWTop * 0.66, 0.018, 5, 8);
@@ -2253,34 +2266,6 @@ function buildQuadrupedModel(type, arch = {}, opts = {}) {
     getBounds,
     dispose,
   };
-}
-
-function disposePrairieWolfCache() {
-  if (!WOLF_ART_CACHE.initialized) return;
-  const disposed = new Set();
-  for (const key of Object.keys(WOLF_ART_CACHE.geomsBody)) {
-    const g = WOLF_ART_CACHE.geomsBody[key];
-    if (g && !disposed.has(g)) {
-      g.dispose();
-      disposed.add(g);
-    }
-  }
-  for (const key of Object.keys(WOLF_ART_CACHE.geomsOutlined)) {
-    const g = WOLF_ART_CACHE.geomsOutlined[key];
-    if (g && !disposed.has(g)) {
-      g.dispose();
-      disposed.add(g);
-    }
-  }
-  if (WOLF_ART_CACHE.furMat) WOLF_ART_CACHE.furMat.dispose();
-  if (WOLF_ART_CACHE.outlineMat) WOLF_ART_CACHE.outlineMat.dispose();
-  if (WOLF_ART_CACHE.eyeMat) WOLF_ART_CACHE.eyeMat.dispose();
-  if (WOLF_ART_CACHE.gradientTex) WOLF_ART_CACHE.gradientTex.dispose();
-
-  WOLF_ART_CACHE.geomsBody = {};
-  WOLF_ART_CACHE.geomsOutlined = {};
-  WOLF_ART_CACHE.outlineShells = {};
-  WOLF_ART_CACHE.initialized = false;
 }
 
 export function createEnemyModel(type = 'goblin_grunt', opts = {}) {

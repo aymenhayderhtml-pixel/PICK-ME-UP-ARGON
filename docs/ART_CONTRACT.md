@@ -2,39 +2,22 @@
 
 ## CURRENT STATE
 
-- `src/player/Player.js:20-165`: `Player.constructor` builds the player humanoid mesh hierarchy with primitives (torso, collar, head, hair, arm pivots, leg pivots, shadow).
-- `src/combat/Ally.js:92-159`: `Ally.buildMesh(hero)` constructs ally humanoid meshes using torso, head, hair cap, arm pivots, and leg pivots.
-- `src/combat/Enemy.js:89-137`: `Enemy.buildGoblinMesh()` constructs small humanoid goblin meshes with green skin, torso, head, ears, and limb pivots.
-- `src/combat/HobgoblinChief.js:39-165`: `HobgoblinChief.constructor` creates a large humanoid boss mesh with torso, tusks, shoulder armor, arm pivots, and leg pivots.
-- `src/hub/HubHeroes.js:306-430`: `HubHero.buildModel()` creates civilian/hero models with randomized hair, aprons, vests, and limb pivots.
-- `src/hub/TrainingManager.js:90-165`: `TrainingHero.buildHeroMesh(hero)` creates training humanoid meshes with torso, head, and limb pivots.
-- `src/player/Player.js:27-133`: Bounding box measurement of the standard player mesh spans y = 0.00 to y = 1.67, establishing the model height at 1.67 units.
-- `src/player/Player.js:380-384, 804`: The model faces the +Z axis when `rotation.y = 0` (forward vector calculation uses `sin(rotY)` on X and `cos(rotY)` on Z).
-- `src/player/Player.js:90-134`: Limbs use pivot groups named `torsoGroup`, `leftArmPivot`, `rightArmPivot`, `leftLegPivot`, and `rightLegPivot`.
-- `src/player/Player.js:920-936`: Locomotion swing animates `leftLegPivot.rotation.x = -swingAngle`, `rightLegPivot.rotation.x = swingAngle`, `leftArmPivot.rotation.x = swingAngle`, and `rightArmPivot.rotation.x = -swingAngle`.
-- `src/player/Player.js:961-969`: Sword attack swings `rightArmPivot.rotation.x` (-1.2 to +1.2) and `rightArmPivot.rotation.y` (-0.5 to +0.5) over 0.25s.
-- `src/player/Player.js:846-850`: Shield blocking poses `leftArmPivot` with `rotation.x = -Math.PI / 2.3`, `rotation.y = 0.4`, and `rotation.z = 0.2`.
-- `src/player/Player.js:804-811`: Dodge rolling rotates `torsoGroup.rotation.x` through 360 degrees over 0.35s.
-- `src/player/Player.js:957-959`: Idle breathing translates `torsoGroup.position.y` with a sine wave bob of amplitude 0.02.
-- `src/combat/Ally.js:648-652, 678-680, 704-706`: Ally attack swings animate `rightArmPivot.rotation.x` forward (-0.5 to -0.7 rad) based on weapon role.
-- `src/combat/Ally.js:726-732`: Ally locomotion alternates `leftLegPivot` / `rightLegPivot` and arm pivots by `swing`.
-- `src/combat/Ally.js:451-454`: Panic state raises both arms by setting `leftArmPivot.rotation.x` and `rightArmPivot.rotation.x` to `-Math.PI * 0.8`.
-- `src/hub/HubHeroes.js:927-932, 964-969`: Hub heroes swing limb pivots during waypoint path traversal.
-- `src/hub/HubHeroes.js:747-752`: Hub blacksmithing swings `rightArmPivot.rotation.x` to simulate hammer blows.
-- `src/hub/HubHeroes.js:823-826`: Hub mining swings `rightArmPivot.rotation.x` for pickaxe striking loops.
-- `src/hub/TrainingManager.js:294-350`: Training facility animates attack cycles for sword, spear, bow, dagger, and magic on `rightArmPivot` and `leftArmPivot`.
-- `src/player/Player.js:98-114`: Weapons are attached as children of `rightArmPivot` (`this.weaponGroup`), and shields are attached as children of `leftArmPivot` (`this.shieldGroup`).
-- `src/player/Player.js:251-326`: `rebuildWeaponMesh()` adds weapon geometry into `weaponGroup` and `rebuildShieldMesh()` adds shield geometry into `shieldGroup`.
-- `src/combat/Ally.js:158-234`: `buildWeaponMesh()` attaches weapon meshes directly to `rightArmPivot` and shields/bows to `leftArmPivot`.
-- `src/hub/HubHeroes.js:217-270`: Hub hero models attach weapon meshes directly to `rightArmPivot` and shield meshes directly to `leftArmPivot`.
-- `src/hub/TrainingManager.js:172-214`: `attachWeapon()` adds weapon meshes to `rightArmPivot` and shield meshes to `leftArmPivot`.
+- `src/art/HeroRig.js`: `HeroRig` is the single 15-joint humanoid rig with weapon sockets and procedural poses. **Every humanoid character in the game is built from it** — `src/player/Player.js:45`, `src/combat/Ally.js:101`, `src/hub/HubHeroes.js:238`, `src/hub/TrainingManager.js:96` all construct `new HeroRig(look)`.
+- `src/art/hero.js`: `createHeroModel(opts)` returns the rig's mesh tree and joint sockets; `HERO_POSES` lists the pose names.
+- `src/art/HeroRig.js:169-183`: `HeroRig.equip()` attaches the weapon mesh to `hero.sockets.handR`, the shield mesh to `hero.sockets.handL`, and staves to `hero.sockets.staffHand`.
+- `src/player/Player.js:625-631`: `rebuildWeaponMesh()` and `rebuildShieldMesh()` are thin wrappers over `this.rig.equip(...)` — they no longer build geometry themselves.
+- `src/combat/Ally.js:99-101`: `Ally.buildMesh(hero)` generates a look and creates a `HeroRig`.
+- `src/art/weaponAnimations.js` owns **all** weapon transforms, timings and grip offsets. `WEAPON_ANIMATIONS` holds the hold poses and attack specs; `solveTwoHandGripIK` solves the two-bone IK. Never hardcode an animation transform in a rig or combat file.
+- `src/art/EnemyRig.js`: `EnemyRig` is the enemy rig controller (joint transforms and death collapse).
+- `src/art/enemies.js`: `createEnemyModel(type, opts)` returns the enemy mesh tree; `ENEMY_TYPES`, `ENEMY_POSES` and `POSE_INFO` describe the poses the engine and the test viewer replay.
+- `src/art/weapons.js`: `createWeaponModel(kind, opts)`, `createShieldModel(kind, opts)` and `createPickupModel(kind, opts)` build every weapon, shield and pickup from primitives.
 - `src/core/CameraFade.js:28-48`: In `updateHumanoidCameraFade`, all mesh children of humanoids within 2.5 units of camera have materials updated with `depthWrite = true`, `transparent = true`, and `opacity = op`, restoring `transparent = false` and `opacity = 1.0` when far.
 - `src/ui/Label.js:45-52, 91, 93, 161, 163`: Billboard sprites read `userData.aspectRatio` and `userData.baseOpacity`, while humanoid mesh groups have no custom `userData` fields read by existing gameplay systems.
 
 ## NEW CONTRACT
 
 FILE: src/art/hero.js. ES module. Only import: import * as THREE from ‘three’ (Three.js r160). No other imports, no external files or textures; canvas textures up to 256x256 are allowed.
-EXPORTS: createHeroModel(opts) -> HeroModel; disposeHeroCaches(); HERO_POSES (array of pose names).
+EXPORTS: createHeroModel(opts) -> HeroModel; HERO_POSES (array of pose names).
 UNITS: 1 unit = 1 meter. Origin = center of the feet on the ground. The model faces +Z. Height at heightScale 1 is 1.67 units.
 opts (every field optional, with defaults): {
 seed: integer (same seed and no other fields = same random look),
@@ -89,7 +72,7 @@ LOOK: stylized semi-realistic manhwa characters, 7 to 7.5 heads tall, NOT blocky
 ## ENEMY CONTRACT
 
 FILE: src/art/enemies.js. ES module. Only import: import * as THREE from ‘three’ (Three.js r160). No external files or textures; canvas textures up to 256x256 are allowed.
-EXPORTS: createEnemyModel(type, opts) -> EnemyModel; disposeEnemyCaches(); ENEMY_TYPES (array of type names); ENEMY_POSES (array of pose names); POSE_INFO (object: poseName -> { loop: boolean, duration: seconds }) used by the engine and the test viewer to replay one-shot poses.
+EXPORTS: createEnemyModel(type, opts) -> EnemyModel; ENEMY_TYPES (array of type names); ENEMY_POSES (array of pose names); POSE_INFO (object: poseName -> { loop: boolean, duration: seconds }) used by the engine and the test viewer to replay one-shot poses.
 TYPES (all must exist in the file; types marked LATER may be simple placeholders until their batch): goblin_grunt, goblin_archer, goblin_shaman, goblin_leader, hobgoblin_chief (boss), orc_warrior (LATER), orc_archer (LATER), orc_berserker (LATER), orc_lord (LATER boss), crystal_slime (LATER), rock_crawler (LATER).
 UNITS: 1 unit = 1 meter, origin = the center of the feet on the ground, the model faces +Z. Heights at scale 1: grunt 1.15, archer 1.15, shaman 1.3, leader 1.7, hobgoblin_chief 2.7, orc types 2.1 to 2.4, orc_lord 4.0, crystal_slime 0.9, rock_crawler 0.6.
 opts (optional): { seed: integer (variation of skin shade, hair, small scars, scale 0.94 to 1.06, gear mix), weapon: type-specific variant name (grunt: ‘dualKnives’ | ‘knifeShield’ | ‘club’), level: 1 to 10 (only affects small visual details like more metal at higher levels), outline: true|false (default true) }
@@ -143,11 +126,11 @@ Look: dark slate-gray fur (about 0x4a4d55) with lighter gray muzzle and chest pa
 - `src/art/hero.js:754`: `back` socket is positioned at `(0, 0.12, -0.11 * build.sz)` under `chest` with rotation `(0, 0, 0)`; local -Z points outward from spine and +Y points upwards along the back.
 - `src/art/hero.js:756`: `hip` socket is positioned at `(-0.13 * build.sx, -0.02, 0)` under `hips` with rotation `(0, 0, 0)`; local -X points outward from left hip and +Z points forward.
 - `src/art/hero.js:758`: `head` socket is positioned at `(0, 0.21, 0)` on `head` with rotation `(0, 0, 0)`; local +Y points upwards from crown of head.
-- `src/art/weaponsLegacy.js:23, 140-153`: `buildWeaponMesh()` constructs legacy sword mesh with blade length 0.72 units, guard width 0.24 units, and total length 0.91 units (pommel at y = +0.10, blade tip at y = -0.78).
-- `src/art/weaponsLegacy.js:164, 181-196`: `buildShieldMesh()` constructs legacy round shield mesh with disc radius 0.28 to 0.31 units (diameter 0.56 to 0.62 units), thickness 0.05 units, and center boss radius 0.07 units.
-- `src/player/Player.js:98-114, 251-283`: `rebuildWeaponMesh()` constructs fallback sword (blade length 0.85, width 0.08), dagger (length 0.45), or club (length 0.75, radius 0.09) attached to `weaponGroup` under `rightArmPivot`.
-- `src/player/Player.js:285-326`: `rebuildShieldMesh()` constructs fallback round disc shield (radius 0.32, diameter 0.64, boss radius 0.08) attached to `shieldGroup` under `leftArmPivot`.
-- `src/combat/Ally.js:122, 158-234`: `buildWeaponMesh()` attaches weapon mesh to `rightArmPivot` and shields/bows to `leftArmPivot`.
+- `src/art/weapons.js:351-366`: the `sword` builder makes a 1.0 m blade: pommel at y = +0.16, grip [-0.09..+0.13], guard at y = -0.09, blade from -0.08 to -0.84.
+- `src/art/weapons.js:668-684`: the `woodenRound` shield builder makes a disc of radius 0.255–0.265 (diameter 0.51–0.53) and thickness 0.028, centred at z = 0.058, with a 12-segment iron rim and a centre boss of radius 0.068.
+- `src/player/Player.js:625-627`: `rebuildWeaponMesh()` is a thin wrapper over `this.rig.equip({ weapon, offhand, armor })` — the geometry itself is built by `src/art/weapons.js` and attached by `HeroRig.equip()`.
+- `src/player/Player.js:629-631`: `rebuildShieldMesh()` is the same wrapper for the offhand; it no longer builds shield geometry itself.
+- `src/combat/Ally.js:122`: the ally equips its weapon and shield through `HeroRig.equip()` exactly like the player — the `handR` / `handL` sockets, not raw pivot groups.
 - `src/art/HeroRig.js:169-183`: `HeroRig.equip()` attaches weapon mesh to `hero.sockets.handR` and shield mesh to `hero.sockets.handL`.
 - `src/combat/Enemy.js:828-835`: Scavenged weapon drops create dropped weapon objects with `type: weaponType || 'club'` and `durability: 20`.
 - `src/combat/Items.js:5-63, 70-118`: Items manager defines starter combat equipment (RUSTY_SWORD, WOODEN_SHIELD, CLUB, RUSTY_DAGGER, CRUDE_SHIELD, NOVICE_IRON_SHIELD) and `createItemMesh()` creates ground pickups with a glowing ground ring `RingGeometry(0.3, 0.42)`.
@@ -156,7 +139,7 @@ Look: dark slate-gray fur (about 0x4a4d55) with lighter gray muzzle and chest pa
 ## WEAPON CONTRACT
 
 FILE: src/art/weapons.js. ES module. Only import: import * as THREE from ‘three’ (Three.js r160). Allowed extra import: mergeGeometries from ‘three/examples/jsm/utils/BufferGeometryUtils.js’. No external files; canvas textures up to 256x256 are allowed.
-EXPORTS: createWeaponModel(kind, opts) -> WeaponModel; createShieldModel(kind, opts) -> WeaponModel; createPickupModel(kind, opts) -> PickupModel; disposeWeaponCaches(); WEAPON_KINDS (array); SHIELD_KINDS (array).
+EXPORTS: createWeaponModel(kind, opts) -> WeaponModel; createShieldModel(kind, opts) -> WeaponModel; createPickupModel(kind, opts) -> PickupModel; WEAPON_KINDS (array); SHIELD_KINDS (array).
 WEAPON_KINDS: sword, greatsword, spear, dagger, bow, staff, mace (a morning star: a spiked ball on a haft), club, pickaxe. SHIELD_KINDS: woodenRound, plank (rough spiked planks), ironRound, kite.
 opts: { grade: ‘E’ | ‘D’ | ‘C’ | ‘B’ | ‘A’ | ‘S’ | ‘S+’ (default ‘E’), enhance: 0 to 5 (default 0), wear: 0 to 1 (0 new, 1 almost broken, default 0), seed: integer, variant: optional string }.
 UNITS AND ORIENTATION: 1 unit = 1 meter. The weapon group’s ORIGIN is the center of the grip, so that attaching the group as a child of a hero socket puts the hand on the handle with no extra offset. Local axes for a weapon held in the right hand socket: -Y points along the fingers away from the pommel at +Y; +Z points out of the palm in the direction of the swing; +/-X points laterally across the crossguard. Direction rule: the blade, spear shaft or haft extends along the same axis as the fingers of a closed hand holding it, pointing AWAY from the pommel; the sharp edge faces the direction the character faces when the arm swings. The shield’s origin is the center of the strap inside the shield with the shield face pointing away from the character (when attached to the handL socket); the shield face normal is documented in WEAPON NOTES.

@@ -326,10 +326,19 @@ async function run() {
     `head=${zoneSamples.melee.head} heart=${zoneSamples.melee.heart} torso=${zoneSamples.melee.torso}`);
 
   console.log('\n--- 5. SPARRING ---');
+  // A scripted rng: the Fight AI consumes the first value (0.1 -> 'attack')
+  // and the hit zone roll consumes the second (0.95 -> 'heart').
+  const scriptedRng = (() => {
+    const seq = [0.1, 0.95];
+    let i = 0;
+    return () => seq[i++ % seq.length];
+  })();
+
   const strong = makeHero({ id: 'strong', name: 'Strong', stats: { str: 20, agi: 10, vit: 10, int: 10, wil: 10 } });
   const weak = makeHero({ id: 'weak', name: 'Weak', stats: { str: 1, agi: 1, vit: 1, int: 1, wil: 1 } });
   const sparState = makeFakeState([strong, weak], stateOpts);
-  const spar = resolveSparringSession(strong, weak, sparState, { rng: () => 0.5 });
+  // 0.1 makes the Fight AI attack, so the damage actually accumulates.
+  const spar = resolveSparringSession(strong, weak, sparState, { rng: () => 0.1 });
   check('Sparring below 20% HP awards low-HP survival bonus XP and Pain Tolerance counters',
     spar.lowHpBonusB === 1 && spar.skillXpB > TRAINING_CONFIG.BASE_SESSION_SKILL_XP.spar &&
       weak.painToleranceCounters.damageTaken > 0,
@@ -338,15 +347,16 @@ async function run() {
   const critA = makeHero({ id: 'crit_a', stats: { str: 20, agi: 10, vit: 10, int: 10, wil: 10 } });
   const critB = makeHero({ id: 'crit_b', stats: { str: 1, agi: 1, vit: 1, int: 1, wil: 1 } });
   const critState = makeFakeState([critA, critB], stateOpts);
-  const critSpar = resolveSparringSession(critA, critB, critState, { rng: () => 0.99 });
+  // The scripted rng makes the AI attack and the hit zone land on the heart.
+  const critSpar = resolveSparringSession(critA, critB, critState, { rng: scriptedRng });
   check('Head/Heart hit in sparring triggers Iselle intervention and serious injury (no fast heal)',
     critSpar.stoppedBy === 'iselle' &&
-      critSpar.stopReason === 'critical_zone' &&
+      critSpar.stopReason === 'critical_hit' &&
       critSpar.injuries.length === 1 &&
       critB.injury &&
       critB.injury.severity === 'serious' &&
       critB.injury.healRateMult === TRAINING_CONFIG.CRITICAL_INJURY_HEAL_MULT,
-    `zone=${critSpar.hitZone} stoppedBy=${critSpar.stoppedBy}`);
+    `zone=${critSpar.hitZone} stoppedBy=${critSpar.stoppedBy} reason=${critSpar.stopReason}`);
   check('A broken law is recorded on the spar',
     critSpar.lawBroken === EMOTION_CONFIG.LOBBY_LAWS.NO_LETHAL_SPAR_BLOWS,
     critSpar.lawBroken);

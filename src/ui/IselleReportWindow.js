@@ -13,6 +13,10 @@ const EVENT_COLORS = {
   iselle_intervened: '#b48cff',
   law_broken: '#ff9f43',
   fought_hero: '#ff7a7a',
+  fight_ended: '#e07a5f',
+  fight_won: '#f4a261',
+  fight_lost: '#d62828',
+  sanctioned_bout: '#4ea8de',
   injured: '#ff5a6e',
   skill_combined: '#ffd36b',
   new_skill: '#7dffb0',
@@ -43,6 +47,8 @@ export class IselleReportWindow extends SystemWindow {
     this.contentElement.style.textAlign = 'left';
     this.contentElement.style.maxHeight = '70vh';
     this.contentElement.style.overflowY = 'auto';
+    // The scroll stays inside the report: it never chains out to the page.
+    this.contentElement.style.overscrollBehavior = 'contain';
 
     this.quoteEl = document.createElement('div');
     this.quoteEl.style.fontSize = '13px';
@@ -70,6 +76,21 @@ export class IselleReportWindow extends SystemWindow {
     this.listEl.style.display = 'flex';
     this.listEl.style.flexDirection = 'column';
     this.listEl.style.gap = '8px';
+    // The report list is the element that scrolls: the wheel over it reads
+    // the report and never reaches the camera behind the window.
+    this.listEl.style.maxHeight = '48vh';
+    this.listEl.style.minHeight = '0';
+    this.listEl.style.overflowY = 'auto';
+    this.listEl.style.overscrollBehavior = 'contain';
+
+    this.fightsEl = document.createElement('div');
+    this.fightsEl.style.backgroundColor = 'rgba(40, 18, 12, 0.7)';
+    this.fightsEl.style.border = '1px solid #663322';
+    this.fightsEl.style.borderRadius = '6px';
+    this.fightsEl.style.padding = '8px 12px';
+    this.fightsEl.style.marginBottom = '8px';
+    this.fightsEl.style.fontSize = '12px';
+    this.fightsEl.style.color = '#ffb08a';
 
     this.idleEl = document.createElement('div');
     this.idleEl.style.backgroundColor = 'rgba(10, 10, 14, 0.7)';
@@ -91,6 +112,7 @@ export class IselleReportWindow extends SystemWindow {
     this.contentElement.appendChild(this.summaryEl);
     this.contentElement.appendChild(this.metaEl);
     this.contentElement.appendChild(this.listEl);
+    this.contentElement.appendChild(this.fightsEl);
     this.contentElement.appendChild(this.idleEl);
     this.contentElement.appendChild(this.fallenEl);
   }
@@ -102,12 +124,23 @@ export class IselleReportWindow extends SystemWindow {
     super.open();
   }
 
+  /** The display name of a hero, from the report model. */
+  heroNameOf(reportModel, heroId) {
+    if (!heroId) return 'UNKNOWN';
+    const summary = (reportModel.perHeroSummaries || []).find((s) => s.heroId === heroId);
+    if (summary) return summary.heroName;
+    const fallen = (reportModel.fallenHeroes || []).find((f) => f.heroId === heroId);
+    if (fallen) return fallen.heroName;
+    return heroId;
+  }
+
   renderReport(reportModel) {
     if (!reportModel) {
       this.quoteEl.textContent = '';
       this.summaryEl.textContent = 'No report available.';
       this.metaEl.textContent = '';
       this.listEl.innerHTML = '';
+      this.fightsEl.style.display = 'none';
       this.idleEl.style.display = 'none';
       this.fallenEl.style.display = 'none';
       return;
@@ -176,6 +209,37 @@ export class IselleReportWindow extends SystemWindow {
       }
 
       this.listEl.appendChild(card);
+    }
+
+    // --- The fights that happened -------------------------------------------
+    const fights = reportModel.fightsSummary || [];
+    if (fights.length > 0) {
+      this.fightsEl.style.display = 'block';
+      let html = '<span style="font-weight:bold;">FIGHTS:</span>';
+      for (const fight of fights) {
+        const attacker = this.heroNameOf(reportModel, fight.attackerId);
+        const defender = this.heroNameOf(reportModel, fight.defenderId);
+        const winner = fight.winnerId ? this.heroNameOf(reportModel, fight.winnerId) : 'NOBODY';
+        const law = fight.lawBroken ? ' [LAW BROKEN]' : '';
+        const stopped =
+          fight.stoppedBy === 'iselle'
+            ? ' - stopped by Iselle'
+            : fight.stoppedBy === 'leader'
+              ? ' - stopped by the Squad Leader'
+              : fight.stoppedBy === 'flee'
+                ? ' - one fighter fled'
+                : '';
+        const cost =
+          fight.intimacyDelta !== undefined
+            ? ` | Intimacy ${fight.intimacyDelta >= 0 ? '+' : ''}${fight.intimacyDelta}, Tension +${fight.tensionDelta}`
+            : '';
+        html +=
+          `<div style="margin-top:3px;">Day ${fight.day}: ${attacker} vs ${defender} ` +
+          `(${fight.exchanges} exchanges) - won by ${winner}${law}${stopped}${cost}</div>`;
+      }
+      this.fightsEl.innerHTML = html;
+    } else {
+      this.fightsEl.style.display = 'none';
     }
 
     // --- Heroes who did nothing -------------------------------------------

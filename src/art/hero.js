@@ -1210,15 +1210,3 @@ export function createHeroModel(opts = {}) {
   };
 }
 
-export function disposeHeroCaches() {
-  for (const geo of GEO_CACHE.values()) geo.dispose();
-  GEO_CACHE.clear();
-  for (const mat of MAT_CACHE.values()) mat.dispose();
-  MAT_CACHE.clear();
-  for (const tex of TEX_CACHE.values()) tex.dispose();
-  TEX_CACHE.clear();
-  if (GRADIENT_TEX) {
-    GRADIENT_TEX.dispose();
-    GRADIENT_TEX = null;
-  }
-}

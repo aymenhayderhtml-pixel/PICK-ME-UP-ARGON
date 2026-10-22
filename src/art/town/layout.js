@@ -3,6 +3,37 @@
 
 import { BUILDING_PADS, getGroundY } from './ground.js';
 
+// Player collision tuning for the town hub. The walk-height map decides where
+// the hero STANDS; these numbers decide what stops him (see WalkHeight.js:
+// LAND_ONLY drops every prop from the height map).
+export const PLAYER_COLLISION = {
+  radius: 0.4,      // hero body radius used against every town collider
+  skin: 0.02,       // separation so the hero never sticks to a surface
+  cellSize: 4.0,    // broadphase grid cell size in world units
+  passes: 2         // push-out passes per frame (the second pass slides)
+};
+
+// Solid town props, as multipliers of their mesh scale.
+export const PROP_COLLIDERS = {
+  treeTrunk: 0.38,        // trunk only, never the leaves
+  boulder: 0.85,
+  barrel: 0.36,
+  crate: 0.40,
+  fenceHalfLength: 0.9,   // half of the 1.8 m fence segment
+  fenceHalfThickness: 0.15
+};
+
+// Building wall bands and the half width of every door opening.
+export const WALL_COLLIDERS = {
+  thickness: 0.4,
+  cottageDoorHalf: 1.0,
+  buildingDoorHalf: 1.4,
+  synthesisDoorHalf: 1.7
+};
+
+// Draw the town collision shapes as wireframes (debug aid, built once).
+export const SHOW_COLLIDERS = false;
+
 export const LAYOUT = {
   // 12-sided dodecagonal perimeter wall
   wall: {
@@ -46,6 +77,16 @@ export const LAYOUT = {
     pads: BUILDING_PADS
   },
 
+  // Shared look of every zone signpost. The board is 2.2m x 0.7m with its
+  // bottom 2m above the ground, the post runs from the ground up to the board
+  // and the label plane floats 0.03m in front of the board face so the text
+  // never z-fights with the board it is painted on.
+  signStyle: {
+    board: { width: 2.2, height: 0.7, depth: 0.14 },
+    post: { width: 0.18, height: 2.0 },
+    label: { width: 2.0, height: 0.5, offset: 0.03 }
+  },
+
   // Buildings and major zones
   zones: {
     landing_area: {
@@ -65,8 +106,11 @@ export const LAYOUT = {
         { x: 20.0, z: 13.0 }
       ],
       interactionRadius: 8.0,
-      signText: 'LANDING AREA',
-      signOffset: { x: 0, y: 6.0, z: 0 }
+      sign: {
+        text: 'LANDING AREA',
+        offset: { x: -6.5, z: -2.5 },
+        rotY: 1.204
+      }
     },
 
     summoning_room: {
@@ -81,14 +125,22 @@ export const LAYOUT = {
         position: { x: 23.5, y: 1.8, z: 11.5 },
         outward: { x: -0.4138, y: 0.0, z: 0.9104 }
       },
+      // The route out of the Summoning Room follows the ramp (the stairs) and
+      // then the Landing Area steps. A straight line from the door to the town
+      // cuts across the ramp railing and the terrace steps instead.
       doorCorridor: [
         { x: 30.0, z: 4.0 },
         { x: 23.5, z: 11.5 },
-        { x: 19.5, z: 20.0 }
+        { x: 20.9, z: 14.5 },
+        { x: 20.0, z: 16.5 },
+        { x: 20.0, z: 18.0 }
       ],
       interactionRadius: 8.5,
-      signText: 'SUMMONING ROOM',
-      signOffset: { x: 0, y: 13.0, z: 0 }
+      sign: {
+        text: 'SUMMONING ROOM',
+        offset: { x: -4.2, z: 10.4 },
+        rotY: -0.464
+      }
     },
 
     town_square: {
@@ -100,8 +152,11 @@ export const LAYOUT = {
       door: null,
       doorCorridor: null,
       interactionRadius: 8.0,
-      signText: 'TOWN SQUARE',
-      signOffset: { x: 0, y: 4.0, z: 0 }
+      sign: {
+        text: 'TOWN SQUARE',
+        offset: { x: 9.0, z: 0.0 },
+        rotY: 0.175
+      }
     },
 
     space_time_rift: {
@@ -122,8 +177,11 @@ export const LAYOUT = {
         { x: 28.5, z: -28.5 }
       ],
       interactionRadius: 4.5,
-      signText: 'SPACE-TIME RIFT',
-      signOffset: { x: 0, y: 12.0, z: 0 }
+      sign: {
+        text: 'SPACE-TIME RIFT',
+        offset: { x: -0.43, z: 5.93 },
+        rotY: -0.772
+      }
     },
 
     synthesis_chamber: {
@@ -144,8 +202,11 @@ export const LAYOUT = {
         { x: 0.0, z: -20.0 }
       ],
       interactionRadius: 7.5,
-      signText: 'SYNTHESIS CHAMBER',
-      signOffset: { x: 0, y: 15.0, z: 0 }
+      sign: {
+        text: 'SYNTHESIS CHAMBER',
+        offset: { x: 3.8, z: 10.2 },
+        rotY: 0.637
+      }
     },
 
     armory: {
@@ -163,6 +224,9 @@ export const LAYOUT = {
         forgeWidth: 3.5,
         forgeDepth: 3.8
       },
+      // The wall band used by the player collision: the main hall only, the
+      // lean-to forge shed on the +X side stays open.
+      wallBox: { x: -7.25, z: -20.0, width: 7.0, depth: 5.0 },
       rotation: 0,
       door: {
         id: 'door_armory',
@@ -175,8 +239,11 @@ export const LAYOUT = {
         { x: -6.0, z: -14.0 }
       ],
       interactionRadius: 4.5,
-      signText: 'ARMORY',
-      signOffset: { x: 0, y: 5.6, z: 0 }
+      sign: {
+        text: 'ARMORY',
+        offset: { x: -5.8, z: 4.0 },
+        rotY: 1.269
+      }
     },
 
     training_grounds: {
@@ -196,8 +263,11 @@ export const LAYOUT = {
         { x: -15.0, z: 18.0 }
       ],
       interactionRadius: 8.5,
-      signText: 'TRAINING GROUNDS',
-      signOffset: { x: 0, y: 4.0, z: 0 },
+      sign: {
+        text: 'TRAINING GROUNDS',
+        offset: { x: 9.8, z: 0.8 },
+        rotY: 2.374
+      },
       dummyPositions: [
         { id: 'dummy_1', stand: { x: -26.4, y: 0, z: 16.8 }, dummy: { x: -26.4, y: 0, z: 18.0 } },
         { id: 'dummy_2', stand: { x: -24.0, y: 0, z: 16.8 }, dummy: { x: -24.0, y: 0, z: 18.0 } },
@@ -257,8 +327,11 @@ export const LAYOUT = {
         { x: -14.0, z: -4.0 }
       ],
       interactionRadius: 12.0,
-      signText: 'RESIDENCES',
-      signOffset: { x: 8.0, y: 4.2, z: 0 }
+      sign: {
+        text: 'RESIDENCES',
+        offset: { x: 10.8, z: -2.6 },
+        rotY: 1.619
+      }
     },
 
     mess_hall_row: {
@@ -278,8 +351,11 @@ export const LAYOUT = {
         { x: 8.0, z: 33.0 }
       ],
       interactionRadius: 9.0,
-      signText: 'MESS HALL',
-      signOffset: { x: 0, y: 5.2, z: 0 }
+      sign: {
+        text: 'MESS HALL',
+        offset: { x: -1.0, z: -5.8 },
+        rotY: 2.015
+      }
     },
 
     dungeon_board: {
@@ -291,8 +367,11 @@ export const LAYOUT = {
       door: null,
       doorCorridor: null,
       interactionRadius: 2.8,
-      signText: 'DUNGEON BOARD',
-      signOffset: { x: 0, y: 3.4, z: 0 }
+      sign: {
+        text: 'DUNGEON BOARD',
+        offset: { x: 2.6, z: 0.6 },
+        rotY: 2.456
+      }
     }
   },
 
@@ -449,3 +528,104 @@ export const LAYOUT = {
     }
   }
 };
+
+// Resolves the world placement of a zone signpost from its layout data.
+// Every sign stands on the terrain (getGroundY), never floats, and the label
+// plane is placed on the front face of the board so the text is centred on it.
+// rotY is the facing angle: the board's front normal points along
+// (sin rotY, cos rotY), so rotY = 0 means the board faces +Z.
+export function getSignLayout(layout, zoneId) {
+  const zone = layout && layout.zones ? layout.zones[zoneId] : null;
+  const sign = zone && zone.sign;
+  if (!sign) return null;
+
+  const style = (layout && layout.signStyle) || {};
+  const board = { ...(style.board || {}), ...(sign.board || {}) };
+  const post = { ...(style.post || {}), ...(sign.post || {}) };
+  const label = { ...(style.label || {}), ...(sign.label || {}) };
+
+  const x = zone.center.x + ((sign.offset && sign.offset.x) || 0);
+  const z = zone.center.z + ((sign.offset && sign.offset.z) || 0);
+  const groundY = getGroundY(x, z);
+  const boardY = groundY + post.height + board.height * 0.5;
+  const rotY = sign.rotY || 0;
+  const front = board.depth * 0.5 + (label.offset !== undefined ? label.offset : 0.03);
+
+  return {
+    id: zoneId,
+    text: sign.text || zone.name || '',
+    x,
+    z,
+    groundY,
+    boardY,
+    rotY,
+    board,
+    post,
+    label,
+    labelX: x + Math.sin(rotY) * front,
+    labelZ: z + Math.cos(rotY) * front
+  };
+}
+
+// Floor decal layers. Two flat decals that overlap in plan must never share
+// a plane, or they z-fight: the depth test flips between them as the camera
+// moves and the edges crawl in hatched stripes. Every floor decal (paving
+// inlays, moss joints, glowing lines, stone rings) therefore sits on its own
+// layer, a step above the floor it is inlaid in.
+//
+// `top` is the height of the decal's visible TOP face above that floor; a
+// decal thick enough to reach it is embedded in the floor, so the inlay
+// relief does not change. `lift` is used instead for a decal too thin to
+// reach `top` without floating: it is raised off the floor by `lift` and
+// stays flush with the surface.
+//
+// The depth bias (polygonOffset) grows with the layer so that a decal always
+// wins the depth test against the floor and against the layer below it, and
+// `renderOrder` fixes the draw order: ground first, then the layers from the
+// bottom up.
+//
+// Keep the whole stack under 0.08: the hero walks on the floor, and a taller
+// stack makes him look like he hovers above the ground.
+export const FLOOR_DECAL_LAYERS = {
+  // Dark paving inlays (the Town Square spokes and flagstone patches).
+  patch: {
+    top: 0.02,
+    lift: 0.004,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+    renderOrder: 2
+  },
+  // Mossy joints between the paving stones.
+  moss: {
+    top: 0.035,
+    lift: 0.004,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+    renderOrder: 3
+  },
+  // Glowing lines inlaid almost flush in the floor (a thin bright sliver).
+  inlay: {
+    top: 0.012,
+    lift: 0.004,
+    polygonOffsetFactor: -3,
+    polygonOffsetUnits: -3,
+    renderOrder: 4
+  },
+  // Stone rings and glowing lines that stand slightly proud of the floor.
+  line: {
+    top: 0.05,
+    lift: 0.006,
+    polygonOffsetFactor: -3,
+    polygonOffsetUnits: -3,
+    renderOrder: 4
+  },
+  // The topmost line layer, for the elements that cross the other lines.
+  lineTop: {
+    top: 0.08,
+    lift: 0.006,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
+    renderOrder: 5
+  }
+};
+

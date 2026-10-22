@@ -5,6 +5,7 @@ import { gameState } from '../core/GameState.js';
 import { showSystemMessage } from '../ui/Hud.js';
 import { HeroRig } from '../art/HeroRig.js';
 import { generateLook } from '../art/looks.js';
+import { awardLiveTrainingTickXp } from '../core/TrainingEngine.js';
 
 function createTextSprite(text) {
   return createLabelSprite({ text, isSign: false });
@@ -226,30 +227,26 @@ export class TrainingHeroAvatar {
   }
 
   onTick() {
-    const facLevel = (gameState.facilities.training && gameState.facilities.training.level) || 1;
-    const xpGain = Math.round(8 * (1 + facLevel * 0.25));
+    // ONE training XP path for every source: the shared engine. It applies
+    // the 5 second cooldown, so a hero who is also training through the
+    // autonomous NPC path can never earn the same tick twice.
+    const skillBefore = (this.heroData.skills || []).find((s) => s.id === this.skillId);
+    const levelBefore = skillBefore ? skillBefore.level || 1 : 1;
 
-    // Increase fatigue
-    this.heroData.fatigue = Math.min(100, (this.heroData.fatigue || 0) + 3);
+    const result = awardLiveTrainingTickXp(
+      this.heroData,
+      'dummy',
+      this.skillId,
+      gameState,
+      Date.now()
+    );
 
-    // Apply XP to skill
-    let skill = (this.heroData.skills || []).find((s) => s.id === this.skillId);
-    if (!skill) {
-      this.heroData.skills = this.heroData.skills || [];
-      skill = { id: this.skillId, name: this.skillId, level: 1, exp: 0 };
-      this.heroData.skills.push(skill);
-    }
-    skill.exp = (skill.exp || 0) + xpGain;
-
-    this.spawnFloatingXp(xpGain);
-
-    // Check level up (threshold = 100 * level)
-    const neededXp = 100 * skill.level;
-    if (skill.exp >= neededXp && skill.level < 10) {
-      skill.exp -= neededXp;
-      skill.level += 1;
-      showSystemMessage(`[${this.heroData.name}'s ${skill.name} reached Lv ${skill.level}!]`);
-      this.spawnLevelUpSparkles();
+    if (result.awarded) {
+      this.spawnFloatingXp(result.xpGained);
+      const skillAfter = (this.heroData.skills || []).find((s) => s.id === this.skillId);
+      if (skillAfter && (skillAfter.level || 1) > levelBefore) {
+        this.spawnLevelUpSparkles();
+      }
     }
 
     // Check collapse at 100 fatigue

@@ -301,7 +301,7 @@ export class Hud {
     this.hints.style.color = '#cccccc';
     this.hints.style.fontSize = '12px';
     this.hints.textContent =
-      'WASD Move | Arrow Keys Rotate/Pitch | Wheel Zoom | RIGHT CLICK: ATTACK | LEFT CLICK (HOLD): BLOCK | Q Roll | F Bash | X Auto | C Wheel | ? Toggle Hints';
+      'WASD Move | MOUSE Rotate Camera (Click to Capture) | Arrow Keys Rotate/Pitch | Wheel Zoom | LEFT CLICK: ATTACK | RIGHT CLICK (HOLD): BLOCK | Q Roll | F Bash | X Auto | C Wheel | ? Toggle Hints';
     this.container.appendChild(this.hints);
 
     this.hintsVisible = true;
@@ -1242,13 +1242,13 @@ export class Hud {
     if (!this.hints) return;
     if (hudMode === 'mage') {
       this.hints.textContent =
-        'WASD Move | Arrow Keys Rotate/Pitch | LEFT CLICK: CAST EMBER BOLT | 1-6 Spells | R Ultimate | Q Mana Potion | SPACE Roll | X Auto | ? Toggle Hints';
+        'WASD Move | MOUSE Rotate Camera (Click to Capture) | LEFT CLICK: CAST EMBER BOLT | 1-6 Spells | R Ultimate | Q Mana Potion | SPACE Roll | X Auto | ? Toggle Hints';
     } else if (hudMode === 'archer') {
       this.hints.textContent =
-        'WASD Move | Arrow Keys Rotate/Pitch | HOLD RIGHT CLICK: Draw Bow | LEFT CLICK: Loose Arrow | Q Roll | SPACE Roll | X Auto | ? Toggle Hints';
+        'WASD Move | MOUSE Rotate Camera (Click to Capture) | HOLD RIGHT CLICK: Draw Bow | LEFT CLICK: Loose Arrow | Q Roll | SPACE Roll | X Auto | ? Toggle Hints';
     } else {
       this.hints.textContent =
-        'WASD Move | Arrow Keys Rotate/Pitch | Wheel Zoom | RIGHT CLICK: ATTACK | LEFT CLICK (HOLD): BLOCK | Q Roll | F Bash | X Auto | C Wheel | ? Toggle Hints';
+        'WASD Move | MOUSE Rotate Camera (Click to Capture) | Arrow Keys Rotate/Pitch | Wheel Zoom | LEFT CLICK: ATTACK | RIGHT CLICK (HOLD): BLOCK | Q Roll | F Bash | X Auto | C Wheel | ? Toggle Hints';
     }
   }
 
@@ -1292,9 +1292,6 @@ let activeSystemMessages = [];
 export {
   showSystemMessage,
   showNotices,
-  showStatusNotice,
-  showHeroDeathNotice,
-  showEquipmentNotice,
   clearSystemMessages,
 } from './Notices.js';
 

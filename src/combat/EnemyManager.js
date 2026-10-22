@@ -177,6 +177,29 @@ export class EnemyManager {
       return;
     }
 
+    // Floor 3 Bright Forest Clearing: 4 Armored Goblins (Lv. 4) on first run, 2 on repeat run
+    if (floorNumber === 3) {
+      const isRepeat = (gameState.clearedFloors || 0) >= 3;
+      const f3Spawns = isRepeat
+        ? [
+            { x: -2, z: -34 },
+            { x: 2, z: -34 },
+          ]
+        : [
+            { x: -3, z: -32 },
+            { x: 3, z: -32 },
+            { x: -1, z: -36 },
+            { x: 2, z: -36 },
+          ];
+
+      for (const pos of f3Spawns) {
+        const enemy = new Enemy(pos.x, pos.z, 'ARMORED_GOBLIN', false, 3, 4);
+        this.enemies.push(enemy);
+        scene.add(enemy.mesh);
+      }
+      return;
+    }
+
     const clearings = dungeon.clearings;
     const extraGrunts = Math.max(0, floorNumber - 1); // +1 grunt per clearing for each floor above 1
 
@@ -368,7 +391,9 @@ export class EnemyManager {
       const enemy = this.enemies[i];
 
       if (enemy.isBoss) {
-        enemy.update(delta, player, dungeon, camera, projectilesManager);
+        // LEADER enemies are bosses too and their rally aura iterates
+        // `allies`, so the enemy list has to be passed in here as well.
+        enemy.update(delta, player, dungeon, camera, projectilesManager, this.enemies);
         if (enemy.dead && enemy.stateTimer <= 0) {
           if (scene) scene.remove(enemy.mesh);
           enemy.dispose();

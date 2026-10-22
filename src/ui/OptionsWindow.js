@@ -2,6 +2,179 @@ import { SystemWindow } from './SystemWindow.js';
 import { gameState } from '../core/GameState.js';
 import { fpsCounter } from './FpsCounter.js';
 
+const GOLD = 'var(--gold, #ffd36b)';
+const FRAME_INNER = 'var(--frame-inner, #5b4a8a)';
+const OK = 'var(--ok, #7dffb0)';
+const TEXT = 'var(--text, #d0d7de)';
+
+/** Repaints a segmented button group so the active option reads as a gold pill. */
+function paintSegmented(buttons, activeId) {
+  Object.entries(buttons || {}).forEach(([id, btn]) => {
+    const on = id === String(activeId);
+    btn.style.backgroundColor = on ? 'rgba(255, 211, 107, 0.18)' : 'rgba(20, 15, 30, 0.7)';
+    btn.style.color = on ? GOLD : '#9a9a9a';
+    btn.style.borderColor = on ? GOLD : FRAME_INNER;
+    btn.style.boxShadow = on ? '0 0 8px rgba(255, 211, 107, 0.35)' : 'none';
+  });
+}
+
+/** A bordered section card with a gold accent bar and a spaced title. */
+function createSection(titleText) {
+  const section = document.createElement('div');
+  section.style.display = 'flex';
+  section.style.flexDirection = 'column';
+  section.style.gap = '9px';
+  section.style.backgroundColor = 'rgba(15, 12, 24, 0.55)';
+  section.style.border = `1px solid ${FRAME_INNER}`;
+  section.style.borderRadius = '6px';
+  section.style.padding = '10px 12px';
+
+  const head = document.createElement('div');
+  head.style.display = 'flex';
+  head.style.alignItems = 'center';
+  head.style.gap = '8px';
+
+  const accent = document.createElement('div');
+  accent.style.width = '3px';
+  accent.style.height = '13px';
+  accent.style.borderRadius = '1px';
+  accent.style.background = GOLD;
+  accent.style.boxShadow = '0 0 6px rgba(255, 211, 107, 0.6)';
+
+  const title = document.createElement('span');
+  title.textContent = titleText;
+  title.style.fontWeight = 'bold';
+  title.style.color = GOLD;
+  title.style.fontSize = '11px';
+  title.style.letterSpacing = '1.5px';
+
+  head.appendChild(accent);
+  head.appendChild(title);
+  section.appendChild(head);
+  return section;
+}
+
+/** Small grey field caption used above a segmented group. */
+function createFieldLabel(text) {
+  const label = document.createElement('div');
+  label.textContent = text;
+  label.style.fontSize = '10px';
+  label.style.fontWeight = 'bold';
+  label.style.color = '#8fa3b8';
+  label.style.letterSpacing = '1px';
+  return label;
+}
+
+/** Builds a segmented pill group. Returns the row and the id -> button map. */
+function createSegmented(options, activeId, onSelect) {
+  const group = document.createElement('div');
+  group.style.display = 'flex';
+  group.style.gap = '6px';
+
+  const buttons = {};
+  options.forEach((opt) => {
+    const btn = document.createElement('button');
+    btn.textContent = opt.label;
+    btn.style.flex = '1';
+    btn.style.padding = '6px 4px';
+    btn.style.fontFamily = 'monospace, sans-serif';
+    btn.style.fontSize = '11px';
+    btn.style.fontWeight = 'bold';
+    btn.style.cursor = 'pointer';
+    btn.style.borderRadius = '4px';
+    btn.style.border = `1px solid ${FRAME_INNER}`;
+    btn.style.backgroundColor = 'rgba(20, 15, 30, 0.7)';
+    btn.style.color = '#9a9a9a';
+    btn.style.transition = 'background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease';
+    btn.addEventListener('click', () => onSelect(opt.id));
+    buttons[opt.id] = btn;
+    group.appendChild(btn);
+  });
+
+  paintSegmented(buttons, activeId);
+  return { group, buttons };
+}
+
+/**
+ * A real switch: a hidden native checkbox drives the state, the visible
+ * track and knob are painted from it. Clicking the label or the track both
+ * toggle it exactly once.
+ */
+function createSwitch(labelText, checked, onChange, id) {
+  const row = document.createElement('div');
+  row.style.position = 'relative';
+  row.style.display = 'flex';
+  row.style.alignItems = 'center';
+  row.style.justifyContent = 'space-between';
+  row.style.gap = '12px';
+
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.id = id;
+  check.checked = checked;
+  check.setAttribute('aria-label', labelText);
+  check.style.position = 'absolute';
+  check.style.top = '0';
+  check.style.left = '0';
+  check.style.width = '1px';
+  check.style.height = '1px';
+  check.style.opacity = '0';
+
+  const label = document.createElement('label');
+  label.htmlFor = id;
+  label.textContent = labelText;
+  label.style.fontSize = '12px';
+  label.style.cursor = 'pointer';
+  label.style.color = checked ? TEXT : '#8fa3b8';
+
+  const track = document.createElement('div');
+  track.style.position = 'relative';
+  track.style.width = '40px';
+  track.style.height = '18px';
+  track.style.flex = '0 0 auto';
+  track.style.borderRadius = '9px';
+  track.style.border = `1px solid ${FRAME_INNER}`;
+  track.style.backgroundColor = 'rgba(0, 0, 0, 0.55)';
+  track.style.cursor = 'pointer';
+  track.style.transition = 'background-color 0.15s ease, border-color 0.15s ease';
+
+  const knob = document.createElement('div');
+  knob.style.position = 'absolute';
+  knob.style.top = '2px';
+  knob.style.left = '2px';
+  knob.style.width = '12px';
+  knob.style.height = '12px';
+  knob.style.borderRadius = '50%';
+  knob.style.backgroundColor = '#6a6a7a';
+  knob.style.transition = 'left 0.15s ease, background-color 0.15s ease';
+  track.appendChild(knob);
+
+  const paint = (on) => {
+    track.style.backgroundColor = on ? 'rgba(125, 255, 176, 0.22)' : 'rgba(0, 0, 0, 0.55)';
+    track.style.borderColor = on ? OK : FRAME_INNER;
+    knob.style.left = on ? '24px' : '2px';
+    knob.style.backgroundColor = on ? OK : '#6a6a7a';
+    label.style.color = on ? TEXT : '#8fa3b8';
+  };
+
+  check.addEventListener('change', () => {
+    paint(check.checked);
+    onChange(check.checked);
+  });
+
+  track.addEventListener('click', () => {
+    check.checked = !check.checked;
+    paint(check.checked);
+    onChange(check.checked);
+  });
+
+  row.appendChild(check);
+  row.appendChild(label);
+  row.appendChild(track);
+  paint(checked);
+  return row;
+}
+
 export class OptionsWindow extends SystemWindow {
   constructor(options = {}) {
     super('SYSTEM OPTIONS');
@@ -10,15 +183,25 @@ export class OptionsWindow extends SystemWindow {
     this.onFpsToggle = options.onFpsToggle || (() => {});
     this.onVolumeChange = options.onVolumeChange || (() => {});
 
-    this.container.style.width = '520px';
+    this.container.style.width = '640px';
     this.container.style.maxWidth = '92vw';
+    this.container.style.maxHeight = 'calc(100vh - 40px)';
+    this.container.style.boxSizing = 'border-box';
+    this.titleBar.style.flex = '0 0 auto';
+
+    // The base class leaves an empty content element behind: hide it so the
+    // options sections start right under the title bar.
+    this.contentElement.style.display = 'none';
 
     this.content = document.createElement('div');
-    this.content.style.padding = '14px 20px';
+    this.content.style.padding = '14px 18px';
     this.content.style.display = 'flex';
     this.content.style.flexDirection = 'column';
-    this.content.style.gap = '14px';
-    this.content.style.color = 'var(--text, #d0d7de)';
+    this.content.style.gap = '12px';
+    this.content.style.flex = '1 1 auto';
+    this.content.style.minHeight = '0';
+    this.content.style.overflowY = 'auto';
+    this.content.style.color = TEXT;
     this.content.style.fontSize = '13px';
     this.container.appendChild(this.content);
 
@@ -28,276 +211,145 @@ export class OptionsWindow extends SystemWindow {
   buildUI() {
     this.content.innerHTML = '';
     const settings = gameState.settings || { quality: 'medium', resolutionScale: 1, showFps: false };
-    if (!settings.controls) settings.controls = { attackButton: 'right', blockButton: 'left' };
+    if (!settings.controls) settings.controls = { attackButton: 'left', blockButton: 'right' };
     if (!settings.camera) settings.camera = { followSpeed: 'tight', autoTurn: true, distance: 'normal' };
 
-    // 1. Graphics Quality Setting
-    const qRow = document.createElement('div');
-    qRow.style.display = 'flex';
-    qRow.style.flexDirection = 'column';
-    qRow.style.gap = '6px';
+    // --- 1. DISPLAY -------------------------------------------------------
+    const displaySec = createSection('DISPLAY');
+    displaySec.appendChild(createFieldLabel('GRAPHICS QUALITY'));
 
-    const qLabel = document.createElement('div');
-    qLabel.textContent = 'GRAPHICS QUALITY';
-    qLabel.style.fontWeight = 'bold';
-    qLabel.style.color = 'var(--frame, #ffd36b)';
-    qLabel.style.letterSpacing = '1px';
-    qRow.appendChild(qLabel);
-
-    const qBtnGroup = document.createElement('div');
-    qBtnGroup.style.display = 'flex';
-    qBtnGroup.style.gap = '8px';
-
-    const qualities = ['low', 'medium', 'high'];
-    this.qualityBtns = {};
-
-    qualities.forEach((q) => {
-      const btn = document.createElement('button');
-      btn.textContent = q.toUpperCase();
-      btn.style.flex = '1';
-      btn.style.padding = '8px 12px';
-      btn.style.fontFamily = 'monospace';
-      btn.style.fontSize = '12px';
-      btn.style.cursor = 'pointer';
-      btn.style.border = '1px solid var(--frame-inner, #4a3e66)';
-      btn.style.borderRadius = '4px';
-      btn.style.backgroundColor = settings.quality === q ? 'rgba(111, 224, 240, 0.25)' : 'rgba(20, 15, 30, 0.7)';
-      btn.style.color = settings.quality === q ? '#6fe0f0' : '#cccccc';
-      btn.style.boxShadow = settings.quality === q ? '0 0 8px rgba(111, 224, 240, 0.4)' : 'none';
-
-      btn.addEventListener('click', () => {
-        settings.quality = q;
+    const quality = createSegmented(
+      [
+        { id: 'low', label: 'LOW' },
+        { id: 'medium', label: 'MEDIUM' },
+        { id: 'high', label: 'HIGH' },
+      ],
+      settings.quality || 'medium',
+      (id) => {
+        settings.quality = id;
         gameState.saveToLocalStorage();
         this.updateQualityBtnStyles();
-        this.onQualityChange(q);
-      });
+        this.onQualityChange(id);
+      }
+    );
+    this.qualityBtns = quality.buttons;
+    displaySec.appendChild(quality.group);
 
-      this.qualityBtns[q] = btn;
-      qBtnGroup.appendChild(btn);
-    });
-    qRow.appendChild(qBtnGroup);
-    this.content.appendChild(qRow);
+    displaySec.appendChild(createFieldLabel('RESOLUTION SCALE'));
 
-    // 2. Camera Settings Section
-    const camSec = document.createElement('div');
-    camSec.style.display = 'flex';
-    camSec.style.flexDirection = 'column';
-    camSec.style.gap = '8px';
+    const resolution = createSegmented(
+      [
+        { id: '0.5', label: '50%' },
+        { id: '0.75', label: '75%' },
+        { id: '1', label: '100%' },
+      ],
+      settings.resolutionScale ?? 1,
+      (id) => {
+        settings.resolutionScale = parseFloat(id);
+        gameState.saveToLocalStorage();
+        this.updateResolutionBtnStyles();
+        this.onResolutionChange(settings.resolutionScale);
+      }
+    );
+    this.resolutionBtns = resolution.buttons;
+    displaySec.appendChild(resolution.group);
 
-    const camLabel = document.createElement('div');
-    camLabel.textContent = 'CAMERA SETTINGS';
-    camLabel.style.fontWeight = 'bold';
-    camLabel.style.color = 'var(--frame, #ffd36b)';
-    camLabel.style.letterSpacing = '1px';
-    camSec.appendChild(camLabel);
+    displaySec.appendChild(
+      createSwitch('SHOW FPS COUNTER', settings.showFps ?? true, (on) => {
+        settings.showFps = on;
+        gameState.saveToLocalStorage();
+        fpsCounter.setVisible(on);
+        this.onFpsToggle(on);
+      }, 'opt-fps-toggle')
+    );
 
-    // Follow Speed: Tight, Normal, Loose
-    const spdBox = document.createElement('div');
-    spdBox.style.display = 'flex';
-    spdBox.style.alignItems = 'center';
-    spdBox.style.justifyContent = 'space-between';
+    this.content.appendChild(displaySec);
 
-    const spdTitle = document.createElement('span');
-    spdTitle.textContent = 'Follow Speed:';
-    spdTitle.style.fontSize = '12px';
-    spdBox.appendChild(spdTitle);
+    // --- 2. CAMERA --------------------------------------------------------
+    const camSec = createSection('CAMERA');
+    camSec.appendChild(createFieldLabel('FOLLOW SPEED'));
 
-    const spdGroup = document.createElement('div');
-    spdGroup.style.display = 'flex';
-    spdGroup.style.gap = '6px';
-    const speeds = [
-      { id: 'tight', label: 'TIGHT' },
-      { id: 'normal', label: 'NORMAL' },
-      { id: 'loose', label: 'LOOSE' }
-    ];
-    this.camSpeedBtns = {};
-    speeds.forEach((sp) => {
-      const b = document.createElement('button');
-      b.textContent = sp.label;
-      b.style.padding = '4px 10px';
-      b.style.fontSize = '11px';
-      b.style.cursor = 'pointer';
-      b.style.borderRadius = '4px';
-      b.style.border = '1px solid var(--frame-inner, #4a3e66)';
-      const isSel = (settings.camera.followSpeed || 'tight') === sp.id;
-      b.style.backgroundColor = isSel ? 'rgba(111, 224, 240, 0.25)' : 'rgba(20, 15, 30, 0.7)';
-      b.style.color = isSel ? '#6fe0f0' : '#cccccc';
-
-      b.addEventListener('click', () => {
-        settings.camera.followSpeed = sp.id;
+    const speed = createSegmented(
+      [
+        { id: 'tight', label: 'TIGHT' },
+        { id: 'normal', label: 'NORMAL' },
+        { id: 'loose', label: 'LOOSE' },
+      ],
+      settings.camera.followSpeed || 'tight',
+      (id) => {
+        settings.camera.followSpeed = id;
         gameState.saveToLocalStorage();
         this.updateCamSpeedBtnStyles();
-      });
-      this.camSpeedBtns[sp.id] = b;
-      spdGroup.appendChild(b);
-    });
-    spdBox.appendChild(spdGroup);
-    camSec.appendChild(spdBox);
+      }
+    );
+    this.camSpeedBtns = speed.buttons;
+    camSec.appendChild(speed.group);
 
-    // Camera Distance: Near, Normal, Far
-    const distBox = document.createElement('div');
-    distBox.style.display = 'flex';
-    distBox.style.alignItems = 'center';
-    distBox.style.justifyContent = 'space-between';
+    camSec.appendChild(createFieldLabel('CAMERA DISTANCE'));
 
-    const distTitle = document.createElement('span');
-    distTitle.textContent = 'Camera Distance:';
-    distTitle.style.fontSize = '12px';
-    distBox.appendChild(distTitle);
-
-    const distGroup = document.createElement('div');
-    distGroup.style.display = 'flex';
-    distGroup.style.gap = '6px';
-    const dists = [
-      { id: 'near', label: 'NEAR' },
-      { id: 'normal', label: 'NORMAL' },
-      { id: 'far', label: 'FAR' }
-    ];
-    this.camDistBtns = {};
-    dists.forEach((d) => {
-      const b = document.createElement('button');
-      b.textContent = d.label;
-      b.style.padding = '4px 10px';
-      b.style.fontSize = '11px';
-      b.style.cursor = 'pointer';
-      b.style.borderRadius = '4px';
-      b.style.border = '1px solid var(--frame-inner, #4a3e66)';
-      const isSel = (settings.camera.distance || 'normal') === d.id;
-      b.style.backgroundColor = isSel ? 'rgba(111, 224, 240, 0.25)' : 'rgba(20, 15, 30, 0.7)';
-      b.style.color = isSel ? '#6fe0f0' : '#cccccc';
-
-      b.addEventListener('click', () => {
-        settings.camera.distance = d.id;
+    const distance = createSegmented(
+      [
+        { id: 'near', label: 'NEAR' },
+        { id: 'normal', label: 'NORMAL' },
+        { id: 'far', label: 'FAR' },
+      ],
+      settings.camera.distance || 'normal',
+      (id) => {
+        settings.camera.distance = id;
         gameState.saveToLocalStorage();
         this.updateCamDistBtnStyles();
-      });
-      this.camDistBtns[d.id] = b;
-      distGroup.appendChild(b);
-    });
-    distBox.appendChild(distGroup);
-    camSec.appendChild(distBox);
-
-    // Auto-turn behind character checkbox
-    const autoTurnBox = document.createElement('div');
-    autoTurnBox.style.display = 'flex';
-    autoTurnBox.style.alignItems = 'center';
-    autoTurnBox.style.gap = '8px';
-
-    const autoTurnCheck = document.createElement('input');
-    autoTurnCheck.type = 'checkbox';
-    autoTurnCheck.id = 'opt-auto-turn';
-    autoTurnCheck.checked = settings.camera.autoTurn ?? true;
-    autoTurnCheck.style.cursor = 'pointer';
-    autoTurnCheck.addEventListener('change', (e) => {
-      settings.camera.autoTurn = e.target.checked;
-      gameState.saveToLocalStorage();
-    });
-
-    const autoTurnLbl = document.createElement('label');
-    autoTurnLbl.htmlFor = 'opt-auto-turn';
-    autoTurnLbl.textContent = 'Auto-turn camera behind character';
-    autoTurnLbl.style.cursor = 'pointer';
-    autoTurnLbl.style.fontSize = '12px';
-    autoTurnLbl.style.fontWeight = 'bold';
-    autoTurnBox.appendChild(autoTurnCheck);
-    autoTurnBox.appendChild(autoTurnLbl);
-    camSec.appendChild(autoTurnBox);
+      }
+    );
+    this.camDistBtns = distance.buttons;
+    camSec.appendChild(distance.group);
 
     this.content.appendChild(camSec);
 
-    // 3. Controls Toggle (Swap attack and block buttons)
-    const ctrlSec = document.createElement('div');
-    ctrlSec.style.display = 'flex';
-    ctrlSec.style.flexDirection = 'column';
-    ctrlSec.style.gap = '6px';
+    // --- 3. COMBAT CONTROLS ----------------------------------------------
+    const ctrlSec = createSection('COMBAT CONTROLS');
+    // The switch is ON when the buttons are swapped from the default
+    // (default: LEFT = ATTACK, RIGHT = BLOCK).
+    ctrlSec.appendChild(
+      createSwitch('SWAP ATTACK & BLOCK BUTTONS', settings.controls.attackButton === 'right', (on) => {
+        if (on) {
+          settings.controls.attackButton = 'right';
+          settings.controls.blockButton = 'left';
+        } else {
+          settings.controls.attackButton = 'left';
+          settings.controls.blockButton = 'right';
+        }
+        gameState.saveToLocalStorage();
+        this.updateControlsKeyList();
+      }, 'opt-swap-buttons')
+    );
 
-    const ctrlLabel = document.createElement('div');
-    ctrlLabel.textContent = 'COMBAT CONTROLS';
-    ctrlLabel.style.fontWeight = 'bold';
-    ctrlLabel.style.color = 'var(--frame, #ffd36b)';
-    ctrlLabel.style.letterSpacing = '1px';
-    ctrlSec.appendChild(ctrlLabel);
-
-    const swapBox = document.createElement('div');
-    swapBox.style.display = 'flex';
-    swapBox.style.alignItems = 'center';
-    swapBox.style.gap = '8px';
-
-    const swapCheck = document.createElement('input');
-    swapCheck.type = 'checkbox';
-    swapCheck.id = 'opt-swap-buttons';
-    // Checked if attack is left and block is right (swapped from default)
-    swapCheck.checked = settings.controls.attackButton === 'left' && settings.controls.blockButton === 'right';
-    swapCheck.style.cursor = 'pointer';
-    swapCheck.addEventListener('change', (e) => {
-      if (e.target.checked) {
-        settings.controls.attackButton = 'left';
-        settings.controls.blockButton = 'right';
-      } else {
-        settings.controls.attackButton = 'right';
-        settings.controls.blockButton = 'left';
-      }
-      gameState.saveToLocalStorage();
-      this.updateControlsKeyList();
-    });
-
-    const swapLbl = document.createElement('label');
-    swapLbl.htmlFor = 'opt-swap-buttons';
-    swapLbl.textContent = 'Swap attack and block buttons (Left = Attack, Right = Block)';
-    swapLbl.style.cursor = 'pointer';
-    swapLbl.style.fontSize = '12px';
-    swapLbl.style.fontWeight = 'bold';
-    swapBox.appendChild(swapCheck);
-    swapBox.appendChild(swapLbl);
-    ctrlSec.appendChild(swapBox);
+    const ctrlHint = document.createElement('div');
+    ctrlHint.textContent = 'OFF: LEFT CLICK ATTACKS, RIGHT CLICK BLOCKS. ON: REVERSED.';
+    ctrlHint.style.fontSize = '10px';
+    ctrlHint.style.color = '#7f8fa0';
+    ctrlHint.style.letterSpacing = '0.5px';
+    ctrlSec.appendChild(ctrlHint);
 
     this.content.appendChild(ctrlSec);
 
-    // 4. Audio Controls & FPS Overlay
-    const optGrid = document.createElement('div');
-    optGrid.style.display = 'grid';
-    optGrid.style.gridTemplateColumns = '1fr 1fr';
-    optGrid.style.gap = '12px';
+    // --- 4. AUDIO ---------------------------------------------------------
+    const audioSec = createSection('AUDIO');
 
-    // FPS Toggle
-    const fpsBox = document.createElement('div');
-    fpsBox.style.display = 'flex';
-    fpsBox.style.alignItems = 'center';
-    fpsBox.style.gap = '8px';
+    const volHead = document.createElement('div');
+    volHead.style.display = 'flex';
+    volHead.style.alignItems = 'center';
+    volHead.style.justifyContent = 'space-between';
 
-    const fpsCheck = document.createElement('input');
-    fpsCheck.type = 'checkbox';
-    fpsCheck.id = 'opt-fps-toggle';
-    fpsCheck.checked = gameState.settings?.showFps ?? true;
-    fpsCheck.style.cursor = 'pointer';
-    fpsCheck.addEventListener('change', (e) => {
-      settings.showFps = e.target.checked;
-      gameState.saveToLocalStorage();
-      fpsCounter.setVisible(settings.showFps);
-      this.onFpsToggle(settings.showFps);
-    });
+    const volLabel = createFieldLabel('MASTER VOLUME');
+    volHead.appendChild(volLabel);
 
-    const fpsLbl = document.createElement('label');
-    fpsLbl.htmlFor = 'opt-fps-toggle';
-    fpsLbl.textContent = 'SHOW FPS COUNTER';
-    fpsLbl.style.cursor = 'pointer';
-    fpsLbl.style.fontSize = '12px';
-    fpsLbl.style.fontWeight = 'bold';
-    fpsBox.appendChild(fpsCheck);
-    fpsBox.appendChild(fpsLbl);
-    optGrid.appendChild(fpsBox);
+    const volValue = document.createElement('span');
+    volValue.style.fontSize = '11px';
+    volValue.style.fontWeight = 'bold';
+    volValue.style.color = GOLD;
+    volHead.appendChild(volValue);
 
-    // Volume Slider
-    const volBox = document.createElement('div');
-    volBox.style.display = 'flex';
-    volBox.style.flexDirection = 'column';
-    volBox.style.gap = '4px';
-
-    const volLabel = document.createElement('div');
-    volLabel.textContent = 'MASTER VOLUME';
-    volLabel.style.fontSize = '12px';
-    volLabel.style.fontWeight = 'bold';
-    volBox.appendChild(volLabel);
+    audioSec.appendChild(volHead);
 
     const volSlider = document.createElement('input');
     volSlider.type = 'range';
@@ -309,6 +361,13 @@ export class OptionsWindow extends SystemWindow {
       : 0.3;
     volSlider.value = String(curVol);
     volSlider.style.cursor = 'pointer';
+    volSlider.style.width = '100%';
+    volSlider.style.accentColor = GOLD;
+
+    const showVol = (v) => {
+      volValue.textContent = `${Math.round(v * 100)}%`;
+    };
+    showVol(curVol);
 
     volSlider.addEventListener('input', (e) => {
       const v = parseFloat(e.target.value);
@@ -316,35 +375,21 @@ export class OptionsWindow extends SystemWindow {
         if (!window.__audioMaster) window.__audioMaster = { isMuted: false, masterVolume: 0.3 };
         window.__audioMaster.masterVolume = v;
       }
+      showVol(v);
       this.onVolumeChange(v);
     });
-    volBox.appendChild(volSlider);
-    optGrid.appendChild(volBox);
-    this.content.appendChild(optGrid);
 
-    // 5. Keyboard & Mouse Controls Reference
-    const keySec = document.createElement('div');
-    keySec.style.display = 'flex';
-    keySec.style.flexDirection = 'column';
-    keySec.style.gap = '6px';
-    keySec.style.backgroundColor = 'rgba(15, 12, 24, 0.6)';
-    keySec.style.border = '1px solid rgba(74, 62, 102, 0.4)';
-    keySec.style.borderRadius = '4px';
-    keySec.style.padding = '8px 12px';
+    audioSec.appendChild(volSlider);
+    this.content.appendChild(audioSec);
 
-    const keyTitle = document.createElement('div');
-    keyTitle.textContent = 'CONTROLS REFERENCE';
-    keyTitle.style.fontWeight = 'bold';
-    keyTitle.style.color = 'var(--gold, #ffc27a)';
-    keyTitle.style.fontSize = '11px';
-    keyTitle.style.letterSpacing = '1px';
-    keySec.appendChild(keyTitle);
+    // --- 5. CONTROLS REFERENCE -------------------------------------------
+    const keySec = createSection('CONTROLS REFERENCE');
 
     this.keyGrid = document.createElement('div');
     this.keyGrid.style.display = 'grid';
-    this.keyGrid.style.gridTemplateColumns = '120px 1fr';
-    this.keyGrid.style.gap = '3px 8px';
-    this.keyGrid.style.fontSize = '11px';
+    this.keyGrid.style.gridTemplateColumns = 'auto 1fr auto 1fr';
+    this.keyGrid.style.gap = '6px 14px';
+    this.keyGrid.style.alignItems = 'center';
     keySec.appendChild(this.keyGrid);
 
     this.content.appendChild(keySec);
@@ -354,67 +399,81 @@ export class OptionsWindow extends SystemWindow {
   updateControlsKeyList() {
     if (!this.keyGrid) return;
     this.keyGrid.innerHTML = '';
-    const ctrl = gameState.settings?.controls || { attackButton: 'right', blockButton: 'left' };
+    const ctrl = gameState.settings?.controls || { attackButton: 'left', blockButton: 'right' };
     const atkStr = ctrl.attackButton === 'left' ? 'LEFT CLICK' : 'RIGHT CLICK';
     const blkStr = ctrl.blockButton === 'right' ? 'RIGHT CLICK (HOLD)' : 'LEFT CLICK (HOLD)';
 
     const keysList = [
-      [atkStr, 'ATTACK (3-hit combo, 1 per press)'],
-      [blkStr, 'BLOCK (hold to raise shield; parry)'],
-      ['F', 'Shield bash while blocking / attack alias'],
-      ['Q', 'Roll / Dodge evasion'],
-      ['WASD', 'Move player character'],
-      ['E', 'Interact with building / door / item'],
-      ['C', 'Squad Command Wheel (hold)'],
-      ['X', 'Toggle Auto-combat mode'],
-      ['Arrows', 'Rotate camera yaw & pitch'],
-      ['Wheel', 'Zoom camera in / out'],
-      ['R', 'Open Hero Roster'],
-      ['T', 'Deploy / Enter Tower Gate'],
-      ['O', 'Toggle Options Window'],
-      ['M', 'Toggle Audio Mute'],
-      ['\\', 'Toggle Ground & surfaces debug overlay'],
+      ['MOUSE', 'ROTATE CAMERA (CLICK TO CAPTURE)'],
+      ['ARROWS', 'ROTATE CAMERA'],
+      [atkStr, 'ATTACK (3-HIT COMBO)'],
+      [blkStr, 'BLOCK (HOLD TO PARRY)'],
+      ['F', 'SHIELD BASH / ATTACK ALIAS'],
+      ['Q', 'ROLL / DODGE'],
+      ['WASD', 'MOVE CHARACTER'],
+      ['E', 'INTERACT'],
+      ['C', 'SQUAD COMMAND WHEEL (HOLD)'],
+      ['X', 'TOGGLE AUTO-COMBAT'],
+      ['WHEEL', 'ZOOM CAMERA'],
+      ['R', 'OPEN HERO ROSTER'],
+      ['T', 'DEPLOY / TOWER GATE'],
+      ['O', 'TOGGLE OPTIONS'],
+      ['M', 'TOGGLE AUDIO MUTE'],
+      ['\\', 'GROUND & SURFACE DEBUG'],
     ];
 
-    keysList.forEach(([k, desc]) => {
-      const kEl = document.createElement('span');
-      kEl.textContent = k;
-      kEl.style.color = '#6fe0f0';
-      kEl.style.fontWeight = 'bold';
-      const dEl = document.createElement('span');
-      dEl.textContent = desc;
-      dEl.style.color = '#aaaaaa';
-      this.keyGrid.appendChild(kEl);
-      this.keyGrid.appendChild(dEl);
-    });
+    const makeKey = (text) => {
+      const el = document.createElement('span');
+      el.textContent = text;
+      el.style.fontFamily = 'monospace, sans-serif';
+      el.style.fontSize = '10px';
+      el.style.fontWeight = 'bold';
+      el.style.color = GOLD;
+      el.style.background = 'rgba(0, 0, 0, 0.45)';
+      el.style.border = `1px solid ${FRAME_INNER}`;
+      el.style.borderRadius = '3px';
+      el.style.padding = '1px 6px';
+      el.style.justifySelf = 'start';
+      el.style.whiteSpace = 'nowrap';
+      return el;
+    };
+
+    const makeDesc = (text) => {
+      const el = document.createElement('span');
+      el.textContent = text;
+      el.style.fontSize = '10px';
+      el.style.color = '#9fb0c0';
+      el.style.letterSpacing = '0.3px';
+      return el;
+    };
+
+    // Two key/description pairs per row.
+    for (let i = 0; i < keysList.length; i += 2) {
+      const left = keysList[i];
+      const right = keysList[i + 1];
+      this.keyGrid.appendChild(makeKey(left[0]));
+      this.keyGrid.appendChild(makeDesc(left[1]));
+      if (right) {
+        this.keyGrid.appendChild(makeKey(right[0]));
+        this.keyGrid.appendChild(makeDesc(right[1]));
+      }
+    }
   }
 
   updateQualityBtnStyles() {
-    const q = gameState.settings?.quality || 'medium';
-    for (const [key, btn] of Object.entries(this.qualityBtns || {})) {
-      const isSel = key === q;
-      btn.style.backgroundColor = isSel ? 'rgba(111, 224, 240, 0.25)' : 'rgba(20, 15, 30, 0.7)';
-      btn.style.color = isSel ? '#6fe0f0' : '#cccccc';
-      btn.style.boxShadow = isSel ? '0 0 8px rgba(111, 224, 240, 0.4)' : 'none';
-    }
+    paintSegmented(this.qualityBtns, gameState.settings?.quality || 'medium');
+  }
+
+  updateResolutionBtnStyles() {
+    paintSegmented(this.resolutionBtns, gameState.settings?.resolutionScale ?? 1);
   }
 
   updateCamSpeedBtnStyles() {
-    const spd = gameState.settings?.camera?.followSpeed || 'tight';
-    for (const [key, btn] of Object.entries(this.camSpeedBtns || {})) {
-      const isSel = key === spd;
-      btn.style.backgroundColor = isSel ? 'rgba(111, 224, 240, 0.25)' : 'rgba(20, 15, 30, 0.7)';
-      btn.style.color = isSel ? '#6fe0f0' : '#cccccc';
-    }
+    paintSegmented(this.camSpeedBtns, gameState.settings?.camera?.followSpeed || 'tight');
   }
 
   updateCamDistBtnStyles() {
-    const dist = gameState.settings?.camera?.distance || 'normal';
-    for (const [key, btn] of Object.entries(this.camDistBtns || {})) {
-      const isSel = key === dist;
-      btn.style.backgroundColor = isSel ? 'rgba(111, 224, 240, 0.25)' : 'rgba(20, 15, 30, 0.7)';
-      btn.style.color = isSel ? '#6fe0f0' : '#cccccc';
-    }
+    paintSegmented(this.camDistBtns, gameState.settings?.camera?.distance || 'normal');
   }
 
   open() {

@@ -19,19 +19,6 @@ export const COMBAT_STATES = Object.freeze({
   DEAD: 'DEAD',
 });
 
-export const STATE_PRIORITY = Object.freeze({
-  IDLE: 0,
-  MOVE: 10,
-  AIM: 45,
-  BLOCK: 50,
-  ATTACK: 60,
-  CAST: 65,
-  DODGE: 70,
-  PARRY: 80,
-  STAGGER: 90,
-  DEAD: 100,
-});
-
 export const ATTACK_PHASES = Object.freeze({
   NONE: 'NONE',
   STARTUP: 'STARTUP',

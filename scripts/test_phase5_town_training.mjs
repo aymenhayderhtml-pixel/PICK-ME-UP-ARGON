@@ -97,6 +97,10 @@ async function run() {
   const { TRAINING_CONFIG } = await import('../src/data/training.config.js');
   const { EMOTION_CONFIG } = await import('../src/data/emotions.config.js');
   const { TownSparringController } = await import('../src/hub/TownSparringController.js');
+  const { applyTrainingYardRecovery } = await import('../src/core/TrainingEngine.js');
+
+  // The sparring controller and the fairy VFX are Three.js objects.
+  const scene = new THREE.Scene();
 
   const RING = { x: -18.7, z: 23.3 };
   const anchors = {
@@ -134,10 +138,10 @@ async function run() {
 
   console.log('\n--- 2. SPARRING: LOW HP ---');
   {
-    const strong = makeNpc(makeHero({ id: 's', name: 'Strong', stats: { str: 20, agi: 10, vit: 10, int: 10, wil: 10 } }));
-    const weak = makeNpc(makeHero({ id: 'w', name: 'Weak', stats: { str: 1, agi: 1, vit: 1, int: 1, wil: 1 } }));
-    const ctrl = new TownSparringController(null, makeManager([strong, weak]), null, null);
-    ctrl.setAnchors(anchors);
+    const strong = makeNpc(makeHero({ id: 's', name: 'Strong', stats: { str: 20, agi: 10, vit: 10, int: 10, wil: 10 } }), RING.x - 0.9, RING.z);
+    const weak = makeNpc(makeHero({ id: 'w', name: 'Weak', stats: { str: 1, agi: 1, vit: 1, int: 1, wil: 1 } }), RING.x + 0.9, RING.z);
+    const ctrl = new TownSparringController(scene, makeManager([strong, weak]), null, null);
+    ctrl.setAnchors(anchors, 1.9);
     const session = ctrl.startSpar(strong, weak, true);
     // Drop the weak fighter below the safe HP threshold.
     session.fighterB.hp = session.fighterB.maxHp * 0.2;
@@ -152,45 +156,52 @@ async function run() {
 
   console.log('\n--- 3. SPARRING: HEAD OR HEART HIT ---');
   {
-    const strong = makeNpc(makeHero({ id: 's2', name: 'Strong', stats: { str: 20, agi: 10, vit: 10, int: 10, wil: 10 } }));
-    const weak = makeNpc(makeHero({ id: 'w2', name: 'Weak', stats: { str: 1, agi: 1, vit: 1, int: 1, wil: 1 } }));
-    const ctrl = new TownSparringController(null, makeManager([strong, weak]), null, null);
-    ctrl.setAnchors(anchors);
+    const strong = makeNpc(makeHero({ id: 's2', name: 'Strong', stats: { str: 20, agi: 10, vit: 10, int: 10, wil: 10 } }), RING.x - 0.9, RING.z);
+    const weak = makeNpc(makeHero({ id: 'w2', name: 'Weak', stats: { str: 1, agi: 1, vit: 1, int: 1, wil: 1 } }), RING.x + 0.9, RING.z);
+    const ctrl = new TownSparringController(scene, makeManager([strong, weak]), null, null);
+    ctrl.setAnchors(anchors, 1.9);
     const session = ctrl.startSpar(strong, weak, true);
-    withRandom(0.99, () => ctrl.update(1.0));
+    // A scripted rng: the Fight AI consumes the first value (0.1 -> 'attack')
+    // and the hit zone roll consumes the second (0.95 -> 'heart').
+    const seq = [0.1, 0.95];
+    let ri = 0;
+    const scripted = () => seq[ri++ % seq.length];
+    for (let i = 0; i < 3 && !session.stoppedBy; i++) {
+      withRandom(0, () => { Math.random = scripted; ctrl.update(1.0); });
+    }
     check('TownSparringController stops spar immediately on head or heart hit and applies serious injury',
       session.stoppedBy === 'iselle' &&
-        session.stopReason === 'critical_zone' &&
+        session.stopReason === 'critical_hit' &&
         weak.heroData.injury &&
         weak.heroData.injury.severity === 'serious' &&
         weak.heroData.injury.healRateMult === TRAINING_CONFIG.CRITICAL_INJURY_HEAL_MULT,
-      `zone=${session.zone} injury=${weak.heroData.injury ? weak.heroData.injury.zone : 'none'}`);
+      `zone=${session.lastHitZone} injury=${weak.heroData.injury ? weak.heroData.injury.zone : 'none'}`);
     check('A critical hit breaks the NO_LETHAL_SPAR_BLOWS law',
       session.lawBroken === EMOTION_CONFIG.LOBBY_LAWS.NO_LETHAL_SPAR_BLOWS, session.lawBroken);
   }
 
   console.log('\n--- 4. SPARRING: DURATION AND TOTAL DAMAGE ---');
   {
-    const a = makeNpc(makeHero({ id: 'a4', name: 'A' }));
-    const b = makeNpc(makeHero({ id: 'b4', name: 'B' }));
-    const ctrl = new TownSparringController(null, makeManager([a, b]), null, null);
-    ctrl.setAnchors(anchors);
+    const a = makeNpc(makeHero({ id: 'a4', name: 'A' }), RING.x - 0.9, RING.z);
+    const b = makeNpc(makeHero({ id: 'b4', name: 'B' }), RING.x + 0.9, RING.z);
+    const ctrl = new TownSparringController(scene, makeManager([a, b]), null, null);
+    ctrl.setAnchors(anchors, 1.9);
     const session = ctrl.startSpar(a, b, true);
     session.elapsed = EMOTION_CONFIG.ISELLE_MAX_FIGHT_DURATION_SEC + 1;
     withRandom(0.5, () => ctrl.update(1.0));
     check('TownSparringController stops spar when duration > 25s',
-      session.stoppedBy === 'iselle' && session.stopReason === 'duration',
+      session.stoppedBy === 'iselle' && session.stopReason === 'max_duration',
       `reason=${session.stopReason}`);
 
-    const a2 = makeNpc(makeHero({ id: 'a5', name: 'A2' }));
-    const b2 = makeNpc(makeHero({ id: 'b5', name: 'B2' }));
-    const ctrl2 = new TownSparringController(null, makeManager([a2, b2]), null, null);
-    ctrl2.setAnchors(anchors);
+    const a2 = makeNpc(makeHero({ id: 'a5', name: 'A2' }), RING.x - 0.9, RING.z);
+    const b2 = makeNpc(makeHero({ id: 'b5', name: 'B2' }), RING.x + 0.9, RING.z);
+    const ctrl2 = new TownSparringController(scene, makeManager([a2, b2]), null, null);
+    ctrl2.setAnchors(anchors, 1.9);
     const session2 = ctrl2.startSpar(a2, b2, true);
     session2.totalDamage = EMOTION_CONFIG.ISELLE_MAX_FIGHT_TOTAL_DAMAGE + 1;
     withRandom(0.5, () => ctrl2.update(1.0));
     check('TownSparringController stops spar when totalDamage > 120',
-      session2.stoppedBy === 'iselle' && session2.stopReason === 'total_damage',
+      session2.stoppedBy === 'iselle' && session2.stopReason === 'max_damage',
       `reason=${session2.stopReason}`);
   }
 
@@ -199,15 +210,29 @@ async function run() {
     // The fighters are standing far away from the ring.
     const a = makeNpc(makeHero({ id: 'a6', name: 'A' }), 0, 0);
     const b = makeNpc(makeHero({ id: 'b6', name: 'B' }), 1, 0);
-    const ctrl = new TownSparringController(null, makeManager([a, b]), null, null);
+    const ctrl = new TownSparringController(scene, makeManager([a, b]), null, null);
     ctrl.setAnchors(anchors);
     const session = ctrl.startSpar(a, b, false);
     const motivationBefore = a.heroData.motivationScore;
-    withRandom(0.5, () => ctrl.update(1.0));
+    // Iselle only notices an unsanctioned brawl after the detection window.
+    withRandom(0.5, () => {
+      for (let i = 0; i < 8 && !session.stoppedBy; i++) ctrl.update(1.0);
+    });
+    // The two mock fighters are identical, so the fight is a draw: the
+    // outcome delta and the law penalty both apply.
+    const outcomeDelta = session.consequenceSummary
+      ? (session.consequenceSummary.winnerId === a.heroData.id
+          ? EMOTION_CONFIG.FIGHT_WIN_MOTIVATION_GAIN
+          : session.consequenceSummary.winnerId === b.heroData.id
+            ? EMOTION_CONFIG.FIGHT_LOSS_MOTIVATION_DELTA
+            : EMOTION_CONFIG.FIGHT_DRAW_MOTIVATION_DELTA)
+      : 0;
     check('Unsanctioned fight outside ring triggers LAW_NO_OUTSIDE_FIGHTING and lowers offender motivationScore by 15',
       session.lawBroken === EMOTION_CONFIG.LOBBY_LAWS.NO_OUTSIDE_FIGHTING &&
-        a.heroData.motivationScore === motivationBefore - EMOTION_CONFIG.LAW_BREAK_MOTIVATION_PENALTY,
-      `law=${session.lawBroken} motivation=${a.heroData.motivationScore}`);
+        session.stoppedBy === 'iselle' &&
+        a.heroData.motivationScore ===
+          motivationBefore + outcomeDelta - EMOTION_CONFIG.LAW_BREAK_MOTIVATION_PENALTY,
+      `law=${session.lawBroken} stoppedBy=${session.stoppedBy} motivation=${a.heroData.motivationScore}`);
   }
 
   console.log('\n--- 6. SQUAD LEADER INTERVENES BEFORE ISELLE ---');
@@ -218,39 +243,44 @@ async function run() {
       RING.x + 1,
       RING.z + 1
     );
-    const a = makeNpc(makeHero({ id: 'a7', name: 'A', stats: { str: 2, agi: 1, vit: 2, int: 1, wil: 1 } }));
-    const b = makeNpc(makeHero({ id: 'b7', name: 'B', stats: { str: 2, agi: 1, vit: 2, int: 1, wil: 1 } }));
-    const ctrl = new TownSparringController(null, makeManager([leader, a, b]), null, null);
-    ctrl.setAnchors(anchors);
+    const a = makeNpc(makeHero({ id: 'a7', name: 'A', stats: { str: 2, agi: 1, vit: 2, int: 1, wil: 1 } }), RING.x - 0.9, RING.z);
+    const b = makeNpc(makeHero({ id: 'b7', name: 'B', stats: { str: 2, agi: 1, vit: 2, int: 1, wil: 1 } }), RING.x + 0.9, RING.z);
+    const ctrl = new TownSparringController(scene, makeManager([leader, a, b]), null, null);
+    ctrl.setAnchors(anchors, 1.9);
     const session = ctrl.startSpar(a, b, true);
     ctrl.update(0.5);
     check('Squad Leader intervenes before Iselle when nearby and stronger than both fighters',
-      session.stoppedBy === 'leader' && session.stopReason === 'squad_leader',
+      session.stoppedBy === 'leader' && session.stopReason === 'leader_stopped',
       `stoppedBy=${session.stoppedBy}`);
   }
 
   console.log('\n--- 7. FAST HEAL AT THE TRAINING GROUND ---');
   {
-    const a = makeNpc(makeHero({ id: 'a8', name: 'A' }));
-    const b = makeNpc(makeHero({ id: 'b8', name: 'B' }));
-    const ctrl = new TownSparringController(null, makeManager([a, b]), null, null);
-    ctrl.setAnchors(anchors);
+    // The fast heal lives in the shared engine: it runs AFTER a fight, not
+    // during one, so the damage has to accumulate for Iselle's rules to fire.
+    const a = makeNpc(makeHero({ id: 'a8', name: 'A' }), RING.x - 0.9, RING.z);
+    const b = makeNpc(makeHero({ id: 'b8', name: 'B' }), RING.x + 0.9, RING.z);
+    const ctrl = new TownSparringController(scene, makeManager([a, b]), null, null);
+    ctrl.setAnchors(anchors, 1.9);
     const session = ctrl.startSpar(a, b, true);
     session.fighterB.hp = session.fighterB.maxHp - 50;
     const before = session.fighterB.hp;
-    // delta 0.5 is below the exchange interval, so only the heal runs.
-    ctrl.update(0.5);
-    const healed = session.fighterB.hp - before;
-    const expected = TRAINING_CONFIG.TRAINING_FAST_HEAL_PER_SEC * 0.5;
+    const healed = applyTrainingYardRecovery(
+      session.fighterB,
+      b.heroData,
+      TRAINING_CONFIG.FIGHT_RECOVERY_SEC
+    );
+    const expected = TRAINING_CONFIG.TRAINING_FAST_HEAL_PER_SEC * TRAINING_CONFIG.FIGHT_RECOVERY_SEC;
     check('Non-critical training damage fast-heals',
-      Math.abs(healed - expected) < 0.01,
+      Math.abs(healed - expected) < 0.01 &&
+        Math.abs(session.fighterB.hp - (before + expected)) < 0.01,
       `healed=${healed.toFixed(2)} expected=${expected}`);
 
     // With a serious head or heart injury the heal is heavily reduced.
-    const a2 = makeNpc(makeHero({ id: 'a9', name: 'A2' }));
-    const b2 = makeNpc(makeHero({ id: 'b9', name: 'B2' }));
-    const ctrl2 = new TownSparringController(null, makeManager([a2, b2]), null, null);
-    ctrl2.setAnchors(anchors);
+    const a2 = makeNpc(makeHero({ id: 'a9', name: 'A2' }), RING.x - 0.9, RING.z);
+    const b2 = makeNpc(makeHero({ id: 'b9', name: 'B2' }), RING.x + 0.9, RING.z);
+    const ctrl2 = new TownSparringController(scene, makeManager([a2, b2]), null, null);
+    ctrl2.setAnchors(anchors, 1.9);
     const session2 = ctrl2.startSpar(a2, b2, true);
     session2.fighterB.hp = session2.fighterB.maxHp - 50;
     b2.heroData.injury = {
@@ -259,9 +289,11 @@ async function run() {
       daysRemaining: 2,
       healRateMult: TRAINING_CONFIG.CRITICAL_INJURY_HEAL_MULT,
     };
-    const before2 = session2.fighterB.hp;
-    ctrl2.update(0.5);
-    const healed2 = session2.fighterB.hp - before2;
+    const healed2 = applyTrainingYardRecovery(
+      session2.fighterB,
+      b2.heroData,
+      TRAINING_CONFIG.FIGHT_RECOVERY_SEC
+    );
     const expected2 = expected * TRAINING_CONFIG.CRITICAL_INJURY_HEAL_MULT;
     check('A head or heart injury does not fast-heal',
       healed2 < healed * 0.5 && Math.abs(healed2 - expected2) < 0.01,
