@@ -47,6 +47,7 @@ scripts/check_codemap.mjs | Integrity validator verifying docs/CODEMAP.md matche
 scripts/diagnose_all_combatants.mjs | Headless diagnostic script checking all combatant configurations | (none) | module | dev only
 scripts/diagnose_shot.mjs | Diagnostic script for archer arrow shot trajectories and velocity | (none) | module | dev only
 scripts/diagnose_weapons.mjs | Diagnostic script verifying all weapon meshes and grade colors | (none) | module | dev only
+scripts/split_by_plan.mjs | CLI utility to extract exact line ranges into target files according to a JSON plan | (none) | node:fs, node:path | dev only
 scripts/test_aim_and_clear.mjs | Test script for OTS aim camera activation and reticle clearing | (none) | module, fs | dev only
 scripts/test_bow_fixes.mjs | Validation script verifying bow string draw and projectile fixes | (none) | module, fs | dev only
 scripts/test_bow_qa.mjs | Automated QA test suite for bow aim, draw, and loose mechanics | (none) | module | dev only
