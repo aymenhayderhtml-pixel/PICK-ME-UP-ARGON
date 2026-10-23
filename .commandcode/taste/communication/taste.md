@@ -1,5 +1,8 @@
 # Communication taste
 - Prefers tightly scoped outputs: "reply with ONLY the prompt in one code block" plus a short list of facts that could not be found; minimal surrounding prose. Confidence: 0.7
+- For audit/verification tasks, the final chat reply must contain ONLY the final PASS/FAIL table and the NEEDS DECISION list (no extra prose). Confidence: 0.95
+- Never declare a task complete or write "done" without pasting real command output as proof; a status claim without evidence is not acceptable. Confidence: 0.85
+- If a required proof fails and cannot be fixed, stop immediately and report exactly what failed; do not continue to the next step or claim success. Confidence: 0.8">
 - Agent ambiguity rule (AGENTS.md): ask at most ONE focused question when a task is genuinely ambiguous; otherwise decide and state the choice made rather than stalling or returning open-ended questions. Confidence: 0.7
 - Writes long structured specs with numbered parts and "copy these rules exactly" instructions, expecting the agent to follow the requested structure verbatim rather than paraphrase, reorder, or embellish. Confidence: 0.75
 - Names the downstream executor model and its weaknesses in the brief (e.g. "write for Gemini, which is weak at vague instructions") — wants prompts targeted at a less capable implementer with exact paths, signatures, defaults, edge cases, and an open-questions section. Confidence: 0.7
