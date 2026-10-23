@@ -71,3 +71,8 @@ e counts, the before/after comparison result, and problems. Confidence: 0.85
 - For move-only splits, cut code by exact line ranges using the repo's splitting tool (scripts/split_by_plan.mjs) instead of retyping it, so the code is copied unchanged. Confidence: 0.7
 - Runtime smoke tests must report console errors/warnings, FPS, draw calls and triangle counts per visited floor, and must explicitly state if Playwright is unavailable instead of claiming the check passed. Confidence: 0.75
 - Dispose/memory checks must report renderer.info geometry, texture and program counts after each enter/leave loop iteration, not just a final summary. Confidence: 0.7
+- Before splitting a large file, inspect its structure first (grep signatures/constants) and work from that output rather than reading the whole file. Confidence: 0.6
+- When cutting method ranges for a move-only split, include the comment lines immediately above each method in the same range so they move with it. Confidence: 0.65
+- Before applying a split plan, run `scripts/split_by_plan.mjs` with `--dry-run`, paste its output, and fix plan errors before `--apply`. Confidence: 0.7
+- For class splits, capture the original prototype's method-name list from the pre-split commit and require it to match the composed class's method-name list exactly, showing both lists. Confidence: 0.75
+- If a split proof fails and cannot be fixed, reset hard to the pre-split backup commit and report exactly what failed; do not continue to the next file or claim success. Confidence: 0.7
