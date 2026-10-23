@@ -110,6 +110,12 @@ for (const part of plan.parts) {
     extractedPieces.push(chunk);
   }
   content += extractedPieces.join(lineEnding);
+  if (part.footer) {
+    if (!content.endsWith(lineEnding)) {
+      content += lineEnding;
+    }
+    content += part.footer + lineEnding;
+  }
   if (content.length > 0 && !content.endsWith(lineEnding)) {
     content += lineEnding;
   }

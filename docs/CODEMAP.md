@@ -227,7 +227,10 @@ src/player/ThirdPersonCamera.js | Third-person follow camera with distance colli
 
 ### src/scenes/
 src/scenes/HubScene.js | Town hub Three.js scene managing buildings, NPCs, and town interaction; hands the town obstacle shapes to the player and can draw them as wireframes | HubScene | three, TownAssembler, layout, HubHeroes, Iselle, TownSparringController, IselleReportWindow, LoginSimulation, EmotionEngine, AudioManager | live game
-src/scenes/TowerScene.js | Tower dungeon Three.js scene managing dungeon floors, mobs, lighting (including BRIGHT_FOREST_LIGHTING), and player | TowerScene | three, DungeonGenerator, FloorAssembler, Player, EnemyManager, equipmentEvents | live game
+src/scenes/TowerScene.js | Tower dungeon Three.js scene managing dungeon floors, mobs, lighting (including BRIGHT_FOREST_LIGHTING), and player | TowerScene, FARM_FLOOR_LIGHTING, PRAIRIE_FLOOR_LIGHTING, FOREST_FLOOR_LIGHTING, BRIGHT_FOREST_LIGHTING | three, DungeonGenerator, FloorAssembler, Player, EnemyManager, equipmentEvents | live game
+src/scenes/tower/CombatMixin.js | Combat mixin for TowerScene handling raycasts, commands, shouts, overlays, and rewards | CombatMixin | three, Hud, GameState | live game
+src/scenes/tower/FloorLoaderMixin.js | Floor loader mixin for TowerScene handling floor setup, mob spawns, and lighting | FloorLoaderMixin | three, TowerFloor, CaveFloor, missions, Enemy, HobgoblinChief, Items, Hud, GameState, Ally, TowerScene | live game
+src/scenes/tower/UpdateLoopMixin.js | Update loop mixin for TowerScene handling per-frame ticks, adaptive quality, and metrics | UpdateLoopMixin | three, Player, forest, Combat, Telegraph, Items, Hud, GameState, Commands, CameraFade | live game
 
 ### src/ui/
 src/ui/AccountCreationScreen.js | Initial new game account creation and tutorial intro screen | AccountCreationScreen | (none) | live game
