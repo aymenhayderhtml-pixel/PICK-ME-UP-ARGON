@@ -173,6 +173,9 @@ This is the defining constraint of the project, and it is strict:
 
 - **Floor art dispatch:** floor 1 → `farm.js`, floor 2 → `prairie.js`, floors 3+
   → `forest.js`.
+- **Module size:** every procedural art module under `src/art/` is split into
+  focused files of strictly fewer than 800 lines; `docs/CODEMAP.md` is the
+  module index.
 
 The town and floor art modules are written against a contract rather than being
 hand-modelled. See [`docs/ART_CONTRACT.md`](docs/ART_CONTRACT.md).

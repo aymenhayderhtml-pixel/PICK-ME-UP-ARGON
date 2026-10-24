@@ -21,6 +21,7 @@ Read this file first, then consult `docs/CODEMAP.md`. Keep token consumption min
 - Modify **only** what the task explicitly names.
 - **Never touch protected areas** without explicit user permission: `src/world/*`, `src/gacha/*`, `src/hub/*`, `src/ui/*`, `src/player/Player.js`, `src/combat/Ally.js`, `src/combat/Enemy.js`.
 - Architecture: One system per file under appropriate `src/` modules. Primitives only (no external 3D models/textures).
+- Refactor status: procedural art modules under `src/art/` are split into focused files of strictly <800 lines; use `docs/CODEMAP.md` for the module index.
 
 ## 4. Code & Combat Rules
 - **Zero allocations in per-frame code**: No `new THREE.Vector3()`, `new THREE.Mesh()`, or closures in `update()` loops. Use preallocated scratch objects (`_v0`, `_q0`) or object pools.
