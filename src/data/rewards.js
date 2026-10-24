@@ -1,6 +1,13 @@
 // src/data/rewards.js
 // Per-floor stage clear reward table and formulas.
 
+/**
+ * Flat gold paid for a REPEAT clear (a floor that was already cleared).
+ * The manhua pays a flat 1,000G on every replay of a cleared floor: no
+ * materials, no gems and no summon tickets.
+ */
+export const REPEAT_CLEAR_GOLD = 1000;
+
 export const STAGE_REWARDS = {
   1: {
     gold: 2000,
@@ -26,15 +33,57 @@ export const STAGE_REWARDS = {
     gems: 0,
     tickets: 0,
   },
+  4: {
+    gold: 10000,
+    materials: [
+      { id: 'crude_iron', name: 'IRON ORE (C)', count: 2 },
+      { id: 'leather', name: 'LEATHER (C)', count: 3 },
+    ],
+    gems: 0,
+    tickets: 0,
+  },
+  5: {
+    gold: 5000,
+    materials: [
+      { id: 'crude_iron', name: 'IRON ORE (C)', count: 1 },
+      { id: 'leather', name: 'LEATHER (C)', count: 3 },
+      { id: 'wooden_planks_b', name: 'WOODEN PLANKS (B)', count: 2 },
+    ],
+    gems: 0,
+    tickets: 0,
+  },
+  6: {
+    gold: 12000,
+    materials: [
+      { id: 'crude_iron', name: 'IRON ORE (C)', count: 3 },
+      { id: 'leather', name: 'LEATHER (C)', count: 3 },
+      { id: 'wind_elemental_stone', name: "LOW RANK WIND'S ELEMENTAL STONE (D-)", count: 1 },
+    ],
+    gems: 0,
+    tickets: 0,
+  },
 };
 
 /**
  * Returns clear reward definition for a given floor number.
+ *
  * @param {number} floorNumber
- * @param {boolean} isFirstClear
+ * @param {boolean} isFirstClear  True on the first clear of the floor. A
+ *   REPEAT clear always pays the flat `REPEAT_CLEAR_GOLD` (1,000G) and
+ *   nothing else: no materials, no gems, no summon tickets.
  */
-export function getFloorClearReward(floorNumber = 1, isFirstClear = false) {
+export function getFloorClearReward(floorNumber = 1, isFirstClear = true) {
   const floor = Math.max(1, Math.floor(floorNumber));
+
+  // Repeat clear of an already cleared floor: flat 1,000G, nothing else.
+  if (isFirstClear === false) {
+    return {
+      gold: REPEAT_CLEAR_GOLD,
+      gems: 0,
+      materials: [],
+      items: [],
+    };
+  }
 
   if (STAGE_REWARDS[floor]) {
     const preset = STAGE_REWARDS[floor];

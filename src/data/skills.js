@@ -1,4 +1,14 @@
-import { showSystemMessage } from '../ui/Hud.js';
+import { showSystemMessage } from '../ui/Notices.js';
+
+/**
+ * Formats a hero's star rating as the ★ glyphs the notice stack shows.
+ *
+ * A local copy on purpose: the data layer must not depend on src/ui/, so the
+ * star formatter lives next to the code that builds the notice text.
+ */
+function heroStarString(star = 1) {
+  return '★'.repeat(Math.max(1, Math.min(7, star)));
+}
 
 export const SKILLS = {
   basic_swordsmanship: {
@@ -261,6 +271,56 @@ export const SKILLS = {
     description: 'Dagger and stealth fused into a shadow strike.',
     effects: { damageMult: 0.05, critDamageMult: 0.08 },
   },
+
+  // --- Chapter 5-8 skills ------------------------------------------------
+  eagles_eye: {
+    id: 'eagles_eye',
+    name: "Eagle's Eye",
+    type: 'skill',
+    maxLevel: 10,
+    description: "Sharpens ranged accuracy and crit rate, and boosts attack power.",
+    effects: { accuracyMult: 0.05, critChanceBonus: 0.03, damageMult: 0.04 },
+  },
+  composure: {
+    id: 'composure',
+    name: 'Composure',
+    type: 'skill',
+    maxLevel: 10,
+    description: 'Mental resilience that reduces fear and panic gain, and grants poise.',
+    effects: { fearGainMult: 0.8, panicThreshold: 5, poiseBonus: 0.05 },
+  },
+  cooking: {
+    id: 'cooking',
+    name: 'Cooking',
+    type: 'skill',
+    maxLevel: 10,
+    description: 'Culinary skill that improves Mess Hall meal buffs.',
+    effects: { mealBuffMult: 0.1 },
+  },
+  quick_movements: {
+    id: 'quick_movements',
+    name: 'Quick Movements',
+    type: 'skill',
+    maxLevel: 10,
+    description: 'Unlocked when Basic Swordsmanship reaches Lv.3; boosts evasion, move speed, and AGI.',
+    effects: { evasionBonus: 0.05, moveSpeedMult: 0.05, agiBonus: 2 },
+  },
+  berserk: {
+    id: 'berserk',
+    name: 'Berserk',
+    type: 'skill',
+    maxLevel: 10,
+    description: 'Increases ATK and attack speed significantly when HP is low; normally conflicts with composure except for Half-Master/Half-Hero Islat Han.',
+    effects: { lowHpAtkMult: 0.3, lowHpAtkSpeedMult: 0.25, defencePenalty: 0.15 },
+  },
+  hunter_of_the_forest: {
+    id: 'hunter_of_the_forest',
+    name: 'Hunter of the Forest',
+    type: 'skill',
+    maxLevel: 10,
+    description: "Jenna's awakened skill; increases damage against beast/forest monsters and boosts material drop rates.",
+    effects: { beastDamageMult: 0.2, forestDamageMult: 0.2, materialDropMult: 0.15 },
+  },
 };
 
 export function getSkill(id) {
@@ -313,8 +373,16 @@ export function getSkillEffects(hero) {
   return totalEffects;
 }
 
-export function addSkillExp(hero, skillId, expAmount) {
+/**
+ * Adds skill experience to a hero and levels the skill up when it is full.
+ *
+ * `options.notify === false` silences the level-up notice. The offline login
+ * simulation replays days of training in a single go and must not flood the
+ * notice stack with dozens of level-up messages.
+ */
+export function addSkillExp(hero, skillId, expAmount, options = {}) {
   if (!hero || !skillId || expAmount <= 0) return;
+  const notify = options.notify !== false;
   const fx = getSkillEffects(hero);
   const effectiveExp = fx.skillXpMult ? Math.round(expAmount * fx.skillXpMult) : expAmount;
   const sKey = skillId.toLowerCase().replace(/\s+/g, '_');
@@ -333,7 +401,11 @@ export function addSkillExp(hero, skillId, expAmount) {
   while (skill.exp >= neededXp && skill.level < maxLevel) {
     skill.exp -= neededXp;
     skill.level += 1;
-    showSystemMessage(`SKILL ${skillName.toUpperCase()} HAS REACHED LEVEL ${skill.level}.`);
+    if (notify) {
+      showSystemMessage(
+        `${hero.name || 'HERO'} (${heroStarString(hero.star)})'S '${skillName}' HAS LEVELED UP TO LV${skill.level}!`
+      );
+    }
     neededXp = 100 * skill.level;
   }
 }

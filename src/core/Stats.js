@@ -43,7 +43,7 @@ export function getCombatStats(hero, party = null, relations = null) {
   }
 
   const str = hero.stats?.str || 5;
-  const agi = hero.stats?.agi || 5;
+  let agi = hero.stats?.agi || 5;
   const vit = hero.stats?.vit || 5;
   const wil = hero.stats?.wil || 5;
   const level = hero.level || 1;
@@ -112,6 +112,30 @@ export function getCombatStats(hero, party = null, relations = null) {
   if (skillFx.critChance) critChance += skillFx.critChance;
   if (skillFx.reach) reach += skillFx.reach;
   if (skillFx.strMult) damage *= (1 + skillFx.strMult);
+
+  // Berserk: ATK/AGI bonus when HP is low; conflicts with composure except for Han.
+  const hasBerserk = (hero.skills || []).some((s) => (s.id || s) === 'berserk');
+  const hasComposure = (hero.skills || []).some((s) => (s.id || s) === 'composure') || (hero.talents || []).some((t) => (t.id || t) === 'composure');
+  if (hasBerserk && (hero.id === 'hero_han' || !hasComposure)) {
+    if (skillFx.lowHpAtkMult) damage *= (1 + skillFx.lowHpAtkMult);
+    if (skillFx.lowHpAtkSpeedMult) attackSpeed *= (1 + skillFx.lowHpAtkSpeedMult);
+    if (skillFx.defencePenalty) defense *= (1 - skillFx.defencePenalty);
+    agi += 2;
+  }
+
+  // Hunter of the Forest: damage vs beasts/forest + material drop rate (stored for callers).
+  const hasHunter = (hero.skills || []).some((s) => (s.id || s) === 'hunter_of_the_forest');
+  if (hasHunter) {
+    if (skillFx.beastDamageMult) damage *= (1 + skillFx.beastDamageMult);
+    if (skillFx.forestDamageMult) damage *= (1 + skillFx.forestDamageMult);
+  }
+
+  // Quick Movements: evasion/move speed/AGI.
+  const hasQuickMovements = (hero.skills || []).some((s) => (s.id || s) === 'quick_movements');
+  if (hasQuickMovements) {
+    if (skillFx.evasionBonus) rollInvuln += skillFx.evasionBonus;
+    if (skillFx.agiBonus) agi += skillFx.agiBonus;
+  }
 
   // Intimacy / Bonds bonus: +3% (25-59), +6% (60-89), +10% (90+), capped at +20%
   if (party && party.length > 0 && relations) {

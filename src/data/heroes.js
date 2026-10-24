@@ -26,13 +26,15 @@ export const HERO_TEMPLATES = {
     hair: 0x993d18, // Reddish-orange
     armor: 0x3e6836, // Leather tunic
     weapon: 'dagger+bow',
-    personality: 'Observant & Anxious',
+    personality: 'Cheerful & Observant',
     baseStats: { str: 5, agi: 10, vit: 6, int: 6, wil: 7 },
     skills: [
       { id: 'basic_dagger_technique', level: 1 },
       { id: 'basic_archery', level: 1 },
     ],
     talents: ['keen_sight'],
+    hiddenTalent: 'quick_learner',
+    hiddenTalents: ['quick_learner'],
   },
   AARON: {
     id: 'hero_aaron',
@@ -133,6 +135,173 @@ export const HERO_TEMPLATES = {
     ],
     talents: [],
   },
+  MOLMONT: {
+    id: 'hero_molmont',
+    name: 'Molmont',
+    star: 2,
+    class: 'Mercenary',
+    hair: 0x6b4a2a, // Weathered brown
+    armor: 0x4a4034, // Worn mercenary leathers
+    weapon: 'sword+shield',
+    pastJob: 'mercenary',
+    motivation: 'lazy',
+    personality: 'Cowardly & Survival-driven',
+    baseStats: { str: 11, agi: 8, vit: 10, int: 5, wil: 9 },
+    skills: [
+      { id: 'basic_swordsmanship', level: 1 },
+      { id: 'basic_shield_technique', level: 1 },
+    ],
+    talents: [],
+    traits: ['cowardly'],
+    hiddenTalent: 'pain_tolerance', // Unlockable at 2 star
+  },
+
+  // --- Chapter 5-8 1-star heroes ------------------------------------------
+  ELSON: {
+    id: 'hero_elson',
+    name: 'Elson',
+    star: 1,
+    class: 'Vanguard',
+    hair: 0x3a2a1a,
+    armor: 0x4a5568,
+    weapon: 'sword',
+    personality: 'Steady & Loyal',
+    baseStats: { str: 8, agi: 6, vit: 8, int: 4, wil: 6 },
+    skills: [{ id: 'basic_swordsmanship', level: 1 }],
+    talents: [],
+  },
+  TOBY: {
+    id: 'hero_toby',
+    name: 'Toby',
+    star: 1,
+    class: 'Scout',
+    hair: 0x5a3a2a,
+    armor: 0x3e5a36,
+    weapon: 'dagger',
+    personality: 'Eager & Curious',
+    baseStats: { str: 5, agi: 9, vit: 6, int: 5, wil: 6 },
+    skills: [{ id: 'basic_swordsmanship', level: 1 }],
+    talents: [],
+  },
+  GIDE: {
+    id: 'hero_gide',
+    name: 'Gide',
+    star: 1,
+    class: 'Vanguard',
+    hair: 0x2a2a2a,
+    armor: 0x556070,
+    weapon: 'sword',
+    personality: 'Quiet & Disciplined',
+    baseStats: { str: 9, agi: 5, vit: 9, int: 4, wil: 7 },
+    skills: [{ id: 'basic_swordsmanship', level: 1 }],
+    talents: [],
+  },
+  HANSEN: {
+    id: 'hero_hansen',
+    name: 'Hansen',
+    star: 1,
+    class: 'Vanguard',
+    hair: 0x4a3a2a,
+    armor: 0x4a5060,
+    weapon: 'sword',
+    personality: 'Gruff & Reliable',
+    baseStats: { str: 8, agi: 6, vit: 9, int: 4, wil: 6 },
+    skills: [{ id: 'basic_swordsmanship', level: 1 }],
+    talents: [],
+  },
+  DIKA: {
+    id: 'hero_dika',
+    name: 'Dika',
+    star: 1,
+    class: 'Vanguard',
+    hair: 0x1a1a1a,
+    armor: 0x505868,
+    weapon: 'sword',
+    personality: 'Brave & Impulsive',
+    baseStats: { str: 9, agi: 7, vit: 8, int: 4, wil: 6 },
+    skills: [{ id: 'basic_swordsmanship', level: 1 }],
+    talents: [],
+  },
+  DOLF: {
+    id: 'hero_dolf',
+    name: 'Dolf',
+    star: 1,
+    class: 'Novice',
+    hair: 0x6a5a4a,
+    armor: 0x666666,
+    weapon: 'none',
+    personality: 'Timid & Obedient',
+    baseStats: { str: 4, agi: 4, vit: 5, int: 3, wil: 4 },
+    skills: [],
+    talents: [],
+  },
+  CHLOE: {
+    id: 'hero_chloe',
+    name: 'Chloe',
+    star: 1,
+    class: 'Novice',
+    hair: 0x8a5a3a,
+    armor: 0x776655,
+    weapon: 'none',
+    personality: 'Warm & Caring',
+    baseStats: { str: 3, agi: 5, vit: 5, int: 6, wil: 7 },
+    skills: [{ id: 'cooking', level: 1 }],
+    talents: [],
+  },
+  ENOK: {
+    id: 'hero_enok',
+    name: 'Enok',
+    star: 1,
+    class: 'Novice',
+    hair: 0x2a3a2a,
+    armor: 0x556655,
+    weapon: 'none',
+    personality: 'Quiet & Observant',
+    baseStats: { str: 4, agi: 5, vit: 5, int: 5, wil: 5 },
+    skills: [],
+    talents: [],
+  },
+
+  // --- Chapter 13 Party 4 heroes ------------------------------------------
+  LOUIS: {
+    id: 'hero_louis',
+    name: 'Louis',
+    star: 1,
+    class: 'Vanguard',
+    hair: 0x3a2a1a,
+    armor: 0x4a5568,
+    weapon: 'sword',
+    personality: 'Steady & Loyal',
+    baseStats: { str: 8, agi: 6, vit: 8, int: 4, wil: 6 },
+    skills: [{ id: 'basic_swordsmanship', level: 1 }],
+    talents: [],
+  },
+  JOFFREY: {
+    id: 'hero_joffrey',
+    name: 'Joffrey',
+    star: 1,
+    class: 'Scout',
+    hair: 0x5a3a2a,
+    armor: 0x3e5a36,
+    weapon: 'dagger',
+    personality: 'Eager & Curious',
+    baseStats: { str: 5, agi: 9, vit: 6, int: 5, wil: 6 },
+    skills: [{ id: 'basic_swordsmanship', level: 1 }],
+    talents: [],
+  },
+  OWEN: {
+    id: 'hero_owen',
+    name: 'Owen',
+    star: 1,
+    class: 'Vanguard',
+    hair: 0x2a2a2a,
+    armor: 0x556070,
+    weapon: 'sword',
+    personality: 'Quiet & Disciplined',
+    baseStats: { str: 9, agi: 5, vit: 9, int: 4, wil: 7 },
+    skills: [{ id: 'basic_swordsmanship', level: 1 }],
+    talents: [],
+  },
 };
 
 export const PAST_JOBS = [
@@ -155,6 +324,19 @@ export const JOB_SKILL_MAP = {
   shopkeeper: { skillId: 'basic_shield_technique', weapon: 'sword+shield' },
 };
 
+/**
+ * The manhua's three "unnamed men".
+ *
+ * They are 1-star Commoners and each one carries the trait that defines him:
+ * the first refuses to fight, the second looks for an exit, the third
+ * complains about eating only potatoes.
+ */
+export const UNNAMED_MEN_RECRUITS = Object.freeze([
+  Object.freeze({ job: 'farmer', heroClass: 'Commoner', trait: 'coward' }),
+  Object.freeze({ job: 'student', heroClass: 'Commoner', trait: 'exit_seeker' }),
+  Object.freeze({ job: 'shopkeeper', heroClass: 'Commoner', trait: 'food_complainer' }),
+]);
+
 const FANTASY_NAMES = [
   'Kaelen', 'Theron', 'Lyra', 'Varis', 'Gideon',
   'Rowan', 'Darian', 'Elowen', 'Kael', 'Boran',
@@ -162,11 +344,28 @@ const FANTASY_NAMES = [
   'Leona', 'Valerius', 'Karin', 'Orin', 'Sylvia'
 ];
 
-export function generateNoviceHero({ job = null, forceUncooperative = false, rng = Math.random, existingHeroes = [] } = {}) {
+/**
+ * Generates a low-tier recruit.
+ *
+ * `heroClass` overrides the default 'Novice' class, which is how the manhua's
+ * "unnamed men" (1-star Commoners) are produced. `traits` pins the
+ * personality traits of the recruit instead of rolling them.
+ */
+export function generateNoviceHero({
+  job = null,
+  forceUncooperative = false,
+  forceCooperative = false,
+  heroClass = 'Novice',
+  traits = null,
+  rng = Math.random,
+  existingHeroes = [],
+} = {}) {
   const chosenJob = job || PAST_JOBS[Math.floor(rng() * PAST_JOBS.length)];
   let isUncooperative = false;
   if (forceUncooperative) {
     isUncooperative = true;
+  } else if (forceCooperative) {
+    isUncooperative = false;
   } else if (chosenJob === 'mercenary' || chosenJob === 'thief' || chosenJob === 'bandit') {
     isUncooperative = rng() < 0.6;
   } else {
@@ -215,7 +414,7 @@ export function generateNoviceHero({ job = null, forceUncooperative = false, rng
     level: 1,
     exp: 0,
     fatigue: 0,
-    class: 'Novice',
+    class: heroClass,
     pastJob: chosenJob,
     cooperation: isUncooperative ? 'uncooperative' : 'cooperative',
     motivation: isUncooperative ? 'lazy' : rollMotivation(name),
@@ -225,7 +424,7 @@ export function generateNoviceHero({ job = null, forceUncooperative = false, rng
     personality: isUncooperative ? 'Rebellious & Bitter' : 'Humble & Eager',
     stats,
     composure: Math.floor(rng() * 40) + 20, // 20 to 59
-    traits: [],
+    traits: Array.isArray(traits) ? [...traits] : [],
     skills: [
       { id: jobInfo.skillId, level: 1, exp: 0 }
     ],
@@ -241,6 +440,9 @@ const CLASS_BASE_STATS = {
   Berserker: { str: 10, agi: 7, vit: 7, int: 3, wil: 5 },
   Healer: { str: 4, agi: 5, vit: 6, int: 8, wil: 10 },
   Artisan: { str: 9, agi: 5, vit: 11, int: 8, wil: 10 },
+  Mercenary: { str: 9, agi: 7, vit: 9, int: 4, wil: 7 },
+  Commoner: { str: 7, agi: 6, vit: 7, int: 5, wil: 6 },
+  Novice: { str: 8, agi: 7, vit: 8, int: 5, wil: 6 },
 };
 
 const CLASS_SKILL_POOLS = {
@@ -250,6 +452,9 @@ const CLASS_SKILL_POOLS = {
   Berserker: ['basic_swordsmanship', 'berserk', 'heavy_armor_mastery'],
   Healer: ['mana_amplification', 'leadership', 'basic_shield_technique'],
   Artisan: ['smithing', 'heavy_armor_mastery', 'basic_swordsmanship'],
+  Mercenary: ['basic_swordsmanship', 'basic_shield_technique', 'heavy_armor_mastery'],
+  Commoner: ['basic_swordsmanship', 'basic_spearmanship', 'basic_dagger_technique'],
+  Novice: ['basic_swordsmanship', 'basic_spearmanship', 'basic_dagger_technique'],
 };
 
 const TALENT_POOL = ['composure', 'keen_sight', 'pain_tolerance'];
@@ -261,7 +466,41 @@ const CLASS_PALETTES = {
   Berserker: { hair: 0x221111, armor: 0x5a2323, weapon: 'Axe' },
   Healer: { hair: 0xddb875, armor: 0xd8d8e0, weapon: 'Scepter' },
   Artisan: { hair: 0x5a3d24, armor: 0x8b5a2b, weapon: 'Hammer' },
+  Mercenary: { hair: 0x6b4a2a, armor: 0x4a4034, weapon: 'Sword & Shield' },
+  Commoner: { hair: 0x3d2715, armor: 0x445566, weapon: 'Sword' },
+  Novice: { hair: 0x3d2715, armor: 0x445566, weapon: 'Sword' },
 };
+
+// The class a procedurally generated hero belongs to. The weights differ per
+// star: a 1-star pull is mostly humble Commoners (the manhua's "unnamed men")
+// while a high-star pull is mostly specialised fighters.
+const RANDOM_HERO_CLASS_WEIGHTS = Object.freeze({
+  1: Object.freeze({ Commoner: 32, Novice: 12, Vanguard: 18, Scout: 12, Mage: 8, Berserker: 10, Healer: 8 }),
+  2: Object.freeze({ Commoner: 18, Novice: 6, Vanguard: 22, Scout: 18, Mage: 14, Berserker: 12, Healer: 10 }),
+  3: Object.freeze({ Commoner: 9, Novice: 0, Vanguard: 26, Scout: 20, Mage: 18, Berserker: 14, Healer: 13 }),
+  4: Object.freeze({ Commoner: 5, Novice: 0, Vanguard: 28, Scout: 22, Mage: 20, Berserker: 14, Healer: 11 }),
+});
+
+// The highest star the class weight table knows about. Stars above it use
+// the highest known table.
+const RANDOM_HERO_CLASS_MAX_STAR = 4;
+
+/**
+ * Picks a hero class from the weighted pool of the given star.
+ */
+function rollHeroClass(star, rng) {
+  const s = Math.max(1, Math.min(RANDOM_HERO_CLASS_MAX_STAR, star || 1));
+  const table = RANDOM_HERO_CLASS_WEIGHTS[s];
+  const entries = Object.entries(table).filter(([, w]) => w > 0);
+  const total = entries.reduce((sum, [, w]) => sum + w, 0);
+  if (total <= 0) return 'Commoner';
+  let roll = rng() * total;
+  for (const [id, w] of entries) {
+    roll -= w;
+    if (roll <= 0) return id;
+  }
+  return entries[entries.length - 1][0];
+}
 
 export function generateRandomHero(star = 1, rng = Math.random, existingHeroes = []) {
   const existingNames = new Set(
@@ -285,8 +524,7 @@ export function generateRandomHero(star = 1, rng = Math.random, existingHeroes =
     }
   }
 
-  const classes = ['Vanguard', 'Scout', 'Mage', 'Berserker', 'Healer'];
-  const heroClass = classes[Math.floor(rng() * classes.length)];
+  const heroClass = rollHeroClass(star, rng);
 
   const baseClassStats = CLASS_BASE_STATS[heroClass];
   const stats = {};
@@ -354,6 +592,12 @@ export function getWeightedStatsForClass(heroClass) {
   if (c.includes('tank') || c.includes('vanguard')) {
     return ['str', 'str', 'vit', 'vit', 'vit', 'wil', 'agi'];
   }
+  if (c.includes('mercenary')) {
+    return ['str', 'str', 'vit', 'vit', 'wil', 'agi'];
+  }
+  if (c.includes('commoner')) {
+    return ['str', 'agi', 'agi', 'vit', 'wil'];
+  }
   if (c.includes('scout') || c.includes('ranger') || c.includes('archer') || c.includes('rogue')) {
     return ['agi', 'agi', 'agi', 'str', 'wil', 'vit'];
   }
@@ -369,11 +613,19 @@ export function getWeightedStatsForClass(heroClass) {
 // ---------------------------------------------------------------------------
 // Personality traits
 // ---------------------------------------------------------------------------
-// Weighted trait pools per motivation. `uncooperative` heroes lean hot-headed.
+// Weighted trait pools per motivation. `uncooperative` heroes lean hot-headed,
+// cowards and exit seekers.
 const TRAIT_POOL_BY_MOTIVATION = {
-  diligent: { diligent: 30, lazy: 4, brave: 12, cautious: 14, hot_headed: 8 },
-  normal: { diligent: 12, lazy: 12, brave: 14, cautious: 14, hot_headed: 10 },
-  lazy: { diligent: 4, lazy: 30, brave: 8, cautious: 18, hot_headed: 12 },
+  diligent: { diligent: 30, lazy: 4, brave: 12, cautious: 14, hot_headed: 8, coward: 3, exit_seeker: 3, food_complainer: 4 },
+  normal: { diligent: 12, lazy: 12, brave: 14, cautious: 14, hot_headed: 10, coward: 8, exit_seeker: 8, food_complainer: 8 },
+  lazy: { diligent: 4, lazy: 30, brave: 8, cautious: 18, hot_headed: 12, coward: 14, exit_seeker: 14, food_complainer: 10 },
+};
+
+// Extra trait weights per class. The humble Commoners of the manhua are the
+// ones who refuse to fight, look for an exit and complain about the food.
+const TRAIT_POOL_BY_CLASS = {
+  Commoner: { coward: 14, exit_seeker: 14, food_complainer: 12 },
+  Mercenary: { brave: 8, hot_headed: 4 },
 };
 
 /**
@@ -381,11 +633,25 @@ const TRAIT_POOL_BY_MOTIVATION = {
  * Returns trait ids from EMOTION_CONFIG.PERSONALITY_TRAITS.
  * 'diligent' and 'lazy' are mutually exclusive.
  */
-export function rollPersonalityTraits(motivation = 'normal', cooperation = 'cooperative', rng = Math.random) {
+export function rollPersonalityTraits(
+  motivation = 'normal',
+  cooperation = 'cooperative',
+  rng = Math.random,
+  heroClass = null
+) {
   const pool = TRAIT_POOL_BY_MOTIVATION[motivation] || TRAIT_POOL_BY_MOTIVATION.normal;
   const weights = { ...pool };
   if (cooperation === 'uncooperative') {
-    weights.hot_headed = (weights.hot_headed || 0) * 2;
+    const mult = EMOTION_CONFIG.UNCOOPERATIVE_TRAIT_WEIGHT_MULT;
+    weights.hot_headed = (weights.hot_headed || 0) * mult;
+    weights.coward = (weights.coward || 0) * mult;
+    weights.exit_seeker = (weights.exit_seeker || 0) * mult;
+  }
+  const classPool = TRAIT_POOL_BY_CLASS[heroClass];
+  if (classPool) {
+    for (const [id, w] of Object.entries(classPool)) {
+      weights[id] = (weights[id] || 0) + w;
+    }
   }
 
   const pick = () => {
@@ -503,7 +769,7 @@ export function normalizeHeroEmotionFields(hero, rawHero = hero) {
 
   if (!Array.isArray(hero.traits)) hero.traits = [];
   if (!hero.traits.some((t) => EMOTION_CONFIG.PERSONALITY_TRAITS.includes(t))) {
-    const rolled = rollPersonalityTraits(hero.motivation, hero.cooperation);
+    const rolled = rollPersonalityTraits(hero.motivation, hero.cooperation, Math.random, heroClass);
     hero.traits = hero.traits.concat(rolled);
   }
 
@@ -537,17 +803,19 @@ export function createHeroFromTemplate(templateKey) {
     fatigue: 0,
     stress: 0,
     class: tpl.class || 'Novice',
-    motivation: rollMotivation(tpl.name, tpl.cooperation),
+    motivation: tpl.motivation || rollMotivation(tpl.name, tpl.cooperation),
     hair: tpl.hair || 0x222222,
     armor: tpl.armor || 0x445566,
     weapon: tpl.weapon || 'sword',
     personality: tpl.personality || 'Disciplined',
+    pastJob: tpl.pastJob,
     stats: { ...(tpl.baseStats || { str: 10, agi: 10, vit: 10, int: 10, wil: 10 }) },
     composure: tpl.composure || 50,
-    traits: [],
+    traits: [...(tpl.traits || [])],
     skills: (tpl.skills || []).map((s) => ({ ...s })),
     talents: [...(tpl.talents || [])],
     hiddenTalent: tpl.hiddenTalent,
+    hiddenTalents: tpl.hiddenTalents ? [...tpl.hiddenTalents] : undefined,
     isDwarf: tpl.isDwarf,
     scale: tpl.scale,
     alive: true,

@@ -859,40 +859,75 @@ export class Hud {
       title = missionData.toUpperCase();
     }
 
+    const isFloor3 = title.includes('3') || title === 'FLOOR 3';
     const box = document.createElement('div');
-    box.className = 'mm-panel';
-    box.style.position = 'fixed';
-    box.style.top = '28px';
-    box.style.left = '50%';
-    box.style.transform = 'translate(-50%, -40px)';
-    box.style.maxWidth = '560px';
-    box.style.width = 'min(560px, 92vw)';
-    box.style.padding = '22px 34px';
-    box.style.zIndex = '10015';
-    box.style.opacity = '0';
-    box.style.transition = 'transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.3s ease-out';
-    box.style.pointerEvents = 'none';
+    if (isFloor3) {
+      box.className = 'pmu-crystal-box';
+      box.style.position = 'fixed';
+      box.style.top = '28px';
+      box.style.left = '50%';
+      box.style.transform = 'translate(-50%, -40px)';
+      box.style.zIndex = '10015';
+      box.style.opacity = '0';
+      box.style.transition = 'transform 0.38s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.38s ease-out';
+      box.style.pointerEvents = 'none';
 
-    box.innerHTML = `
-      <div style="display:flex; align-items:center; gap:20px; width:100%; text-align:left;">
-        <canvas id="mission-iselle-portrait" width="64" height="64" style="width:64px; height:64px; border-radius:6px; border:1px solid var(--frame-inner); background:#171026; flex-shrink:0;"></canvas>
-        <div style="flex:1;">
-          <div style="font-size:36px; font-weight:800; color:var(--text); letter-spacing:2px; margin-bottom:6px; line-height:1.1;">${title}</div>
-          <div style="font-size:20px; font-weight:700; color:var(--text); letter-spacing:1px; margin-bottom:4px; line-height:1.25;">${line1}</div>
-          <div style="font-size:20px; font-weight:700; color:var(--text); letter-spacing:1px; line-height:1.25;">${line2}</div>
+      const cornerSvg = `
+        <svg viewBox="0 0 32 32" width="26" height="26" fill="none">
+          <path d="M2 30V6L6 2H30" stroke="#F0E6FF" stroke-width="2.5"/>
+          <path d="M6 22V10L10 6H22" stroke="#C7A4FF" stroke-width="1.5"/>
+          <polygon points="4,4 11,4 4,11" fill="#FFF3D1"/>
+        </svg>`;
+
+      box.innerHTML = `
+        <div class="pmu-corner pmu-corner-tl">${cornerSvg}</div>
+        <div class="pmu-corner pmu-corner-tr">${cornerSvg}</div>
+        <div class="pmu-corner pmu-corner-bl">${cornerSvg}</div>
+        <div class="pmu-corner pmu-corner-br">${cornerSvg}</div>
+        <div class="pmu-mission-header">${title}</div>
+        <div class="pmu-mission-divider">
+          <span class="pmu-mission-divider-line"></span>
+          <span class="pmu-mission-divider-gem"></span>
+          <span class="pmu-mission-divider-line"></span>
         </div>
-      </div>
-    `;
+        <div class="pmu-mission-category">${line1}</div>
+        <div class="pmu-mission-goal">${line2}</div>
+      `;
+    } else {
+      box.className = 'mm-panel';
+      box.style.position = 'fixed';
+      box.style.top = '28px';
+      box.style.left = '50%';
+      box.style.transform = 'translate(-50%, -40px)';
+      box.style.maxWidth = '560px';
+      box.style.width = 'min(560px, 92vw)';
+      box.style.padding = '22px 34px';
+      box.style.zIndex = '10015';
+      box.style.opacity = '0';
+      box.style.transition = 'transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.3s ease-out';
+      box.style.pointerEvents = 'none';
 
-    const canvas = box.querySelector('#mission-iselle-portrait');
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      try {
-        drawIsellePortrait(ctx, 'sweet_cruel', 64);
-      } catch (e) {}
+      box.innerHTML = `
+        <div style="display:flex; align-items:center; gap:20px; width:100%; text-align:left;">
+          <canvas id="mission-iselle-portrait" width="64" height="64" style="width:64px; height:64px; border-radius:6px; border:1px solid var(--frame-inner); background:#171026; flex-shrink:0;"></canvas>
+          <div style="flex:1;">
+            <div style="font-size:36px; font-weight:800; color:var(--text); letter-spacing:2px; margin-bottom:6px; line-height:1.1;">${title}</div>
+            <div style="font-size:20px; font-weight:700; color:var(--text); letter-spacing:1px; margin-bottom:4px; line-height:1.25;">${line1}</div>
+            <div style="font-size:20px; font-weight:700; color:var(--text); letter-spacing:1px; line-height:1.25;">${line2}</div>
+          </div>
+        </div>
+      `;
+
+      const canvas = box.querySelector('#mission-iselle-portrait');
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        try {
+          drawIsellePortrait(ctx, 'sweet_cruel', 64);
+        } catch (e) {}
+      }
+
+      attachOrnateCorners(box);
     }
-
-    attachOrnateCorners(box);
     document.body.appendChild(box);
     this.missionBox = box;
 

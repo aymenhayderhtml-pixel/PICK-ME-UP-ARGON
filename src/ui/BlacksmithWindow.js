@@ -188,6 +188,81 @@ export class BlacksmithWindow extends SystemWindow {
     }
 
     this.contentElement.appendChild(tabContent);
+
+    // Material Processing / Alchemy
+    const alch = document.createElement('div');
+    alch.style.border = '1px solid var(--frame-inner)';
+    alch.style.borderRadius = '6px';
+    alch.style.padding = '8px 12px';
+    alch.style.display = 'flex';
+    alch.style.flexDirection = 'column';
+    alch.style.gap = '6px';
+    const alchTitle = document.createElement('div');
+    alchTitle.style.fontWeight = 'bold';
+    alchTitle.style.color = 'var(--gold)';
+    alchTitle.textContent = 'MATERIAL PROCESSING / ALCHEMY';
+    alch.appendChild(alchTitle);
+
+    // Convert branch -> wooden_planks_b (10x)
+    const conv10 = document.createElement('button');
+    conv10.textContent = 'CONVERT 10 BRANCHES -> WOODEN PLANKS (B)';
+    conv10.className = 'mm-btn';
+    conv10.style.fontSize = '11px';
+    conv10.addEventListener('click', () => {
+      if ((gameState.materials?.branch || 0) < 10) return;
+      gameState.materials.branch -= 10;
+      gameState.materials.wooden_planks_b = (gameState.materials.wooden_planks_b || 0) + 1;
+      gameState.saveToLocalStorage();
+      showSystemMessage("TIPS: IF YOU COLLECT 'BRANCHES', YOU CAN TURN IT INTO LUMBER.");
+      this.render();
+    });
+    alch.appendChild(conv10);
+
+    // Convert branch -> wood (100x)
+    const conv100 = document.createElement('button');
+    conv100.textContent = 'CONVERT 100 BRANCHES -> WOOD';
+    conv100.className = 'mm-btn';
+    conv100.style.fontSize = '11px';
+    conv100.addEventListener('click', () => {
+      if ((gameState.materials?.branch || 0) < 100) return;
+      gameState.materials.branch -= 100;
+      gameState.materials.wood = (gameState.materials.wood || 0) + 1;
+      gameState.saveToLocalStorage();
+      showSystemMessage("TIPS: IF YOU COLLECT 'BRANCHES', YOU CAN TURN IT INTO LUMBER.");
+      this.render();
+    });
+    alch.appendChild(conv100);
+
+    // Craft Healing Potion from plant_of_life
+    const craftPotion = document.createElement('button');
+    craftPotion.textContent = 'CRAFT HEALING POTION (PLANT OF LIFE)';
+    craftPotion.className = 'mm-btn';
+    craftPotion.style.fontSize = '11px';
+    craftPotion.addEventListener('click', () => {
+      if ((gameState.materials?.plant_of_life || 0) <= 0) return;
+      gameState.materials.plant_of_life -= 1;
+      gameState.manaPotions = (gameState.manaPotions || 0) + 1;
+      gameState.saveToLocalStorage();
+      showSystemMessage('PLANTS OF LIFE — A KEY INGREDIENT IN MAKING HEALING POTIONS.');
+      this.render();
+    });
+    alch.appendChild(craftPotion);
+
+    // Discard trash_f
+    const discard = document.createElement('button');
+    discard.textContent = 'DISCARD TRASH (F)';
+    discard.className = 'mm-btn';
+    discard.style.fontSize = '11px';
+    discard.addEventListener('click', () => {
+      if ((gameState.materials?.trash_f || 0) <= 0) return;
+      gameState.materials.trash_f = 0;
+      gameState.saveToLocalStorage();
+      showSystemMessage('TIPS: TRASH IS NOT NEEDED. PLEASE THROW IT AWAY.');
+      this.render();
+    });
+    alch.appendChild(discard);
+
+    this.contentElement.appendChild(alch);
   }
 
   // --- TAB 1: REPAIR ---
@@ -323,6 +398,35 @@ export class BlacksmithWindow extends SystemWindow {
 
   // --- TAB 2: FORGE ---
   renderForgeTab(container, bestSmith) {
+    // Triple-penalty status banner for standard auto-crafting
+    const penaltyBanner = document.createElement('div');
+    penaltyBanner.style.padding = '8px 12px';
+    penaltyBanner.style.backgroundColor = 'rgba(255, 34, 34, 0.12)';
+    penaltyBanner.style.border = '1px solid #ff3344';
+    penaltyBanner.style.borderRadius = '6px';
+    penaltyBanner.style.color = '#ff6677';
+    penaltyBanner.style.fontWeight = 'bold';
+    penaltyBanner.style.fontSize = '11px';
+    penaltyBanner.style.textAlign = 'center';
+    penaltyBanner.textContent = 'THE FACILITY IS LACKING. A PENALTY WILL BE APPLIED. THERE IS NO EXPERT. A PENALTY WILL BE APPLIED. THERE IS NO BLUEPRINT. A PENALTY WILL BE APPLIED. [SUCCESS RATE : HORRIBLE]';
+    container.appendChild(penaltyBanner);
+
+    // Manual Craft button
+    const manualBtn = document.createElement('button');
+    manualBtn.textContent = 'MANUAL CRAFT';
+    manualBtn.style.padding = '8px 16px';
+    manualBtn.style.fontFamily = 'monospace';
+    manualBtn.style.fontSize = '12px';
+    manualBtn.style.fontWeight = 'bold';
+    manualBtn.style.border = '1px solid #00e5ff';
+    manualBtn.style.backgroundColor = 'rgba(0, 229, 255, 0.15)';
+    manualBtn.style.color = '#00e5ff';
+    manualBtn.style.borderRadius = '4px';
+    manualBtn.style.cursor = 'pointer';
+    manualBtn.style.alignSelf = 'flex-start';
+    manualBtn.addEventListener('click', () => this.openManualCraftModal());
+    container.appendChild(manualBtn);
+
     // 1. Active Forge Progress Bar (if active)
     const activeJobs = gameState.forgeQueue || [];
     if (activeJobs.length > 0) {
@@ -693,5 +797,119 @@ export class BlacksmithWindow extends SystemWindow {
     }
 
     container.appendChild(detailCard);
+  }
+
+  openManualCraftModal() {
+    if (typeof document === 'undefined') return;
+    // Remove existing
+    const old = document.getElementById('mm-manual-craft-modal');
+    if (old) old.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'mm-manual-craft-modal';
+    backdrop.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(3,5,10,0.7);z-index:10050;display:flex;align-items:center;justify-content:center;';
+
+    const panel = document.createElement('div');
+    panel.style.cssText = 'background:rgba(10,20,40,0.95);border:1px solid #00e5ff;border-radius:8px;padding:16px;width:420px;max-width:90vw;color:#ffffff;font-family:monospace;';
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:14px;font-weight:bold;color:#00e5ff;margin-bottom:10px;text-align:center;';
+    title.textContent = 'MANUAL CRAFT';
+    panel.appendChild(title);
+
+    const msg = document.createElement('div');
+    msg.style.cssText = 'font-size:12px;color:#88aacc;margin-bottom:12px;text-align:center;';
+    msg.textContent = 'SELECT THE PUZZLE DIFFICULTY. THE HIGHER IT IS, THE BETTER THE REWARD!';
+    panel.appendChild(msg);
+
+    const diffRow = document.createElement('div');
+    diffRow.style.cssText = 'display:flex;gap:8px;justify-content:center;margin-bottom:12px;';
+
+    const timerNote = document.createElement('div');
+    timerNote.style.cssText = 'font-size:11px;color:#ffaa00;text-align:center;margin-bottom:10px;';
+    timerNote.textContent = '3 MINUTES ARE GIVEN.';
+    panel.appendChild(timerNote);
+
+    const startGame = (diff) => {
+      // Simple minigame: click 5 cubes within timer
+      panel.innerHTML = '';
+      const gTitle = document.createElement('div');
+      gTitle.style.cssText = 'font-size:13px;font-weight:bold;color:#00e5ff;margin-bottom:8px;text-align:center;';
+      gTitle.textContent = diff;
+      panel.appendChild(gTitle);
+
+      const timerEl = document.createElement('div');
+      timerEl.style.cssText = 'font-size:12px;color:#ffaa00;text-align:center;margin-bottom:8px;';
+      timerEl.textContent = 'Time: 10';
+      panel.appendChild(timerEl);
+
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;';
+      panel.appendChild(grid);
+
+      let remaining = 10;
+      let clicked = 0;
+      const needed = 5;
+      const cubes = [];
+      for (let i = 0; i < 9; i++) {
+        const c = document.createElement('div');
+        c.style.cssText = 'height:40px;background:rgba(0,229,255,0.2);border:1px solid #00e5ff;border-radius:4px;cursor:pointer;';
+        c.textContent = '■';
+        c.style.display = 'flex';
+        c.style.alignItems = 'center';
+        c.style.justifyContent = 'center';
+        c.style.color = '#00e5ff';
+        c.addEventListener('click', () => {
+          if (c.dataset.done) return;
+          c.dataset.done = '1';
+          c.style.background = 'rgba(125,255,176,0.3)';
+          c.style.borderColor = '#7dffb0';
+          clicked++;
+          if (clicked >= needed) {
+            finish(true);
+          }
+        });
+        cubes.push(c);
+        grid.appendChild(c);
+      }
+
+      let finished = false;
+      const finish = (success) => {
+        if (finished) return;
+        finished = true;
+        clearInterval(iv);
+        if (success) {
+          const itemName = 'ITEM';
+          showSystemMessage(`★ HUGE SUCCESS! ★ HAN (★) HAS CRAFTED '${itemName.toUpperCase()}'!`);
+        }
+        backdrop.remove();
+      };
+
+      const iv = setInterval(() => {
+        remaining--;
+        timerEl.textContent = `Time: ${remaining}`;
+        if (remaining <= 0) {
+          finish(false);
+        }
+      }, 1000);
+    };
+
+    ['NORMAL', 'HARD', 'EXTREME HELL'].forEach((d) => {
+      const b = document.createElement('button');
+      b.textContent = d;
+      b.style.cssText = 'padding:6px 12px;font-family:monospace;font-size:11px;font-weight:bold;border:1px solid #00e5ff;background:rgba(0,229,255,0.15);color:#00e5ff;border-radius:4px;cursor:pointer;';
+      b.addEventListener('click', () => startGame(d));
+      diffRow.appendChild(b);
+    });
+    panel.appendChild(diffRow);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.style.cssText = 'padding:6px 14px;font-family:monospace;font-size:11px;border:1px solid #666;background:transparent;color:#aaa;border-radius:4px;cursor:pointer;display:block;margin:0 auto;';
+    closeBtn.addEventListener('click', () => backdrop.remove());
+    panel.appendChild(closeBtn);
+
+    backdrop.appendChild(panel);
+    document.body.appendChild(backdrop);
   }
 }

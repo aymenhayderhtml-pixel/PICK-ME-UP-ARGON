@@ -337,9 +337,7 @@ export function showHeroDeathNotice(hero, deathCause) {
   // Single death notice panel with 3 lines
   const deathHtml = `
     <div style="display:flex; flex-direction:column; gap:4px; line-height:1.35; text-align:center;">
-      <div style="color:var(--danger); font-weight:bold; font-size:17px;">${name} HAS RETURNED TO THE GODDESS.</div>
-      <div style="color:var(--accent); font-size:14px;">THEIR FIGHTING SPIRIT WILL BE REMEMBERED FOR ETERNITY.</div>
-      <div style="color:var(--text); font-size:14px; margin-top:2px;">CAUSE OF DEATH: ${cause}</div>
+      <div style="color:var(--danger); font-weight:bold; font-size:17px;">${name} (★) HAS RETURNED TO THE GODDESS'S ARMS! HIS GRIT WILL BE REMEMBERED FOREVER!</div>
     </div>
   `;
 

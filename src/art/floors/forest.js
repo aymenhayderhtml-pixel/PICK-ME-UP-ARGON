@@ -1,169 +1,746 @@
+// src/art/floors/forest.js
+// Procedural 3D floor art orchestrator for Floor 3: Forest Glade ("buildFloor3Clearing" / "buildForestFloorArt").
+
 import * as THREE from 'three';
+import {
+  BRIGHT_FOREST_LIGHTING,
+  FOREST_FLOOR_LIGHTING,
+  PILLAR_SPECS,
+  GRASS_PALETTE_HEX,
+  createSeededRandom,
+  valueNoise2D,
+  mergeStaticGeometries,
+  evaluateTerrainHeight,
+  attachWindSwayShader
+} from './forestUtils.js';
+import {
+  buildRollingMeadowTerrainGeometry,
+  buildWornDirtOverlayGeometry,
+  buildTapered3VertexGrassBladeGeometry,
+  buildFlowerClusterGeometry,
+  buildPineTreeGeometry,
+  buildBroadleafTrunkWithBranchesGeometry,
+  buildBroadleafCanopyGeometry,
+  buildBushGeometry,
+  buildFernGeometry,
+  buildMossBoulderGeometry,
+  buildAncientBrokenPillarAssembly
+} from './forestGeometries.js';
+import {
+  updateFloor3Debris,
+  clearActiveDebrisStateIfMatch,
+  buildSkyAndLighting,
+  buildMountainsAndDebris
+} from './forestAtmosphere.js';
 
-function groundPlane(layout) {
-  const w = layout.bounds.maxX - layout.bounds.minX;
-  const d = layout.bounds.maxZ - layout.bounds.minZ;
-  const geo = new THREE.PlaneGeometry(w, d, 1, 1);
-  geo.rotateX(-Math.PI / 2);
-  geo.translate((layout.bounds.minX + layout.bounds.maxX) / 2, -0.02, (layout.bounds.minZ + layout.bounds.maxZ) / 2);
-  return geo;
+export {
+  BRIGHT_FOREST_LIGHTING,
+  FOREST_FLOOR_LIGHTING,
+  createSeededRandom,
+  mergeStaticGeometries,
+  updateFloor3Debris
+};
+
+const _tempMat4 = new THREE.Matrix4();
+const _tempPos = new THREE.Vector3();
+const _tempQuat = new THREE.Quaternion();
+const _tempScale = new THREE.Vector3();
+const _tempEuler = new THREE.Euler();
+const _tempColor = new THREE.Color();
+
+export function getForestPalette() {
+  return {};
 }
 
-function ribbonGeometry(points, width) {
-  const positions = [];
-  const indices = [];
-  const half = width / 2;
-  for (let i = 0; i < points.length; i++) {
-    const prev = points[Math.max(0, i - 1)];
-    const next = points[Math.min(points.length - 1, i + 1)];
-    let dx = next.x - prev.x;
-    let dz = next.z - prev.z;
-    const len = Math.hypot(dx, dz) || 1;
-    dx /= len;
-    dz /= len;
-    const nx = -dz * half;
-    const nz = dx * half;
-    positions.push(points[i].x + nx, 0.01, points[i].z + nz);
-    positions.push(points[i].x - nx, 0.01, points[i].z - nz);
-    if (i > 0) {
-      const a = (i - 1) * 2;
-      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  return geo;
+export function getForestGeometries() {
+  return {};
 }
 
-function gateGroup(spec, color) {
-  const g = new THREE.Group();
-  g.position.set(spec.position.x, 0, spec.position.z);
-  g.rotation.y = spec.rotationY;
-  const mat = new THREE.MeshBasicMaterial({ color });
-  const half = spec.width / 2;
-  for (const side of [-1, 1]) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, 0.3), mat);
-    post.position.set(side * (half - 0.15), 1.3, 0);
-    g.add(post);
-  }
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(spec.width, 0.25, 0.2), mat);
-  bar.position.y = 1.9;
-  bar.name = 'gate_bar';
-  g.add(bar);
-  return g;
-}
+export function buildFloor3Clearing(ctx = {}) {
+  const rand = createSeededRandom(ctx.seed ?? 3005);
 
-export function buildForestFloorArt(ctx) {
-  const { layout } = ctx;
+  const centerX = ctx.center?.x ?? 0;
+  const centerY = ctx.center?.y ?? 0;
+  const centerZ = ctx.center?.z ?? -34;
+
   const group = new THREE.Group();
-  group.name = 'forest_floor_art';
+  group.name = 'Floor3_ForestGlade';
 
-  const groundMat = new THREE.MeshToonMaterial({ color: 0x3c4a3a });
-  const pathMat = new THREE.MeshToonMaterial({ color: 0x7c857d });
-  const stoneMat = new THREE.MeshToonMaterial({ color: 0x8e9da3 });
+  const ownedGeometries = [];
+  const ownedMaterials = [];
+  const windUniforms = [];
 
-  const ground = new THREE.Mesh(groundPlane(layout), groundMat);
-  ground.name = 'ground';
-  group.add(ground);
+  let drawCalls = 0;
+  let triangleCount = 0;
 
-  const road = new THREE.Mesh(ribbonGeometry(layout.pathPolyline, layout.pathWidth), pathMat);
-  road.name = 'road';
-  group.add(road);
+  const trackGeometry = (g) => {
+    ownedGeometries.push(g);
+    return g;
+  };
+  const trackMaterial = (m) => {
+    ownedMaterials.push(m);
+    return m;
+  };
 
-  for (const cl of layout.clearings) {
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(cl.radius, 32), pathMat);
-    disc.rotation.x = -Math.PI / 2;
-    disc.position.set(cl.center.x, 0.005, cl.center.z);
-    group.add(disc);
+  const registerMesh = (mesh, instanceCount = 1) => {
+    group.add(mesh);
+    drawCalls += 1;
+    const geom = mesh.geometry;
+    const trisPerInstance = geom.index
+      ? geom.index.count / 3
+      : geom.attributes.position.count / 3;
+    triangleCount += Math.round(trisPerInstance * instanceCount);
+  };
+
+  const { fallbackSun, restoreSceneFog } = buildSkyAndLighting({
+    ctx,
+    group,
+    centerX,
+    centerY,
+    centerZ,
+    trackGeometry,
+    trackMaterial,
+    registerMesh
+  });
+
+  const terrainGeo = trackGeometry(buildRollingMeadowTerrainGeometry());
+  const terrainMat = trackMaterial(
+    new THREE.MeshLambertMaterial({
+      vertexColors: true,
+    })
+  );
+  const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+  terrainMesh.position.set(centerX, centerY, centerZ);
+  terrainMesh.receiveShadow = true;
+  registerMesh(terrainMesh);
+
+  const dirtOverlayGeo = trackGeometry(buildWornDirtOverlayGeometry());
+  const dirtOverlayMat = trackMaterial(
+    new THREE.MeshLambertMaterial({
+      vertexColors: true,
+    })
+  );
+  const dirtOverlayMesh = new THREE.Mesh(dirtOverlayGeo, dirtOverlayMat);
+  dirtOverlayMesh.position.set(centerX, centerY, centerZ);
+  dirtOverlayMesh.receiveShadow = true;
+  registerMesh(dirtOverlayMesh);
+
+  const grassBladeGeo = trackGeometry(buildTapered3VertexGrassBladeGeometry());
+  const grassMat = trackMaterial(
+    attachWindSwayShader(
+      new THREE.MeshLambertMaterial({
+        vertexColors: true,
+        side: THREE.DoubleSide,
+      }),
+      windUniforms,
+      0.19,
+      2.15
+    )
+  );
+
+  const grassCount = 33750;
+  const grassInst = new THREE.InstancedMesh(grassBladeGeo, grassMat, grassCount);
+  grassInst.receiveShadow = true;
+
+  const grassPalette = GRASS_PALETTE_HEX.map((hex) => new THREE.Color(hex));
+
+  for (let i = 0; i < grassCount; i++) {
+    let lx = 0;
+    let lz = 0;
+    let scaleY = 0.7 + rand() * 0.6;
+    const scaleXZ = 0.8 + rand() * 0.4;
+
+    if (i < 7500) {
+      const side = i % 2 === 0 ? -1 : 1;
+      lz = -1.5 + rand() * 41.0;
+      const pathCurve = Math.sin(lz * 0.11) * 0.85;
+      const edgeOffset = 1.65 + Math.pow(rand(), 1.6) * 2.8;
+      lx = pathCurve + side * edgeOffset;
+      scaleY = 0.8 + rand() * 0.5;
+    } else if (i < 13000) {
+      const ang = rand() * Math.PI * 2;
+      const rad = 5.6 + Math.pow(rand(), 1.35) * 4.5;
+      lx = Math.cos(ang) * rad * 1.08;
+      lz = Math.sin(ang) * rad * 0.96 - 1.6;
+      scaleY = 0.7 + rand() * 0.5;
+    } else {
+      const ang = rand() * Math.PI * 2;
+      const rad = Math.sqrt(rand()) * 37.5;
+      lx = Math.cos(ang) * rad;
+      lz = Math.sin(ang) * rad;
+
+      const dClear = Math.hypot(lx * 0.9, (lz + 1.8) * 1.05);
+      const pathCenter = Math.sin(lz * 0.11) * 0.85;
+      const onTrail = lz > -2.0 && lz < 40.0 && Math.abs(lx - pathCenter) < 1.35;
+      if (dClear < 5.1 || onTrail) {
+        const pushAng = Math.atan2(lz, lx);
+        const pushRad = 6.2 + rand() * 14.0;
+        lx = Math.cos(pushAng) * pushRad;
+        lz = Math.sin(pushAng) * pushRad;
+      }
+    }
+
+    const ly = evaluateTerrainHeight(lx, lz);
+    _tempPos.set(centerX + lx, centerY + ly, centerZ + lz);
+    _tempEuler.set((rand() - 0.5) * 0.22, rand() * Math.PI * 2, (rand() - 0.5) * 0.22);
+    _tempQuat.setFromEuler(_tempEuler);
+    _tempScale.set(scaleXZ, scaleY, scaleXZ);
+    _tempMat4.compose(_tempPos, _tempQuat, _tempScale);
+    grassInst.setMatrixAt(i, _tempMat4);
+
+    const nCol = valueNoise2D(lx * 0.14 + 5.2, lz * 0.14 - 3.8);
+    const colIdx = Math.min(grassPalette.length - 1, Math.floor(nCol * grassPalette.length));
+    _tempColor.copy(grassPalette[colIdx]);
+    _tempColor.offsetHSL((rand() - 0.5) * 0.03, (rand() - 0.5) * 0.08, (rand() - 0.5) * 0.06);
+    grassInst.setColorAt(i, _tempColor);
+  }
+  grassInst.instanceMatrix.needsUpdate = true;
+  if (grassInst.instanceColor) grassInst.instanceColor.needsUpdate = true;
+  registerMesh(grassInst, grassCount);
+
+  const flowerMat = trackMaterial(
+    attachWindSwayShader(
+      new THREE.MeshLambertMaterial({
+        vertexColors: true,
+      }),
+      windUniforms,
+      0.12,
+      2.0
+    )
+  );
+
+  const whiteFlowerGeo = trackGeometry(buildFlowerClusterGeometry(0xfafdf6, 0xf2c138));
+  const yellowFlowerGeo = trackGeometry(buildFlowerClusterGeometry(0xffdd3c, 0xe07b18));
+
+  const whiteFlowerCount = 1750;
+  const yellowFlowerCount = 1750;
+  const whiteFlowerInst = new THREE.InstancedMesh(whiteFlowerGeo, flowerMat, whiteFlowerCount);
+  const yellowFlowerInst = new THREE.InstancedMesh(yellowFlowerGeo, flowerMat, yellowFlowerCount);
+
+  const populateFlowers = (instMesh, count, phaseShift) => {
+    for (let i = 0; i < count; i++) {
+      let lx = 0;
+      let lz = 0;
+      if (i < count * 0.22) {
+        const side = i % 2 === 0 ? -1 : 1;
+        lz = -1.0 + rand() * 38.0;
+        const pathCurve = Math.sin(lz * 0.11) * 0.85;
+        lx = pathCurve + side * (2.0 + rand() * 3.2);
+      } else {
+        const ang = rand() * Math.PI * 2 + phaseShift;
+        const rad = 6.2 + Math.sqrt(rand()) * 27.5;
+        lx = Math.cos(ang) * rad;
+        lz = Math.sin(ang) * rad;
+        if (lz > -1.0 && lz < 40.0) {
+          const pathCurve = Math.sin(lz * 0.11) * 0.85;
+          if (Math.abs(lx - pathCurve) < 1.8) {
+            lx += (lx >= pathCurve ? 1 : -1) * 2.4;
+          }
+        }
+      }
+      const ly = evaluateTerrainHeight(lx, lz);
+      const sc = 0.72 + rand() * 0.62;
+      _tempPos.set(centerX + lx, centerY + ly, centerZ + lz);
+      _tempEuler.set((rand() - 0.5) * 0.12, rand() * Math.PI * 2, (rand() - 0.5) * 0.12);
+      _tempQuat.setFromEuler(_tempEuler);
+      _tempScale.set(sc, sc, sc);
+      _tempMat4.compose(_tempPos, _tempQuat, _tempScale);
+      instMesh.setMatrixAt(i, _tempMat4);
+    }
+    instMesh.instanceMatrix.needsUpdate = true;
+  };
+
+  populateFlowers(whiteFlowerInst, whiteFlowerCount, 0.0);
+  populateFlowers(yellowFlowerInst, yellowFlowerCount, 1.57);
+  registerMesh(whiteFlowerInst, whiteFlowerCount);
+  registerMesh(yellowFlowerInst, yellowFlowerCount);
+
+  const pillarMat = trackMaterial(
+    new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.86,
+      metalness: 0.05,
+    })
+  );
+
+  const pillars = [];
+  const colliders = [];
+  const blockers = [];
+
+  for (let i = 0; i < PILLAR_SPECS.length; i++) {
+    const spec = PILLAR_SPECS[i];
+    const px = centerX + spec.dx;
+    const pz = centerZ + spec.dz;
+    const py = centerY + evaluateTerrainHeight(spec.dx, spec.dz);
+
+    const pGeo = trackGeometry(buildAncientBrokenPillarAssembly(i + 1, rand));
+    const pillarMesh = new THREE.Mesh(pGeo, pillarMat);
+    pillarMesh.position.set(px, py, pz);
+    pillarMesh.rotation.set(spec.leanX, spec.rotY, spec.leanZ);
+    pillarMesh.castShadow = true;
+    pillarMesh.receiveShadow = true;
+
+    const radius = 0.66;
+    const height = 3.8;
+    const blockerEntry = {
+      id: i,
+      index: i,
+      type: 'pillar',
+      x: px,
+      y: py,
+      z: pz,
+      radius,
+      height,
+      minX: px - radius,
+      maxX: px + radius,
+      minZ: pz - radius,
+      maxZ: pz + radius,
+      position: new THREE.Vector3(px, py, pz),
+      mesh: pillarMesh,
+      destroyed: false,
+      active: true,
+    };
+
+    pillarMesh.userData = {
+      id: i,
+      index: i,
+      destroyed: false,
+      collider: true,
+      radius,
+      height,
+      blocker: blockerEntry,
+    };
+
+    pillars.push(pillarMesh);
+    colliders.push(pillarMesh);
+    blockers.push(blockerEntry);
+    registerMesh(pillarMesh);
   }
 
-  const entranceGate = gateGroup(layout.entranceBarrier, 0x2b2623);
-  const exitGate = gateGroup(layout.exitGate, 0x2b2623);
-  group.add(entranceGate, exitGate);
+  const gateStoneGeo = trackGeometry(buildAncientBrokenPillarAssembly(99, rand));
+  const gateLeft = new THREE.Mesh(gateStoneGeo, pillarMat);
+  gateLeft.position.set(centerX - 2.35, centerY, centerZ - 17.5);
+  gateLeft.scale.set(0.85, 1.05, 0.85);
+  gateLeft.castShadow = true;
+  gateLeft.receiveShadow = true;
+  registerMesh(gateLeft);
 
-  if (layout.bossArena) {
-    for (const p of layout.bossArena.pillars) {
-      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(p.radius, p.radius * 1.15, p.height, 8), stoneMat);
-      pillar.name = p.id;
-      pillar.position.set(p.x, p.height / 2, p.z);
-      group.add(pillar);
+  const gateRight = new THREE.Mesh(gateStoneGeo, pillarMat);
+  gateRight.position.set(centerX + 2.35, centerY, centerZ - 17.5);
+  gateRight.rotation.y = Math.PI;
+  gateRight.scale.set(0.85, 1.05, 0.85);
+  gateRight.castShadow = true;
+  gateRight.receiveShadow = true;
+  registerMesh(gateRight);
+
+  const gatePortalGeo = trackGeometry(new THREE.CircleGeometry(1.85, 24));
+  const gatePortalMat = trackMaterial(
+    new THREE.MeshBasicMaterial({
+      color: 0x9b6bff,
+      transparent: true,
+      opacity: 0.68,
+      side: THREE.DoubleSide,
+    })
+  );
+  const gatePortalMesh = new THREE.Mesh(gatePortalGeo, gatePortalMat);
+  gatePortalMesh.position.set(centerX, centerY + 2.0, centerZ - 17.5);
+  gatePortalMesh.visible = false;
+  registerMesh(gatePortalMesh);
+
+  const pineCount = 145;
+  const broadleafCount = 165;
+  const totalTrees = pineCount + broadleafCount;
+
+  const pineGeo = trackGeometry(buildPineTreeGeometry());
+  const pineMat = trackMaterial(
+    new THREE.MeshLambertMaterial({
+      vertexColors: true,
+    })
+  );
+  const pineInst = new THREE.InstancedMesh(pineGeo, pineMat, pineCount);
+  pineInst.castShadow = true;
+  pineInst.receiveShadow = true;
+
+  const broadleafTrunkGeo = trackGeometry(buildBroadleafTrunkWithBranchesGeometry());
+  const broadleafTrunkMat = trackMaterial(
+    new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.92,
+      metalness: 0.0,
+    })
+  );
+  const broadleafTrunkInst = new THREE.InstancedMesh(
+    broadleafTrunkGeo,
+    broadleafTrunkMat,
+    broadleafCount
+  );
+  broadleafTrunkInst.castShadow = true;
+  broadleafTrunkInst.receiveShadow = true;
+
+  const broadleafCanopyGeo = trackGeometry(buildBroadleafCanopyGeometry());
+  const broadleafCanopyMat = trackMaterial(
+    new THREE.MeshLambertMaterial({
+      vertexColors: true,
+    })
+  );
+  const broadleafCanopyInst = new THREE.InstancedMesh(
+    broadleafCanopyGeo,
+    broadleafCanopyMat,
+    broadleafCount
+  );
+  broadleafCanopyInst.castShadow = true;
+  broadleafCanopyInst.receiveShadow = true;
+
+  const treePositions = [];
+
+  const sampleValidTreeCoord = (idx, total) => {
+    for (let attempt = 0; attempt < 16; attempt++) {
+      let lx = 0;
+      let lz = 0;
+      if (idx < 34 && attempt === 0) {
+        const side = idx % 2 === 0 ? -1 : 1;
+        lz = 15.0 + (idx / 34) * 27.0 + (rand() - 0.5) * 2.2;
+        const pathCenter = Math.sin(lz * 0.11) * 0.85;
+        lx = pathCenter + side * (6.8 + rand() * 14.5);
+      } else {
+        const goldenAngle = idx * 2.399963229728653 + attempt * 0.47;
+        const ringT = (idx / total + rand() * 0.12) % 1.0;
+        const radius = 19.2 + Math.pow(ringT, 0.82) * 29.5;
+        lx = Math.cos(goldenAngle) * radius;
+        lz = Math.sin(goldenAngle) * radius;
+      }
+
+      if (lz > -2.0 && lz < 46.0) {
+        const pathCenter = Math.sin(lz * 0.11) * 0.85;
+        if (Math.abs(lx - pathCenter) < 6.2) continue;
+      }
+      if (lz < -14.0 && lz > -24.0 && Math.abs(lx) < 4.5) continue;
+
+      return { lx, lz };
     }
-    for (const w of layout.bossArena.wallSegments) {
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(w.length, 2.4, 0.6), stoneMat);
-      wall.position.set(w.x, 1.2, w.z);
-      wall.rotation.y = w.rotationY;
-      group.add(wall);
+    const fallbackAngle = (idx / total) * Math.PI * 2;
+    return {
+      lx: Math.cos(fallbackAngle) * 24.0,
+      lz: Math.sin(fallbackAngle) * 24.0,
+    };
+  };
+
+  let pIdx = 0;
+  let bIdx = 0;
+
+  for (let i = 0; i < totalTrees; i++) {
+    const { lx, lz } = sampleValidTreeCoord(i, totalTrees);
+    const ly = evaluateTerrainHeight(lx, lz) - 0.12;
+    const rotY = rand() * Math.PI * 2;
+    const tiltX = (rand() - 0.5) * 0.07;
+    const tiltZ = (rand() - 0.5) * 0.07;
+    const scaleXZ = 0.84 + rand() * 0.56;
+    const scaleY = 0.86 + rand() * 0.64;
+
+    treePositions.push({ lx, ly, lz, scale: scaleXZ });
+
+    _tempPos.set(centerX + lx, centerY + ly, centerZ + lz);
+    _tempEuler.set(tiltX, rotY, tiltZ);
+    _tempQuat.setFromEuler(_tempEuler);
+    _tempScale.set(scaleXZ, scaleY, scaleXZ);
+    _tempMat4.compose(_tempPos, _tempQuat, _tempScale);
+
+    const isPine = (i % 2 === 0 && pIdx < pineCount) || bIdx >= broadleafCount;
+    if (isPine) {
+      pineInst.setMatrixAt(pIdx, _tempMat4);
+      _tempColor.setHSL(0.31 + (rand() - 0.5) * 0.04, 0.52, 0.48 + (rand() - 0.5) * 0.08);
+      pineInst.setColorAt(pIdx, _tempColor);
+      pIdx++;
+    } else {
+      broadleafTrunkInst.setMatrixAt(bIdx, _tempMat4);
+      broadleafCanopyInst.setMatrixAt(bIdx, _tempMat4);
+      _tempColor.setHSL(0.27 + (rand() - 0.5) * 0.05, 0.62, 0.52 + (rand() - 0.5) * 0.10);
+      broadleafCanopyInst.setColorAt(bIdx, _tempColor);
+      bIdx++;
     }
   }
+
+  pineInst.instanceMatrix.needsUpdate = true;
+  if (pineInst.instanceColor) pineInst.instanceColor.needsUpdate = true;
+  broadleafTrunkInst.instanceMatrix.needsUpdate = true;
+  broadleafCanopyInst.instanceMatrix.needsUpdate = true;
+  if (broadleafCanopyInst.instanceColor) broadleafCanopyInst.instanceColor.needsUpdate = true;
+
+  registerMesh(pineInst, pineCount);
+  registerMesh(broadleafTrunkInst, broadleafCount);
+  registerMesh(broadleafCanopyInst, broadleafCount);
+
+  const bushCount = 520;
+  const bushGeo = trackGeometry(buildBushGeometry());
+  const bushMat = trackMaterial(
+    new THREE.MeshLambertMaterial({
+      vertexColors: true,
+    })
+  );
+  const bushInst = new THREE.InstancedMesh(bushGeo, bushMat, bushCount);
+  bushInst.castShadow = true;
+  bushInst.receiveShadow = true;
+
+  for (let i = 0; i < bushCount; i++) {
+    const baseTree = treePositions[i % treePositions.length];
+    const ang = rand() * Math.PI * 2;
+    const dist = 0.9 + rand() * 2.8;
+    let lx = baseTree.lx + Math.cos(ang) * dist;
+    let lz = baseTree.lz + Math.sin(ang) * dist;
+    if (Math.hypot(lx, lz) < 17.8) {
+      const push = 18.2 / Math.max(0.1, Math.hypot(lx, lz));
+      lx *= push;
+      lz *= push;
+    }
+    const ly = evaluateTerrainHeight(lx, lz) - 0.06;
+    const sx = 0.72 + rand() * 0.75;
+    const sy = 0.68 + rand() * 0.68;
+
+    _tempPos.set(centerX + lx, centerY + ly, centerZ + lz);
+    _tempEuler.set((rand() - 0.5) * 0.1, rand() * Math.PI * 2, (rand() - 0.5) * 0.1);
+    _tempQuat.setFromEuler(_tempEuler);
+    _tempScale.set(sx, sy, sx);
+    _tempMat4.compose(_tempPos, _tempQuat, _tempScale);
+    bushInst.setMatrixAt(i, _tempMat4);
+
+    _tempColor.setHSL(0.28 + (rand() - 0.5) * 0.05, 0.58, 0.48 + (rand() - 0.5) * 0.10);
+    bushInst.setColorAt(i, _tempColor);
+  }
+  bushInst.instanceMatrix.needsUpdate = true;
+  if (bushInst.instanceColor) bushInst.instanceColor.needsUpdate = true;
+  registerMesh(bushInst, bushCount);
+
+  const fernCount = 850;
+  const fernGeo = trackGeometry(buildFernGeometry());
+  const fernMat = trackMaterial(
+    attachWindSwayShader(
+      new THREE.MeshLambertMaterial({
+        vertexColors: true,
+        side: THREE.DoubleSide,
+      }),
+      windUniforms,
+      0.09,
+      1.85
+    )
+  );
+  const fernInst = new THREE.InstancedMesh(fernGeo, fernMat, fernCount);
+  fernInst.receiveShadow = true;
+
+  for (let i = 0; i < fernCount; i++) {
+    let lx = 0;
+    let lz = 0;
+    if (i < 120) {
+      const pSpec = PILLAR_SPECS[i % PILLAR_SPECS.length];
+      const ang = rand() * Math.PI * 2;
+      const dist = 0.85 + rand() * 1.45;
+      lx = pSpec.dx + Math.cos(ang) * dist;
+      lz = pSpec.dz + Math.sin(ang) * dist;
+    } else {
+      const baseTree = treePositions[i % treePositions.length];
+      const ang = rand() * Math.PI * 2;
+      const dist = 0.65 + rand() * 2.6;
+      lx = baseTree.lx + Math.cos(ang) * dist;
+      lz = baseTree.lz + Math.sin(ang) * dist;
+    }
+    const ly = evaluateTerrainHeight(lx, lz);
+    const sc = 0.68 + rand() * 0.72;
+    _tempPos.set(centerX + lx, centerY + ly, centerZ + lz);
+    _tempEuler.set((rand() - 0.5) * 0.14, rand() * Math.PI * 2, (rand() - 0.5) * 0.14);
+    _tempQuat.setFromEuler(_tempEuler);
+    _tempScale.set(sc, sc, sc);
+    _tempMat4.compose(_tempPos, _tempQuat, _tempScale);
+    fernInst.setMatrixAt(i, _tempMat4);
+  }
+  fernInst.instanceMatrix.needsUpdate = true;
+  registerMesh(fernInst, fernCount);
+
+  const rockCount = 250;
+  const { rock: boulderGeo, moss: mossCapGeo } = buildMossBoulderGeometry();
+  trackGeometry(boulderGeo);
+  trackGeometry(mossCapGeo);
+
+  const boulderMat = trackMaterial(
+    new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.88,
+      metalness: 0.04,
+    })
+  );
+  const mossCapMat = trackMaterial(
+    new THREE.MeshLambertMaterial({
+      vertexColors: true,
+    })
+  );
+
+  const stoneInst = new THREE.InstancedMesh(boulderGeo, boulderMat, rockCount);
+  const mossCapInst = new THREE.InstancedMesh(mossCapGeo, mossCapMat, rockCount);
+  stoneInst.castShadow = true;
+  stoneInst.receiveShadow = true;
+  mossCapInst.receiveShadow = true;
+
+  for (let i = 0; i < rockCount; i++) {
+    const baseTree = treePositions[(i * 3) % treePositions.length];
+    const ang = rand() * Math.PI * 2;
+    const dist = 0.8 + rand() * 2.5;
+    let lx = baseTree.lx + Math.cos(ang) * dist;
+    let lz = baseTree.lz + Math.sin(ang) * dist;
+    if (Math.hypot(lx, lz) < 17.2) {
+      const push = 17.6 / Math.max(0.1, Math.hypot(lx, lz));
+      lx *= push;
+      lz *= push;
+    }
+    const ly = evaluateTerrainHeight(lx, lz) - 0.08;
+    const sx = 0.45 + rand() * 0.78;
+    const sy = 0.38 + rand() * 0.65;
+    const sz = 0.45 + rand() * 0.78;
+
+    _tempPos.set(centerX + lx, centerY + ly, centerZ + lz);
+    _tempEuler.set((rand() - 0.5) * 0.25, rand() * Math.PI * 2, (rand() - 0.5) * 0.25);
+    _tempQuat.setFromEuler(_tempEuler);
+    _tempScale.set(sx, sy, sz);
+    _tempMat4.compose(_tempPos, _tempQuat, _tempScale);
+
+    stoneInst.setMatrixAt(i, _tempMat4);
+    mossCapInst.setMatrixAt(i, _tempMat4);
+  }
+  stoneInst.instanceMatrix.needsUpdate = true;
+  mossCapInst.instanceMatrix.needsUpdate = true;
+  registerMesh(stoneInst, rockCount);
+  registerMesh(mossCapInst, rockCount);
+
+  const {
+    debrisState,
+    leafInst,
+    leafCount,
+    pollenInst,
+    pollenCount
+  } = buildMountainsAndDebris({
+    centerX,
+    centerY,
+    centerZ,
+    rand,
+    windUniforms,
+    gatePortalMesh,
+    trackGeometry,
+    trackMaterial,
+    registerMesh
+  });
 
   const anchors = {
-    entranceGate: new THREE.Vector3(layout.entranceBarrier.position.x, 0, layout.entranceBarrier.position.z),
-    exitGate: new THREE.Vector3(layout.exitGate.position.x, 0, layout.exitGate.position.z),
-    camps: layout.campSpots.map((c) => new THREE.Vector3(c.x, 0, c.z)),
+    arena: new THREE.Vector3(centerX, centerY, centerZ),
+    center: new THREE.Vector3(centerX, centerY, centerZ),
+    playerSpawn: new THREE.Vector3(centerX, centerY, centerZ + 11.0),
+    gate: new THREE.Vector3(centerX, centerY, centerZ - 17.5),
+    bossSpawn: new THREE.Vector3(centerX, centerY, centerZ - 6.0),
+    enemySpawns: [
+      new THREE.Vector3(centerX - 4.5, centerY, centerZ - 3.5),
+      new THREE.Vector3(centerX + 4.5, centerY, centerZ - 3.5),
+      new THREE.Vector3(centerX - 2.5, centerY, centerZ - 7.0),
+      new THREE.Vector3(centerX + 2.5, centerY, centerZ - 7.0),
+      new THREE.Vector3(centerX, centerY, centerZ - 5.0),
+    ],
   };
-  if (layout.bossArena) {
-    anchors.arena = new THREE.Vector3(layout.bossArena.center.x, 0, layout.bossArena.center.z);
-    anchors.arenaEntrance = new THREE.Vector3(
-      layout.bossArena.entrance.position.x,
-      0,
-      layout.bossArena.entrance.position.z
-    );
+
+  function update(delta, time) {
+    if (typeof time === 'number' && (!delta || delta <= 0)) {
+      const computedDt = time - debrisState.time;
+      updateFloor3Debris(computedDt > 0 && computedDt < 0.25 ? computedDt : 0.016);
+    } else {
+      updateFloor3Debris(delta);
+    }
   }
 
-  function setGateState(state = {}) {
-    const entranceBar = entranceGate.getObjectByName('gate_bar');
-    const exitBar = exitGate.getObjectByName('gate_bar');
-    if (entranceBar) entranceBar.visible = !state.entranceOpen;
-    if (exitBar) exitBar.visible = !state.exitOpen;
+  function setQuality(quality) {
+    if (quality === 'low') {
+      pollenInst.count = Math.floor(pollenCount * 0.4);
+      leafInst.count = Math.floor(leafCount * 0.6);
+    } else {
+      pollenInst.count = pollenCount;
+      leafInst.count = leafCount;
+    }
+  }
+
+  function setLighting(lightOverride) {
+    if (!lightOverride) return;
+    if (lightOverride.sun?.intensity !== undefined) {
+      fallbackSun.intensity = lightOverride.sun.intensity;
+    }
+  }
+
+  function setGateState(state) {
+    const isOpen =
+      state === true ||
+      state === 'open' ||
+      state === 'active' ||
+      (typeof state === 'object' && state !== null && (state.open || state.active));
+    gatePortalMesh.visible = Boolean(isOpen);
+  }
+
+  function destroyPillar(indexOrId) {
+    const target = pillars.find(
+      (p, idx) => idx === indexOrId || p.userData?.id === indexOrId
+    );
+    if (!target || target.userData.destroyed) return false;
+    target.userData.destroyed = true;
+    target.scale.y = 0.22;
+    if (target.userData.blocker) {
+      target.userData.blocker.destroyed = true;
+      target.userData.blocker.active = false;
+      target.userData.blocker.radius = 0;
+    }
+    return true;
   }
 
   function getStats() {
-    let meshes = 0;
-    let triangles = 0;
-    const materials = new Set();
-    group.traverse((obj) => {
-      if (!obj.isMesh) return;
-      meshes++;
-      const geo = obj.geometry;
-      const count = geo.index ? geo.index.count : geo.attributes.position.count;
-      triangles += count / 3;
-      materials.add(obj.material);
-    });
-    return { meshes, triangles, drawCallsEstimate: materials.size };
+    return {
+      floor: 3,
+      drawCalls,
+      triangles: triangleCount,
+      instancedLeaves: leafCount,
+      instancedGrass: grassCount,
+      instancedTrees: totalTrees,
+      pillars: pillars.length,
+    };
   }
 
-  function destroyPillar(index) {
-    if (!layout.bossArena) return false;
-    const pillar = layout.bossArena.pillars[index];
-    if (!pillar) return false;
-    const mesh = group.getObjectByName(pillar.id);
-    if (!mesh) return false;
-    mesh.visible = false;
-    return true;
+  function dispose() {
+    clearActiveDebrisStateIfMatch(debrisState);
+    restoreSceneFog();
+
+    for (let i = 0; i < ownedGeometries.length; i++) {
+      ownedGeometries[i].dispose();
+    }
+    ownedGeometries.length = 0;
+
+    for (let i = 0; i < ownedMaterials.length; i++) {
+      const mat = ownedMaterials[i];
+      if (mat.map) mat.map.dispose();
+      mat.dispose();
+    }
+    ownedMaterials.length = 0;
+
+    if (group.parent) {
+      group.parent.remove(group);
+    }
   }
 
   return {
     group,
     anchors,
-    lights: [],
-    update() {},
-    setQuality() {},
-    setLighting() {},
+    lights: BRIGHT_FOREST_LIGHTING,
+    pillars,
+    colliders,
+    blockers,
+    update,
+    setQuality,
+    setLighting,
     setGateState,
     destroyPillar,
     getStats,
-    dispose() {
-      const geos = new Set();
-      const mats = new Set();
-      group.traverse((obj) => {
-        if (!obj.isMesh) return;
-        geos.add(obj.geometry);
-        mats.add(obj.material);
-      });
-      for (const g of geos) g.dispose();
-      for (const m of mats) m.dispose();
-    },
+    dispose,
   };
 }
+
+export const buildForestFloor = buildFloor3Clearing;
+
+export const buildForestFloorArt = buildFloor3Clearing;

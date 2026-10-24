@@ -1,5 +1,6 @@
 import { SystemWindow } from './SystemWindow.js';
 import { gameState } from '../core/GameState.js';
+import { showSystemMessage } from './Hud.js';
 import { getRarityHexString, getSynthesisXp, getSkillInheritChance, getXpForLevel, LEVEL_CAP_PER_STAR } from '../data/rules.js';
 import { getDisplayStats, formatStatDisplay } from '../core/Stats.js';
 
@@ -43,11 +44,29 @@ export class SynthesisWindow extends SystemWindow {
     this.contentElement.style.flexDirection = 'column';
     this.contentElement.style.gap = '12px';
 
+    // Instruction prompt
+    const instr = document.createElement('div');
+    instr.style.color = '#ff8899';
+    instr.style.fontWeight = 'bold';
+    instr.style.fontSize = '12px';
+    instr.style.textAlign = 'center';
+    instr.style.padding = '4px 0';
+    instr.textContent = 'DRAG AND DROP THE HEROES TO BE SACRIFICED INTO THE SLOTS.';
+    this.contentElement.appendChild(instr);
+
     // 1. Slots Overview: Base Hero on Left, up to 4 Materials on Right
     this.slotsSection = document.createElement('div');
     this.slotsSection.style.display = 'flex';
     this.slotsSection.style.gap = '14px';
     this.contentElement.appendChild(this.slotsSection);
+
+    // Promotion section (1★ -> 2★ via elemental stone)
+    this.promoteSection = document.createElement('div');
+    this.promoteSection.style.backgroundColor = 'rgba(30, 12, 18, 0.8)';
+    this.promoteSection.style.border = '1px solid rgba(255, 211, 107, 0.3)';
+    this.promoteSection.style.borderRadius = '6px';
+    this.promoteSection.style.padding = '10px 14px';
+    this.contentElement.appendChild(this.promoteSection);
 
     // 2. Live Preview Panel (EXP, Skills, Warning)
     this.previewPanel = document.createElement('div');
@@ -79,6 +98,16 @@ export class SynthesisWindow extends SystemWindow {
     this.pickerList.style.gap = '6px';
     this.contentElement.appendChild(this.pickerList);
 
+    // Synthesis confirmation prompt (hidden by default)
+    this.synthConfirmEl = document.createElement('div');
+    this.synthConfirmEl.style.display = 'none';
+    this.synthConfirmEl.style.backgroundColor = 'rgba(255, 34, 34, 0.15)';
+    this.synthConfirmEl.style.border = '1px solid #ff3344';
+    this.synthConfirmEl.style.borderRadius = '6px';
+    this.synthConfirmEl.style.padding = '8px 12px';
+    this.synthConfirmEl.style.textAlign = 'center';
+    this.contentElement.appendChild(this.synthConfirmEl);
+
     // 4. Action Bar (Hold 1.5s Confirm Button)
     const bottomBar = document.createElement('div');
     bottomBar.style.display = 'flex';
@@ -106,12 +135,9 @@ export class SynthesisWindow extends SystemWindow {
       '#ff2233',
       () => {
         if (!this.baseHeroId || this.materialHeroIds.length === 0) return;
-        const baseId = this.baseHeroId;
-        const matIds = [...this.materialHeroIds];
-        this.close();
-        if (this.onConfirmSynthesis) {
-          this.onConfirmSynthesis(baseId, matIds);
-        }
+        this._pendingBaseId = this.baseHeroId;
+        this._pendingMatIds = [...this.materialHeroIds];
+        this.showSynthConfirm();
       }
     );
     bottomBar.appendChild(this.confirmBtn);
@@ -187,6 +213,69 @@ export class SynthesisWindow extends SystemWindow {
     return btn;
   }
 
+  showSynthConfirm() {
+    if (!this.synthConfirmEl) return;
+    const baseHero = gameState.heroes.find((h) => h.id === this._pendingBaseId);
+    const mats = (this._pendingMatIds || [])
+      .map((id) => gameState.heroes.find((h) => h.id === id))
+      .filter(Boolean);
+    const sacrificeName = mats.length ? mats[0].name : '';
+    this.synthConfirmEl.innerHTML = '';
+    const text = document.createElement('div');
+    text.textContent = 'WILL YOU SYNTHESIZE?';
+    text.style.color = '#ff8899';
+    text.style.fontWeight = 'bold';
+    text.style.fontSize = '12px';
+    text.style.marginBottom = '6px';
+    this.synthConfirmEl.appendChild(text);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.justifyContent = 'center';
+    btnRow.style.gap = '8px';
+
+    const yesBtn = document.createElement('button');
+    yesBtn.className = 'mm-btn mm-btn-danger';
+    yesBtn.textContent = 'Yes';
+    yesBtn.style.padding = '4px 14px';
+    yesBtn.style.fontSize = '12px';
+    yesBtn.addEventListener('click', () => {
+      this.synthConfirmEl.style.display = 'none';
+      const baseId = this._pendingBaseId;
+      const matIds = [...(this._pendingMatIds || [])];
+      const baseHero2 = gameState.heroes.find((h) => h.id === baseId);
+      const mats2 = matIds.map((id) => gameState.heroes.find((h) => h.id === id)).filter(Boolean);
+      // Notices
+      mats2.forEach((m) => {
+        showSystemMessage(`SYNTHESIS COMPLETE! ${m.name.toUpperCase()} (★) HAS BECOME LIGHT AND DISAPPEARED.`);
+      });
+      // If base hero levels up or inherits/awakens a skill:
+      // const baseName = baseHero2 ? baseHero2.name : '';
+      // const skillName = 'SkillName';
+      // showSystemMessage(`SYNTHESIS COMPLETE! ${baseName} (★) LEVEL UP! OBTAINED THE SKILL, '${skillName.toUpperCase()}'!`);
+      console.log('MASTER, SYNTHESIS HAS STARTED.');
+      showSystemMessage('MASTER, SYNTHESIS HAS STARTED.');
+      this.close();
+      if (this.onConfirmSynthesis) {
+        this.onConfirmSynthesis(baseId, matIds);
+      }
+    });
+    btnRow.appendChild(yesBtn);
+
+    const noBtn = document.createElement('button');
+    noBtn.className = 'mm-btn mm-btn-ok';
+    noBtn.textContent = 'No';
+    noBtn.style.padding = '4px 14px';
+    noBtn.style.fontSize = '12px';
+    noBtn.addEventListener('click', () => {
+      this.synthConfirmEl.style.display = 'none';
+    });
+    btnRow.appendChild(noBtn);
+
+    this.synthConfirmEl.appendChild(btnRow);
+    this.synthConfirmEl.style.display = 'block';
+  }
+
   render() {
     const baseHero = gameState.heroes.find((h) => h.id === this.baseHeroId);
     const materials = this.materialHeroIds
@@ -207,6 +296,27 @@ export class SynthesisWindow extends SystemWindow {
     baseSlot.style.flexDirection = 'column';
     baseSlot.style.justifyContent = 'space-between';
     baseSlot.style.minHeight = '120px';
+
+    // Drag-and-drop drop target for the base slot
+    baseSlot.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      baseSlot.style.outline = '2px dashed var(--accent)';
+    });
+    baseSlot.addEventListener('dragleave', () => {
+      baseSlot.style.outline = '';
+    });
+    baseSlot.addEventListener('drop', (e) => {
+      e.preventDefault();
+      baseSlot.style.outline = '';
+      const id = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+      if (!id) return;
+      const hero = gameState.heroes.find((h) => h.id === id);
+      if (!hero) return;
+      this.baseHeroId = id;
+      this.materialHeroIds = this.materialHeroIds.filter((x) => x !== id);
+      this.render();
+    });
 
     if (baseHero) {
       const starColor = getRarityHexString(baseHero.star);
@@ -307,6 +417,34 @@ export class SynthesisWindow extends SystemWindow {
           <div style="color:#663344; font-size:10px; margin-top:4px;">[Empty]</div>
         `;
       }
+      // Drag-and-drop drop target for each material slot
+      if (!isLocked) {
+        mSlot.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+          mSlot.style.outline = '2px dashed #ff4455';
+        });
+        mSlot.addEventListener('dragleave', () => {
+          mSlot.style.outline = '';
+        });
+        mSlot.addEventListener('drop', (e) => {
+          e.preventDefault();
+          mSlot.style.outline = '';
+          const id = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+          if (!id) return;
+          const hero = gameState.heroes.find((h) => h.id === id);
+          if (!hero) return;
+          if (hero.id === 'hero_han') return;
+          if (hero.isFavorite) return;
+          if (hero.id === this.baseHeroId) return;
+          const currentIdx = this.materialHeroIds.indexOf(id);
+          if (currentIdx !== -1) this.materialHeroIds.splice(currentIdx, 1);
+          if (this.materialHeroIds.length < maxMaterialSlots) {
+            this.materialHeroIds.push(id);
+          }
+          this.render();
+        });
+      }
       matsWrap.appendChild(mSlot);
     }
     this.slotsSection.appendChild(matsWrap);
@@ -365,7 +503,7 @@ export class SynthesisWindow extends SystemWindow {
     warning.style.fontWeight = 'bold';
     warning.style.fontSize = '12px';
     warning.style.textAlign = 'center';
-    warning.textContent = '[These heroes will be dissolved permanently.]';
+    warning.textContent = '[These heroes will be dissolved permanently.] HEROES WHO ARE SACRIFICED WILL DIE.';
     this.previewPanel.appendChild(warning);
 
     // 3. Render Hero Picker List
@@ -379,6 +517,13 @@ export class SynthesisWindow extends SystemWindow {
       const starColor = getRarityHexString(h.star);
 
       const row = document.createElement('div');
+      row.draggable = true;
+      row.addEventListener('dragstart', (e) => {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData('text/plain', h.id);
+          e.dataTransfer.effectAllowed = 'move';
+        }
+      });
       row.style.padding = '6px 10px';
       row.style.backgroundColor = isBase
         ? 'rgba(180, 140, 255, 0.2)'
@@ -433,6 +578,7 @@ export class SynthesisWindow extends SystemWindow {
       const addMatBtn = row.querySelector('.btn-add-mat');
       if (addMatBtn) {
         addMatBtn.addEventListener('click', () => {
+          if (h.isFavorite) return;
           if (this.materialHeroIds.length < maxMaterialSlots) {
             this.materialHeroIds.push(h.id);
             this.render();
@@ -450,6 +596,33 @@ export class SynthesisWindow extends SystemWindow {
 
       this.pickerList.appendChild(row);
     });
+
+    // Promotion: 1★ hero near/at max level -> 2★ using elemental stone
+    if (this.promoteSection) {
+      this.promoteSection.innerHTML = '';
+      const baseHero = gameState.heroes.find((h) => h.id === this.baseHeroId);
+      if (baseHero && (baseHero.star || 1) === 1 && (baseHero.level || 1) >= 9) {
+        const hasWind = (gameState.materials?.wind_elemental_stone_d || 0) > 0 || (gameState.materials?.wind_elemental_stone || 0) > 0;
+        const hasWater = (gameState.materials?.water_elemental_stone_d || 0) > 0 || (gameState.materials?.water_elemental_stone || 0) > 0;
+        if (hasWind || hasWater) {
+          const btn = document.createElement('button');
+          btn.textContent = 'PROMOTE TO 2★';
+          btn.className = 'mm-btn mm-btn-gold';
+          btn.style.padding = '6px 16px';
+          btn.addEventListener('click', () => {
+            baseHero.star = 2;
+            if (hasWind && gameState.materials?.wind_elemental_stone_d) gameState.materials.wind_elemental_stone_d -= 1;
+            else if (hasWind && gameState.materials?.wind_elemental_stone) gameState.materials.wind_elemental_stone -= 1;
+            else if (hasWater && gameState.materials?.water_elemental_stone_d) gameState.materials.water_elemental_stone_d -= 1;
+            else if (hasWater && gameState.materials?.water_elemental_stone) gameState.materials.water_elemental_stone -= 1;
+            gameState.saveToLocalStorage();
+            showSystemMessage(`PROMOTION COMPLETE! ${String(baseHero.name).toUpperCase()} HAS BECOME ★★!`);
+            this.render();
+          });
+          this.promoteSection.appendChild(btn);
+        }
+      }
+    }
 
     // 4. Update Button State
     const canSynthesize = this.baseHeroId && this.materialHeroIds.length > 0;

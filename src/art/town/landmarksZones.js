@@ -1,0 +1,575 @@
+import * as THREE from 'three';
+import { getSignLayout, FLOOR_DECAL_LAYERS } from './layout.js';
+import {
+  prepareGeo,
+  addBox,
+  addCyl,
+  createArchBlockGeo,
+  decalCenterY,
+  buildSignPost
+} from './landmarksShared.js';
+
+export function buildLandingAreaZone(params) {
+  const {
+    layout,
+    getGroundY,
+    q,
+    qMult,
+    P,
+    rng,
+    stoneGeos,
+    mossGeos,
+    glyphGeos,
+    floorGlyphGeos,
+    colliders,
+    doors,
+    registerAnchor
+  } = params;
+
+  const laCfg = layout.landing_area || {
+    center: { x: 20.0, z: 26.0 },
+    footprint: { radius: 8.0, terraceRadius: 14.0 },
+    door: { id: 'door_landing_area', position: { x: 20.0, y: 0.0, z: 16.0 }, outward: { x: 0.0, y: 0.0, z: -1.0 } }
+  };
+  const laX = laCfg.center.x;
+  const laZ = laCfg.center.z;
+  const laY = getGroundY(laX, laZ);
+  const laRad = (laCfg.footprint && laCfg.footprint.radius) || 8.0;
+  const laTerRad = (laCfg.footprint && laCfg.footprint.terraceRadius) || 13.0;
+
+  const laSegs = q === 'low' ? 20 : q === 'medium' ? 28 : 36;
+  addCyl(stoneGeos, laTerRad, laTerRad + 0.35, 0.24, laSegs, laX, laY + 0.12, laZ, P.groundDark || 0x68767c, 0, 0, 0, 0.72, 1.0, rng);
+  addCyl(stoneGeos, laRad + 1.2, laRad + 1.45, 0.34, laSegs, laX, laY + 0.17, laZ, P.groundBase || 0xa9b6ba, 0, 0, 0, 0.78, 1.04, rng);
+  addCyl(stoneGeos, laRad, laRad + 0.15, 0.44, laSegs, laX, laY + 0.22, laZ, P.wallLit || 0xc4cbcf, 0, 0, 0, 0.84, 1.08, rng);
+
+  const laRings = q === 'low' ? 2 : 3;
+  const slabH = 0.04;
+  const slabTopY = laY + 0.45;
+  const slabCenterY = slabTopY - slabH * 0.5;
+  for (let r = 0; r < laRings; r++) {
+    const rIn = 2.0 + r * 2.8;
+    const rOut = rIn + 2.55;
+    const wedges = Math.max(8, Math.floor((12 + r * 6) * qMult));
+    for (let w = 0; w < wedges; w++) {
+      const a0 = (w / wedges) * Math.PI * 2 + (r % 2) * 0.15;
+      const a1 = ((w + 0.92) / wedges) * Math.PI * 2 + (r % 2) * 0.15;
+      const aMid = (a0 + a1) * 0.5;
+      const rMid = (rIn + rOut) * 0.5;
+      const wx = laX + Math.cos(aMid) * rMid;
+      const wz = laZ + Math.sin(aMid) * rMid;
+      const arcW = (a1 - a0) * rMid;
+      const depth = rOut - rIn;
+      const col = w % 3 === 0 ? (P.wallShade || 0x8e9da3) : (w % 2 === 0 ? (P.wallLit || 0xc4cbcf) : (P.groundBase || 0xa9b6ba));
+      addBox(stoneGeos, arcW, slabH, depth, wx, slabCenterY, wz, col, -aMid + Math.PI / 2, 0, 0, 0.8, 1.05, rng);
+
+      if (w % 3 === 0) {
+        const mossH = 0.03;
+        const mossY = decalCenterY(slabTopY, mossH, FLOOR_DECAL_LAYERS.moss);
+        addBox(mossGeos, arcW * 0.65, mossH, 0.22, laX + Math.cos(aMid) * rIn, mossY, laZ + Math.sin(aMid) * rIn, P.moss || 0x5f8a4a, -aMid + Math.PI / 2, 0, 0, 0.75, 1.05, rng);
+      }
+    }
+  }
+
+  const glyphH = 0.016;
+  const glyphY = decalCenterY(slabTopY, glyphH, FLOOR_DECAL_LAYERS.inlay);
+  const starPoints = 8;
+  for (let i = 0; i < starPoints; i++) {
+    const a = (i / starPoints) * Math.PI * 2;
+    const nextA = ((i + 3) / starPoints) * Math.PI * 2;
+    const x1 = laX + Math.cos(a) * (laRad - 0.65);
+    const z1 = laZ + Math.sin(a) * (laRad - 0.65);
+    const x2 = laX + Math.cos(nextA) * (laRad - 0.65);
+    const z2 = laZ + Math.sin(nextA) * (laRad - 0.65);
+    const mx = (x1 + x2) * 0.5;
+    const mz = (z1 + z2) * 0.5;
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    const ang = Math.atan2(x2 - x1, z2 - z1);
+    addBox(floorGlyphGeos, 0.11, glyphH, len, mx, glyphY, mz, P.teal || 0x6fe0f0, ang, 0, 0, 0.95, 1.05, rng);
+
+    const rx = laX + Math.cos(a) * (laRad - 0.55);
+    const rz = laZ + Math.sin(a) * (laRad - 0.55);
+    addBox(floorGlyphGeos, 0.42, glyphH, 0.42, rx, glyphY, rz, P.sphereCyan || 0xa8f4ff, a + Math.PI / 4, 0, 0, 0.95, 1.05, rng);
+  }
+  for (let i = 0; i < 16; i++) {
+    const a1 = (i / 16) * Math.PI * 2;
+    const a2 = ((i + 1) / 16) * Math.PI * 2;
+    const rB = laRad - 0.35;
+    const x1 = laX + Math.cos(a1) * rB;
+    const z1 = laZ + Math.sin(a1) * rB;
+    const x2 = laX + Math.cos(a2) * rB;
+    const z2 = laZ + Math.sin(a2) * rB;
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    const ang = Math.atan2(x2 - x1, z2 - z1);
+    addBox(floorGlyphGeos, 0.14, glyphH, len + 0.06, (x1 + x2) * 0.5, glyphY, (z1 + z2) * 0.5, P.teal || 0x6fe0f0, ang, 0, 0, 0.95, 1.05, rng);
+  }
+
+  const pillarAngles = [Math.PI * 0.22, Math.PI * 0.78, Math.PI * 1.22, Math.PI * 1.72];
+  const pillarHeights = [5.4, 3.8, 6.2, 4.5];
+  const pSegs = q === 'low' ? 8 : 12;
+  for (let i = 0; i < 4; i++) {
+    const pa = pillarAngles[i];
+    const pr = laRad + 1.8;
+    const px = laX + Math.cos(pa) * pr;
+    const pz = laZ + Math.sin(pa) * pr;
+    const ph = pillarHeights[i];
+
+    addBox(stoneGeos, 1.75, 0.55, 1.75, px, laY + 0.27, pz, P.wallShade || 0x8e9da3, pa, 0, 0, 0.7, 1.02, rng);
+    addBox(stoneGeos, 1.48, 0.35, 1.48, px, laY + 0.72, pz, P.wallLit || 0xc4cbcf, pa, 0, 0, 0.78, 1.05, rng);
+    const drums = Math.floor(ph / 1.1);
+    for (let d = 0; d < drums; d++) {
+      const dy = laY + 0.9 + d * 1.05 + 0.52;
+      const offX = (rng() - 0.5) * 0.06;
+      const offZ = (rng() - 0.5) * 0.06;
+      addCyl(stoneGeos, 0.58, 0.61, 1.04, pSegs, px + offX, dy, pz + offZ, P.wallLit || 0xc4cbcf, rng() * 3, 0, 0, 0.78, 1.05, rng);
+    }
+    const topY = laY + 0.9 + drums * 1.05;
+    addBox(stoneGeos, 0.85, 0.45, 0.75, px + 0.08, topY + 0.15, pz - 0.05, P.wallShade || 0x8e9da3, pa + 0.4, 0.22, -0.18, 0.8, 1.06, rng);
+    addBox(mossGeos, 0.92, 0.18, 0.92, px, topY + 0.08, pz, P.moss || 0x5f8a4a, pa, 0.1, 0.1, 0.78, 1.06, rng);
+    addBox(mossGeos, 1.6, 0.22, 1.6, px, laY + 0.12, pz, P.mossDark || 0x436836, pa + 0.2, 0, 0, 0.7, 1.0, rng);
+
+    const fx = px + Math.cos(pa + 0.35) * 1.95;
+    const fz = pz + Math.sin(pa + 0.35) * 1.95;
+    addCyl(stoneGeos, 0.56, 0.58, 1.15, pSegs, fx, laY + 0.52, fz, P.wallShade || 0x8e9da3, pa + 0.8, Math.PI * 0.48, 0.12, 0.72, 1.04, rng);
+    addBox(mossGeos, 0.75, 0.22, 0.95, fx, laY + 0.95, fz, P.moss || 0x5f8a4a, pa + 0.8, 0.05, 0, 0.8, 1.05, rng);
+
+    colliders.push({ type: 'circle', x: px, z: pz, r: 1.05 });
+    colliders.push({ type: 'circle', x: fx, z: fz, r: 0.75 });
+  }
+
+  for (let s = 0; s < 3; s++) {
+    const sx = laX + 1.1 + s * 0.75;
+    const sz = laZ - 6.8 - s * 1.35;
+    addBox(stoneGeos, 4.6, 0.24, 1.35, sx, laY + 0.12 + s * 0.1, sz, P.wallLit || 0xc4cbcf, -0.43, 0, 0, 0.78, 1.05, rng);
+  }
+
+  if (laCfg.door) {
+    const dp = new THREE.Vector3(laCfg.door.position.x, laY, laCfg.door.position.z);
+    const dw = new THREE.Vector3(laCfg.door.outward.x, 0, laCfg.door.outward.z).normalize();
+    doors.push({ id: laCfg.door.id, position: dp, outward: dw });
+    registerAnchor('door_landing_area', dp);
+  }
+  const laSign = getSignLayout(layout, 'landing_area');
+  if (laSign) {
+    registerAnchor('sign_landing_area', new THREE.Vector3(laSign.x, laSign.boardY, laSign.z));
+    buildSignPost(stoneGeos, glyphGeos, laSign, P, rng);
+  }
+}
+
+export function buildSummoningRoomZone(params) {
+  const {
+    layout,
+    getGroundY,
+    q,
+    P,
+    rng,
+    rootGroup,
+    stoneGeos,
+    mossGeos,
+    glyphGeos,
+    floorGlyphGeos,
+    aoGeos,
+    shaftGeos,
+    columnMatrices,
+    balusterMatrices,
+    dummy,
+    matSphere,
+    matSphereRing,
+    activeDisposables,
+    animRefs,
+    colliders,
+    doors,
+    anchors,
+    lights,
+    registerAnchor
+  } = params;
+
+  const srCfg = layout.summoning_room || {
+    center: { x: 30.0, z: 4.0 },
+    footprint: { radius: 10.0, height: 11.0, wallRadius: 10.2 },
+    door: { id: 'door_summoning_room', position: { x: 23.5, y: 1.8, z: 11.5 }, outward: { x: -0.4138, y: 0.0, z: 0.9104 } }
+  };
+  const srX = srCfg.center.x;
+  const srZ = srCfg.center.z;
+  const srGroundY = getGroundY(srX, srZ);
+  const podiumH = 1.6;
+  const srFloorY = srGroundY + podiumH;
+  const srRad = (srCfg.footprint && srCfg.footprint.radius) || 10.0;
+  const srWallRad = (srCfg.footprint && srCfg.footprint.wallRadius) || 10.2;
+  const srH = (srCfg.footprint && srCfg.footprint.height) || 11.0;
+
+  const doorPosCfg = (srCfg.door && srCfg.door.position) || { x: 23.5, y: 1.8, z: 11.5 };
+  const doorAng = Math.atan2(doorPosCfg.z - srZ, doorPosCfg.x - srX);
+
+  const srSegs = q === 'low' ? 24 : q === 'medium' ? 36 : 48;
+  addCyl(stoneGeos, srWallRad + 1.15, srWallRad + 1.45, 0.55, srSegs, srX, srGroundY + 0.275, srZ, P.groundDark || 0x68767c, 0, 0, 0, 0.68, 0.98, rng);
+  addCyl(stoneGeos, srWallRad + 0.65, srWallRad + 0.85, 0.65, srSegs, srX, srGroundY + 0.82, srZ, P.wallShade || 0x8e9da3, 0, 0, 0, 0.74, 1.02, rng);
+  addCyl(stoneGeos, srWallRad + 0.25, srWallRad + 0.35, 0.55, srSegs, srX, srGroundY + 1.35, srZ, P.wallLit || 0xc4cbcf, 0, 0, 0, 0.82, 1.06, rng);
+
+  const courtBlocks = q === 'low' ? 16 : q === 'medium' ? 24 : 32;
+  const courtSlabH = 0.14;
+  const courtTopY = srFloorY + 0.02 + courtSlabH * 0.5;
+  const courtGlyphH = 0.06;
+  const courtGlyphY = decalCenterY(courtTopY, courtGlyphH, FLOOR_DECAL_LAYERS.inlay);
+  for (let i = 0; i < courtBlocks; i++) {
+    const a = (i / courtBlocks) * Math.PI * 2;
+    for (let rStep = 0; rStep < 3; rStep++) {
+      const radMid = 3.2 + rStep * 2.15;
+      const bx = srX + Math.cos(a) * radMid;
+      const bz = srZ + Math.sin(a) * radMid;
+      const bw = (Math.PI * 2 * radMid) / courtBlocks - 0.08;
+      const col = (i + rStep) % 2 === 0 ? (P.wallLit || 0xc4cbcf) : (P.groundBase || 0xa9b6ba);
+      addBox(stoneGeos, bw, courtSlabH, 1.98, bx, srFloorY + 0.02, bz, col, -a + Math.PI / 2, 0, 0, 0.82, 1.05, rng);
+    }
+    if (i % 4 === 0) {
+      const rayLen = srRad - 2.6;
+      const rx = srX + Math.cos(a) * (2.2 + rayLen * 0.5);
+      const rz = srZ + Math.sin(a) * (2.2 + rayLen * 0.5);
+      addBox(floorGlyphGeos, 0.14, courtGlyphH, rayLen, rx, courtGlyphY, rz, P.teal || 0x6fe0f0, -a + Math.PI / 2, 0, 0, 0.95, 1.05, rng);
+    }
+    if (i % 2 === 0) {
+      const aNext = ((i + 2) / courtBlocks) * Math.PI * 2;
+      const rG = 5.4;
+      const x1 = srX + Math.cos(a) * rG;
+      const z1 = srZ + Math.sin(a) * rG;
+      const x2 = srX + Math.cos(aNext) * rG;
+      const z2 = srZ + Math.sin(aNext) * rG;
+      const clen = Math.hypot(x2 - x1, z2 - z1);
+      const cang = Math.atan2(x2 - x1, z2 - z1);
+      addBox(floorGlyphGeos, 0.12, courtGlyphH, clen, (x1 + x2) * 0.5, courtGlyphY, (z1 + z2) * 0.5, P.sphereCyan || 0xa8f4ff, cang, 0, 0, 0.95, 1.05, rng);
+    }
+  }
+
+  const backSpan = Math.PI * 1.08;
+  const backStart = doorAng + Math.PI - backSpan * 0.5;
+  const wallPanels = q === 'low' ? 8 : q === 'medium' ? 12 : 16;
+  const dAng = backSpan / wallPanels;
+
+  for (let i = 0; i < wallPanels; i++) {
+    const a0 = backStart + i * dAng;
+    const a1 = a0 + dAng;
+    const aMid = (a0 + a1) * 0.5;
+
+    stoneGeos.push(createArchBlockGeo(srRad - 0.65, srWallRad, 3.2, a0, a1, 2, P.wallShade || 0x8e9da3, srFloorY, srX, srZ, rng));
+    stoneGeos.push(createArchBlockGeo(srRad - 0.35, srWallRad - 0.18, 4.6, a0 + 0.03, a1 - 0.03, 2, P.plaster || 0xdfe3df, srFloorY + 3.2, srX, srZ, rng));
+    stoneGeos.push(createArchBlockGeo(srRad - 0.72, srWallRad + 0.08, 0.38, a0, a1, 2, P.wallLit || 0xc4cbcf, srFloorY + 3.05, srX, srZ, rng));
+    stoneGeos.push(createArchBlockGeo(srRad - 0.65, srWallRad, srH - 7.6, a0, a1, 2, P.wallLit || 0xc4cbcf, srFloorY + 7.6, srX, srZ, rng));
+
+    const px = srX + Math.cos(a0) * (srRad - 0.25);
+    const pz = srZ + Math.sin(a0) * (srRad - 0.25);
+    addBox(stoneGeos, 0.78, srH - 0.8, 0.98, px, srFloorY + (srH - 0.8) * 0.5, pz, P.wallLit || 0xc4cbcf, -a0 + Math.PI / 2, 0, 0, 0.76, 1.06, rng);
+
+    if (i % 2 === 1) {
+      const wx = srX + Math.cos(aMid) * (srRad - 0.32);
+      const wz = srZ + Math.sin(aMid) * (srRad - 0.32);
+      addBox(glyphGeos, 0.16, 2.6, 0.14, wx, srFloorY + 5.4, wz, P.teal || 0x6fe0f0, -aMid + Math.PI / 2, 0, 0, 0.95, 1.05, rng);
+    }
+
+    const cx = srX + Math.cos(aMid) * (srRad - 0.25);
+    const cz = srZ + Math.sin(aMid) * (srRad - 0.25);
+    colliders.push({ type: 'circle', x: cx, z: cz, r: 1.35 });
+  }
+
+  const endA = backStart + backSpan;
+  addBox(stoneGeos, 0.82, srH - 0.8, 1.02, srX + Math.cos(endA) * (srRad - 0.25), srFloorY + (srH - 0.8) * 0.5, srZ + Math.sin(endA) * (srRad - 0.25), P.wallLit || 0xc4cbcf, -endA + Math.PI / 2, 0, 0, 0.76, 1.06, rng);
+
+  const colCount = 10;
+  const colArc = Math.PI * 0.86;
+  const colStart = doorAng - colArc * 0.5;
+  for (let i = 0; i < colCount; i++) {
+    const t = i / (colCount - 1);
+    const a = colStart + t * colArc;
+    if (Math.abs(a - doorAng) < 0.13) continue;
+
+    const cx = srX + Math.cos(a) * (srRad - 0.2);
+    const cz = srZ + Math.sin(a) * (srRad - 0.2);
+    dummy.position.set(cx, srFloorY, cz);
+    dummy.rotation.set(0, -a + Math.PI / 2, 0);
+    dummy.scale.set(1, 1, 1);
+    dummy.updateMatrix();
+    columnMatrices.push(dummy.matrix.clone());
+
+    colliders.push({ type: 'circle', x: cx, z: cz, r: 0.78 });
+  }
+
+  const ringSegs = q === 'low' ? 18 : q === 'medium' ? 28 : 36;
+  for (let i = 0; i < ringSegs; i++) {
+    const a0 = (i / ringSegs) * Math.PI * 2;
+    const a1 = ((i + 1) / ringSegs) * Math.PI * 2;
+    const aMid = (a0 + a1) * 0.5;
+
+    stoneGeos.push(createArchBlockGeo(srRad - 0.75, srWallRad + 0.2, 0.75, a0, a1, 1, P.wallShade || 0x8e9da3, srFloorY + srH - 2.2, srX, srZ, rng));
+    stoneGeos.push(createArchBlockGeo(srRad - 0.95, srWallRad + 0.55, 0.65, a0, a1, 1, P.wallLit || 0xc4cbcf, srFloorY + srH - 1.45, srX, srZ, rng));
+    stoneGeos.push(createArchBlockGeo(srRad - 1.65, srWallRad + 0.15, 0.65, a0, a1, 1, P.wallLit || 0xc4cbcf, srFloorY + srH - 0.8, srX, srZ, rng));
+
+    if (i % 2 === 0) {
+      const ribR = srRad - 1.75;
+      const rx = srX + Math.cos(aMid) * ribR;
+      const rz = srZ + Math.sin(aMid) * ribR;
+      addBox(stoneGeos, 0.52, 0.75, 2.7, rx, srFloorY + srH - 0.22, rz, P.wallShade || 0x8e9da3, -aMid + Math.PI / 2, -0.28, 0, 0.82, 1.08, rng);
+    }
+
+    if (i % 3 === 0) {
+      const mx = srX + Math.cos(aMid) * (srWallRad + 0.35);
+      const mz = srZ + Math.sin(aMid) * (srWallRad + 0.35);
+      addBox(mossGeos, 1.35, 0.24, 0.65, mx, srFloorY + srH - 0.76, mz, P.moss || 0x5f8a4a, -aMid + Math.PI / 2, 0, 0, 0.78, 1.06, rng);
+      addBox(mossGeos, 0.55, 1.65, 0.22, mx, srFloorY + srH - 1.65, mz, P.ivy || 0x436836, -aMid + Math.PI / 2, 0.06, 0, 0.72, 1.0, rng);
+    }
+  }
+
+  for (let i = 0; i < 16; i++) {
+    const a0 = (i / 16) * Math.PI * 2;
+    const a1 = ((i + 1) / 16) * Math.PI * 2;
+    stoneGeos.push(createArchBlockGeo(srRad - 3.25, srRad - 2.65, 0.55, a0, a1, 1, P.wallLit || 0xc4cbcf, srFloorY + srH - 0.1, srX, srZ, rng));
+  }
+
+  const gateDist = srRad + 0.15;
+  const gateX = srX + Math.cos(doorAng) * gateDist;
+  const gateZ = srZ + Math.sin(doorAng) * gateDist;
+  const gateRot = -doorAng + Math.PI / 2;
+  const tangX = -Math.sin(doorAng);
+  const tangZ = Math.cos(doorAng);
+
+  for (const side of [-1, 1]) {
+    const px = gateX + tangX * side * 1.65;
+    const pz = gateZ + tangZ * side * 1.65;
+    addBox(stoneGeos, 0.92, 4.4, 1.15, px, srFloorY + 2.2, pz, P.wallLit || 0xc4cbcf, gateRot, 0, 0, 0.76, 1.06, rng);
+    addBox(stoneGeos, 1.12, 0.38, 1.32, px, srFloorY + 4.4, pz, P.wallShade || 0x8e9da3, gateRot, 0, 0, 0.82, 1.06, rng);
+  }
+  addBox(stoneGeos, 4.5, 0.75, 1.25, gateX, srFloorY + 4.85, gateZ, P.wallLit || 0xc4cbcf, gateRot, 0, 0, 0.82, 1.06, rng);
+  addBox(stoneGeos, 2.7, 0.85, 1.12, gateX + tangX * -0.95, srFloorY + 5.55, gateZ + tangZ * -0.95, P.wallLit || 0xc4cbcf, gateRot, 0, 0.34, 0.84, 1.08, rng);
+  addBox(stoneGeos, 2.7, 0.85, 1.12, gateX + tangX * 0.95, srFloorY + 5.55, gateZ + tangZ * 0.95, P.wallLit || 0xc4cbcf, gateRot, 0, -0.34, 0.84, 1.08, rng);
+  addBox(glyphGeos, 0.32, 0.65, 1.32, gateX, srFloorY + 4.95, gateZ, P.teal || 0x6fe0f0, gateRot, 0, 0, 0.95, 1.05, rng);
+
+  const stairDirX = Math.cos(doorAng);
+  const stairDirZ = Math.sin(doorAng);
+  const stairW = 4.4;
+  const stepD = 0.48;
+  const stepH = podiumH / 8;
+
+  for (let s = 0; s < 8; s++) {
+    const dist = srWallRad + 0.35 + (s + 0.5) * stepD;
+    const sx = srX + stairDirX * dist;
+    const sz = srZ + stairDirZ * dist;
+    const hRemain = podiumH - s * stepH;
+    addBox(stoneGeos, stairW, hRemain, stepD + 0.04, sx, srGroundY + hRemain * 0.5, sz, s % 2 === 0 ? (P.wallLit || 0xc4cbcf) : (P.groundBase || 0xa9b6ba), gateRot, 0, 0, 0.75, 1.05, rng);
+
+    for (const side of [-1, 1]) {
+      const bx = sx + tangX * side * (stairW * 0.5 + 0.28);
+      const bz = sz + tangZ * side * (stairW * 0.5 + 0.28);
+      dummy.position.set(bx, srGroundY + hRemain, bz);
+      dummy.rotation.set(0, gateRot, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      balusterMatrices.push(dummy.matrix.clone());
+    }
+  }
+
+  const stairTotalLen = 8 * stepD;
+  const stairMidDist = srWallRad + 0.35 + stairTotalLen * 0.5;
+  const stairSlope = Math.atan2(podiumH, stairTotalLen);
+  for (const side of [-1, 1]) {
+    const sOff = side * (stairW * 0.5 + 0.28);
+    const mx = srX + stairDirX * stairMidDist + tangX * sOff;
+    const mz = srZ + stairDirZ * stairMidDist + tangZ * sOff;
+
+    addBox(stoneGeos, 0.56, podiumH * 0.65, stairTotalLen + 0.4, mx, srGroundY + podiumH * 0.32, mz, P.wallShade || 0x8e9da3, gateRot, 0, 0, 0.72, 1.02, rng);
+    addBox(stoneGeos, 0.52, 0.22, stairTotalLen + 0.55, mx, srGroundY + podiumH * 0.5 + 0.88, mz, P.wallLit || 0xc4cbcf, gateRot, stairSlope, 0, 0.84, 1.08, rng);
+
+    const botDist = srWallRad + 0.35 + stairTotalLen + 0.35;
+    const nx = srX + stairDirX * botDist + tangX * sOff;
+    const nz = srZ + stairDirZ * botDist + tangZ * sOff;
+    addBox(stoneGeos, 0.78, 1.35, 0.78, nx, srGroundY + 0.675, nz, P.wallLit || 0xc4cbcf, gateRot, 0, 0, 0.76, 1.06, rng);
+    addBox(mossGeos, 0.82, 0.16, 0.82, nx, srGroundY + 1.36, nz, P.moss || 0x5f8a4a, gateRot, 0, 0, 0.8, 1.05, rng);
+  }
+
+  const pedY = srFloorY;
+  addCyl(stoneGeos, 2.45, 2.75, 0.45, 8, srX, pedY + 0.225, srZ, P.groundDark || 0x68767c, Math.PI / 8, 0, 0, 0.7, 1.0, rng);
+  addCyl(stoneGeos, 1.85, 2.15, 0.65, 8, srX, pedY + 0.775, srZ, P.wallShade || 0x8e9da3, 0, 0, 0, 0.75, 1.04, rng);
+  addCyl(stoneGeos, 1.25, 1.55, 1.15, 8, srX, pedY + 1.675, srZ, P.wallLit || 0xc4cbcf, Math.PI / 8, 0, 0, 0.8, 1.06, rng);
+  addCyl(stoneGeos, 1.75, 1.15, 0.55, 8, srX, pedY + 2.525, srZ, P.wallLit || 0xc4cbcf, 0, 0, 0, 0.84, 1.08, rng);
+
+  for (let c = 0; c < 4; c++) {
+    const ca = (c / 4) * Math.PI * 2 + Math.PI / 4;
+    const cx = srX + Math.cos(ca) * 1.45;
+    const cz = srZ + Math.sin(ca) * 1.45;
+    addBox(stoneGeos, 0.42, 1.35, 0.68, cx, pedY + 2.55, cz, P.wallLit || 0xc4cbcf, -ca + Math.PI / 2, -0.38, 0, 0.82, 1.08, rng);
+    addBox(glyphGeos, 0.16, 0.95, 0.72, cx, pedY + 1.65, cz, P.teal || 0x6fe0f0, -ca + Math.PI / 2, 0, 0, 0.95, 1.05, rng);
+  }
+  colliders.push({ type: 'circle', x: srX, z: srZ, r: 2.75 });
+
+  const sphereCenter = new THREE.Vector3(srX, pedY + 5.3, srZ);
+  const sphSegs = q === 'low' ? 16 : q === 'medium' ? 24 : 32;
+  const sphereGeo = new THREE.SphereGeometry(2.2, sphSegs, Math.floor(sphSegs * 0.75));
+  activeDisposables.push(sphereGeo);
+  const sphereMesh = new THREE.Mesh(sphereGeo, matSphere);
+  sphereMesh.position.copy(sphereCenter);
+  rootGroup.add(sphereMesh);
+  animRefs.sphereMesh = sphereMesh;
+
+  const ringRadii = [2.68, 3.05, 3.42];
+  const ringTilts = [
+    new THREE.Euler(0.45, 0.0, 0.32),
+    new THREE.Euler(-0.52, 0.4, -0.28),
+    new THREE.Euler(0.25, -0.6, 0.68)
+  ];
+  const ringTubularSegs = q === 'low' ? 32 : q === 'medium' ? 48 : 64;
+  for (let r = 0; r < 3; r++) {
+    const rGeo = new THREE.TorusGeometry(ringRadii[r], 0.055, 8, ringTubularSegs);
+    activeDisposables.push(rGeo);
+    const rMesh = new THREE.Mesh(rGeo, matSphereRing);
+    rMesh.position.copy(sphereCenter);
+    rMesh.rotation.copy(ringTilts[r]);
+    rootGroup.add(rMesh);
+    animRefs.sphereRings.push(rMesh);
+  }
+
+  for (let s = 0; s < 3; s++) {
+    const sa = (s / 3) * Math.PI + 0.35;
+    const sGeo = new THREE.PlaneGeometry(3.4, srH + 1.5);
+    const pShaft = prepareGeo(sGeo, P.sphereCyan || 0xa8f4ff, 0.15, 0.95, 0.0, rng);
+    sGeo.dispose();
+    pShaft.rotateY(sa);
+    pShaft.rotateZ(0.12);
+    pShaft.translate(srX, srFloorY + srH * 0.55, srZ);
+    shaftGeos.push(pShaft);
+  }
+
+  const srAoGeo = new THREE.CircleGeometry(srWallRad + 1.6, 24);
+  srAoGeo.rotateX(-Math.PI / 2);
+  srAoGeo.translate(srX, srGroundY + FLOOR_DECAL_LAYERS.patch.top, srZ);
+  aoGeos.push(srAoGeo);
+
+  registerAnchor('sphere_center', sphereCenter);
+  anchors.summoningSphere = sphereCenter.clone();
+  const pedestalPos = new THREE.Vector3(srX, pedY + 2.8, srZ);
+  registerAnchor('pedestal', pedestalPos);
+
+  if (srCfg.door) {
+    const dp = new THREE.Vector3(srCfg.door.position.x, srFloorY, srCfg.door.position.z);
+    const dw = new THREE.Vector3(srCfg.door.outward.x, 0, srCfg.door.outward.z).normalize();
+    doors.push({ id: srCfg.door.id, position: dp, outward: dw });
+    registerAnchor('door_summoning_room', dp);
+    anchors.door = dp.clone();
+  }
+  const srSign = getSignLayout(layout, 'summoning_room');
+  if (srSign) {
+    registerAnchor('sign_summoning_room', new THREE.Vector3(srSign.x, srSign.boardY, srSign.z));
+    buildSignPost(stoneGeos, glyphGeos, srSign, P, rng);
+  }
+
+  lights.push({
+    position: sphereCenter.clone(),
+    color: P.sphereCyan || 0xa8f4ff,
+    intensity: 5.5,
+    distance: 18.0,
+    baseIntensity: 5.5
+  });
+}
+
+export function buildTownSquareZone(params) {
+  const {
+    layout,
+    getGroundY,
+    q,
+    P,
+    rng,
+    stoneGeos,
+    mossGeos,
+    glyphGeos,
+    colliders,
+    registerAnchor
+  } = params;
+
+  const tsCfg = layout.town_square || {
+    center: { x: 14.0, z: -8.0 },
+    footprint: { radius: 11.0 }
+  };
+  const tsX = tsCfg.center.x;
+  const tsZ = tsCfg.center.z;
+  const tsY = getGroundY(tsX, tsZ);
+  const tsRad = (tsCfg.footprint && tsCfg.footprint.radius) || 11.0;
+
+  const tsSegs = q === 'low' ? 24 : 36;
+  addCyl(stoneGeos, tsRad, tsRad + 0.25, 0.18, tsSegs, tsX, tsY + 0.09, tsZ, P.groundBase || 0xa9b6ba, 0, 0, 0, 0.78, 1.04, rng);
+
+  const tsTopY = tsY + 0.18;
+  const ringH = 0.12;
+  const spokeH = 0.13;
+  const lightSpokeH = 0.14;
+  const patchH = 0.12;
+  const ringY = decalCenterY(tsTopY, ringH, FLOOR_DECAL_LAYERS.line);
+  const spokeY = decalCenterY(tsTopY, spokeH, FLOOR_DECAL_LAYERS.patch);
+  const lightSpokeY = decalCenterY(tsTopY, lightSpokeH, FLOOR_DECAL_LAYERS.lineTop);
+  const patchY = decalCenterY(tsTopY, patchH, FLOOR_DECAL_LAYERS.patch);
+  const wheelRingRadii = [
+    { rIn: 4.4, rOut: 5.2, segs: q === 'low' ? 16 : 24 },
+    { rIn: 8.8, rOut: 9.7, segs: q === 'low' ? 20 : 32 }
+  ];
+  for (const wr of wheelRingRadii) {
+    const stepA = (Math.PI * 2) / wr.segs;
+    for (let i = 0; i < wr.segs; i++) {
+      const a0 = i * stepA;
+      const a1 = (i + 0.96) * stepA;
+      const col = i % 2 === 0 ? (P.groundDark || 0x68767c) : (P.plaster || 0xdfe3df);
+      stoneGeos.push(createArchBlockGeo(wr.rIn, wr.rOut, ringH, a0, a1, 1, col, ringY - ringH * 0.5, tsX, tsZ, rng));
+    }
+  }
+
+  for (let sp = 0; sp < 8; sp++) {
+    const sa = (sp / 8) * Math.PI * 2;
+    const sLen = 7.7;
+    const sx = tsX + Math.cos(sa) * (1.8 + sLen * 0.5);
+    const sz = tsZ + Math.sin(sa) * (1.8 + sLen * 0.5);
+    addBox(stoneGeos, 0.68, spokeH, sLen, sx, spokeY, sz, P.groundDark || 0x68767c, -sa + Math.PI / 2, 0, 0, 0.78, 1.04, rng);
+    addBox(stoneGeos, 0.26, lightSpokeH, sLen - 0.2, sx, lightSpokeY, sz, P.wallLit || 0xc4cbcf, -sa + Math.PI / 2, 0, 0, 0.85, 1.08, rng);
+
+    const midA = sa + Math.PI / 8;
+    for (const dRad of [3.1, 6.4, 7.6]) {
+      const dx = tsX + Math.cos(midA) * dRad;
+      const dz = tsZ + Math.sin(midA) * dRad;
+      addBox(stoneGeos, 1.25, patchH, 1.25, dx, patchY, dz, P.wallShade || 0x8e9da3, -midA + Math.PI / 4, 0, 0, 0.8, 1.05, rng);
+    }
+  }
+
+  addCyl(stoneGeos, 2.15, 2.35, 0.28, 16, tsX, tsY + 0.24, tsZ, P.groundDark || 0x68767c, 0, 0, 0, 0.75, 1.02, rng);
+  addCyl(stoneGeos, 1.45, 1.65, 0.52, 8, tsX, tsY + 0.64, tsZ, P.wallLit || 0xc4cbcf, Math.PI / 8, 0, 0, 0.8, 1.06, rng);
+  addCyl(stoneGeos, 0.85, 1.05, 0.55, 8, tsX, tsY + 1.15, tsZ, P.wallShade || 0x8e9da3, 0, 0, 0, 0.82, 1.06, rng);
+  addBox(glyphGeos, 0.36, 0.24, 0.36, tsX, tsY + 1.48, tsZ, P.teal || 0x6fe0f0, Math.PI / 4, 0, 0, 0.95, 1.05, rng);
+  colliders.push({ type: 'circle', x: tsX, z: tsZ, r: 1.85 });
+
+  const benchAngles = [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75];
+  for (const ba of benchAngles) {
+    const bSpan = 0.42;
+    const bStart = ba - bSpan * 0.5;
+    const bEnd = ba + bSpan * 0.5;
+    const bRad = tsRad - 0.95;
+
+    stoneGeos.push(createArchBlockGeo(bRad - 0.42, bRad + 0.42, 0.16, bStart, bEnd, 5, P.wallLit || 0xc4cbcf, tsY + 0.52, tsX, tsZ, rng));
+    stoneGeos.push(createArchBlockGeo(bRad + 0.22, bRad + 0.46, 0.44, bStart, bEnd, 5, P.wallShade || 0x8e9da3, tsY + 0.68, tsX, tsZ, rng));
+
+    for (const lOff of [-0.18, 0, 0.18]) {
+      const la = ba + lOff;
+      const lx = tsX + Math.cos(la) * bRad;
+      const lz = tsZ + Math.sin(la) * bRad;
+      addBox(stoneGeos, 0.34, 0.42, 0.76, lx, tsY + 0.33, lz, P.groundDark || 0x68767c, -la + Math.PI / 2, 0, 0, 0.72, 1.0, rng);
+    }
+    const mx = tsX + Math.cos(ba) * (bRad + 0.38);
+    const mz = tsZ + Math.sin(ba) * (bRad + 0.38);
+    addBox(mossGeos, 1.15, 0.16, 0.42, mx, tsY + 0.22, mz, P.moss || 0x5f8a4a, -ba + Math.PI / 2, 0, 0, 0.78, 1.04, rng);
+
+    colliders.push({
+      type: 'box',
+      x: tsX + Math.cos(ba) * bRad,
+      z: tsZ + Math.sin(ba) * bRad,
+      w: 3.4,
+      d: 1.0,
+      rotY: -ba + Math.PI / 2
+    });
+  }
+
+  const tsSign = getSignLayout(layout, 'town_square');
+  if (tsSign) {
+    registerAnchor('sign_town_square', new THREE.Vector3(tsSign.x, tsSign.boardY, tsSign.z));
+    buildSignPost(stoneGeos, glyphGeos, tsSign, P, rng);
+  }
+}

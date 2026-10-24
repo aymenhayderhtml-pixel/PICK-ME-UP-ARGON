@@ -94,13 +94,18 @@ export class EnemyManager {
 
     if (!dungeon || !dungeon.clearings) return;
 
-    // Floor 5: Skip regular goblin clearing waves (boss task)
+    // Floor 5: Survival mode trickle spawns
     if (floorNumber === 5) {
+      this.survivalActive = true;
+      this.survivalTimer = 120;
+      this.survivalSpawnCooldown = 0;
+      this.survivalAmbushTriggered = false;
       return;
     }
 
     // Floor 1 Greek Countryside: exactly 10 Goblin Grunts Lv.3 across 3 groups + ambushes
     if (floorNumber === 1) {
+      const isRepeat = (gameState.clearedFloors || 0) >= 1;
       const farmGrunts = [
         // Group 1 (3 grunts, z around -28 to -35, beyond choke point 1)
         { x: 0, z: -32, ambush: false },
@@ -126,6 +131,23 @@ export class EnemyManager {
         this.enemies.push(enemy);
         scene.add(enemy.mesh);
       }
+
+      // Floor 1 repeat runs: spawn 3 Goblin Hound beasts (WolfAI pack behavior).
+      if (isRepeat) {
+        resetWolfPackState();
+        const houndSpawns = [
+          { x: -6, z: -40 },
+          { x: 0, z: -44 },
+          { x: 6, z: -40 },
+        ];
+        for (const h of houndSpawns) {
+          const hound = new Enemy(h.x, h.z, 'GOBLIN_HOUND', false, 1, 3);
+          hound.state = 'ambushWait';
+          hound.pathDirection = new THREE.Vector3(0, 0, -1);
+          this.enemies.push(hound);
+          scene.add(hound.mesh);
+        }
+      }
       return;
     }
 
@@ -137,6 +159,7 @@ export class EnemyManager {
     // Mission goal: kill all of them (no barrier sealing, same as floor 1).
     if (floorNumber === 2) {
       resetWolfPackState();
+      const isRepeat = (gameState.clearedFloors || 0) >= 2;
       const prairieEnemies = [
         // Clearing 1 (z ~ -35): 2 wolves in ambush spots + 3 goblin grunts
         { x: -12, z: -28, type: 'PRAIRIE_WOLF', level: 4, ambush: true },
@@ -165,8 +188,17 @@ export class EnemyManager {
         { x: 0, z: -118, type: 'SHAMAN', level: 3, ambush: false },
       ];
 
+      let wolfIdx = 0;
       for (const e of prairieEnemies) {
-        const enemy = new Enemy(e.x, e.z, e.type, false, 2, e.level);
+        let type = e.type;
+        if (isRepeat && type === 'PRAIRIE_WOLF') {
+          // Include BLACK_WOLF variants in the wolf pack spawns on repeat runs.
+          if (wolfIdx % 2 === 0) type = 'BLACK_WOLF';
+          wolfIdx++;
+        } else if (type === 'PRAIRIE_WOLF') {
+          wolfIdx++;
+        }
+        const enemy = new Enemy(e.x, e.z, type, false, 2, e.level);
         if (e.ambush) {
           enemy.state = 'ambushWait';
           enemy.pathDirection = new THREE.Vector3(0, 0, -1);
@@ -197,6 +229,71 @@ export class EnemyManager {
         this.enemies.push(enemy);
         scene.add(enemy.mesh);
       }
+      return;
+    }
+
+    // Floor 4 Conquest: Harpies + Armored Goblins
+    if (floorNumber === 4) {
+      const spawns = [
+        { x: -8, z: -30, type: 'HARPY', level: 4 },
+        { x: 8, z: -30, type: 'HARPY', level: 4 },
+        { x: 0, z: -45, type: 'HARPY', level: 5 },
+        { x: -4, z: -34, type: 'ARMORED_GOBLIN', level: 4 },
+        { x: 4, z: -34, type: 'ARMORED_GOBLIN', level: 4 },
+        { x: -2, z: -40, type: 'ARMORED_GOBLIN', level: 4 },
+        { x: 2, z: -40, type: 'ARMORED_GOBLIN', level: 4 },
+      ];
+      for (const s of spawns) {
+        const enemy = new Enemy(s.x, s.z, s.type, false, 4, s.level);
+        this.enemies.push(enemy);
+        scene.add(enemy.mesh);
+      }
+      return;
+    }
+
+    // Floor 6 Explore Mode: Goblin Scouts x3
+    if (floorNumber === 6) {
+      const scoutSpawns = [
+        { x: -6, z: -30 },
+        { x: 0, z: -34 },
+        { x: 6, z: -30 },
+      ];
+      for (const s of scoutSpawns) {
+        const enemy = new Enemy(s.x, s.z, 'GOBLIN_SCOUT', false, 6, 8);
+        this.enemies.push(enemy);
+        scene.add(enemy.mesh);
+      }
+      this.floor6AmbushTriggered = false;
+      return;
+    }
+
+    // Daily Dungeons
+    const dungeonType = String((gameState && gameState.activeDungeonType) || '').toLowerCase();
+    if (dungeonType.includes('kendert') || dungeonType.includes('forest') || dungeonType === 'daily_forest') {
+      const beasts = [
+        { x: -4, z: -30, type: 'PRAIRIE_WOLF', level: 5 },
+        { x: 4, z: -30, type: 'PRAIRIE_WOLF', level: 5 },
+        { x: -2, z: -36, type: 'GOBLIN_HOUND', level: 5 },
+        { x: 2, z: -36, type: 'GOBLIN_HOUND', level: 5 },
+      ];
+      for (const b of beasts) {
+        const e = new Enemy(b.x, b.z, b.type, false, 1, b.level);
+        this.enemies.push(e);
+        scene.add(e.mesh);
+      }
+      const queen = new Enemy(0, -45, 'QUEEN_OF_THE_FOREST', true, 1, 8);
+      this.enemies.push(queen);
+      scene.add(queen.mesh);
+      this.dailyDungeonType = 'forest';
+      return;
+    }
+    if (dungeonType.includes('sinmiel') || dungeonType.includes('plateau') || dungeonType === 'daily_plateau') {
+      for (let i = 0; i < 3; i++) {
+        const w = new Enemy((i - 1) * 6, -32 - i * 4, 'LIGHTNING_WOLF', false, 1, 6);
+        this.enemies.push(w);
+        scene.add(w.mesh);
+      }
+      this.dailyDungeonType = 'plateau';
       return;
     }
 
@@ -310,6 +407,37 @@ export class EnemyManager {
 
   update(delta, player, dungeon, scene, camera, projectilesManager, partyAllies = []) {
     if (!player) return;
+
+    // Floor 5 survival trickle spawns
+    if (this.survivalActive) {
+      this.survivalTimer -= delta;
+      if (this.survivalTimer <= 0) {
+        this.survivalFinished = true;
+        this.survivalActive = false;
+      }
+      this.survivalSpawnCooldown -= delta;
+      const activeCount = this.enemies.filter((e) => !e.dead).length;
+      if (this.survivalSpawnCooldown <= 0 && activeCount < 14) {
+        this.survivalSpawnCooldown = 1.5;
+        const lvl = 3 + Math.floor(Math.random() * 3);
+        const e = new Enemy((Math.random() - 0.5) * 12, -30 - Math.random() * 10, 'GRUNT', false, 5, lvl);
+        this.enemies.push(e);
+        if (scene) scene.add(e.mesh);
+      }
+    }
+
+    // Floor 6: scout horn triggers ambush
+    if (this.floorNumber === 6 && !this.floor6AmbushTriggered) {
+      const finishedScout = (this.enemies || []).find((e) => e.typeKey === 'GOBLIN_SCOUT' && e.hornFinished);
+      if (finishedScout) {
+        this.floor6AmbushTriggered = true;
+        for (let i = 0; i < 12; i++) {
+          const g = new Enemy((Math.random() - 0.5) * 16, -28 - Math.random() * 12, 'GRUNT', false, 6, 4);
+          this.enemies.push(g);
+          if (scene) scene.add(g.mesh);
+        }
+      }
+    }
     const pPos = player.mesh.position;
 
     // Check party talents & stealth skill
@@ -432,6 +560,32 @@ export class EnemyManager {
       const wasDeadBeforeUpdate = enemy.dead;
 
       enemy.update(delta, player, dungeon, camera, projectilesManager, this.enemies, context);
+
+      // Harpy dive-bomb: chance to inflict Fear on nearby allies
+      if (enemy.typeKey === 'HARPY' && !enemy.dead) {
+        enemy.fearCooldown = Math.max(0, (enemy.fearCooldown || 0) - delta);
+        if (enemy.fearCooldown <= 0 && (enemy.state === 'attack' || enemy.state === 'pounce')) {
+          enemy.fearCooldown = 4.0;
+          for (const ally of partyAllies || []) {
+            if (!ally || ally.dead || ally.isAfraid) continue;
+            const hasComposureSkill = (ally.hero && Array.isArray(ally.hero.skills))
+              ? ally.hero.skills.some((s) => String(typeof s === 'string' ? s : (s.id || s.name || '')).toLowerCase().replace(/\s+/g, '_') === 'composure')
+              : false;
+            if (hasComposureSkill) continue;
+            const dist = enemy.mesh.position.distanceTo(ally.mesh.position);
+            if (dist <= (enemy.attackRange || 2.0) + 1.5 && Math.random() < 0.5) {
+              const starStr = '★'.repeat(Math.max(1, Math.min(7, (ally.hero && ally.hero.star) || 1)));
+              ally.isAfraid = true;
+              ally.fearTimer = 20.0;
+              ally.fearThreat = enemy;
+              if (((ally.hero && ally.hero.star) || 1) === 1 && (ally.effectiveComposure || 0) < 35) {
+                ally.isFleeing = true;
+              }
+              showSystemMessage(`[${ally.hero.name} (${starStr}) FEELS FEAR! ALL STATS ARE DECREASED BY 30%.]`);
+            }
+          }
+        }
+      }
 
       // Check if enemy just died this frame
       if (!wasDeadBeforeUpdate && enemy.dead) {
@@ -581,6 +735,14 @@ export class EnemyManager {
     this.enemies.push(leader);
     if (scene) scene.add(leader.mesh);
     showSystemMessage('[DEBUG: Goblin Leader spawned!]');
+  }
+
+  dissolveAllEnemies(scene) {
+    for (const enemy of this.enemies) {
+      if (scene) scene.remove(enemy.mesh);
+      if (enemy.dispose) enemy.dispose();
+    }
+    this.enemies = [];
   }
 
   clear(scene) {

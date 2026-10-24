@@ -13,6 +13,30 @@ function clamp100(value) {
 }
 
 /**
+ * True when the hero carries one of the given personality traits.
+ * `traits` may be a single trait id or a list of them.
+ */
+export function hasTrait(hero, traits) {
+  const list = Array.isArray(traits) ? traits : [traits];
+  if (list.length === 0) return false;
+  const own = (hero && hero.traits) || [];
+  return list.some((t) => own.includes(t));
+}
+
+/**
+ * The product of the per-trait multipliers of a config table, e.g. the
+ * hunger gain. Traits that are not listed in the table contribute 1.
+ */
+function getTraitTableMult(hero, table) {
+  let mult = 1;
+  for (const t of (hero && hero.traits) || []) {
+    const m = table[t];
+    if (m) mult *= m;
+  }
+  return mult;
+}
+
+/**
  * Collects the personality trait modifiers of a hero.
  * Multipliers multiply, bonuses add.
  */
@@ -45,13 +69,33 @@ export function getTraitModifiers(hero) {
  * A hero panics when their Mentality collapses while Fear is high.
  * While panicking the hero refuses risky training and refuses to spar.
  */
+function hasSkill(hero, skillId) {
+  const key = String(skillId || '').toLowerCase().replace(/\s+/g, '_');
+  return (hero && Array.isArray(hero.skills))
+    ? hero.skills.some((s) => String(typeof s === 'string' ? s : (s.id || s.name || '')).toLowerCase().replace(/\s+/g, '_') === key)
+    : false;
+}
+
+function composureSkillLevel(hero) {
+  if (!hero || !Array.isArray(hero.skills)) return 0;
+  const s = hero.skills.find((sk) => String(typeof sk === 'string' ? sk : (sk.id || sk.name || '')).toLowerCase().replace(/\s+/g, '_') === 'composure');
+  return s ? (typeof s === 'object' ? (s.level || 1) : 1) : 0;
+}
+
 export function isHeroPanicking(hero) {
   if (!hero) return false;
   const mentality = hero.mentality ?? 0;
   const fear = hero.fear ?? 0;
+  let panicFearThreshold = EMOTION_CONFIG.PANIC_FEAR_THRESHOLD;
+  let panicMentalityThreshold = EMOTION_CONFIG.PANIC_MENTALITY_THRESHOLD;
+  const lvl = composureSkillLevel(hero);
+  if (lvl > 0) {
+    panicFearThreshold += lvl * 4;
+    panicMentalityThreshold = Math.max(0, panicMentalityThreshold - lvl * 2);
+  }
   return (
-    mentality < EMOTION_CONFIG.PANIC_MENTALITY_THRESHOLD &&
-    fear > EMOTION_CONFIG.PANIC_FEAR_THRESHOLD
+    mentality < panicMentalityThreshold &&
+    fear > panicFearThreshold
   );
 }
 
@@ -61,9 +105,13 @@ export function isHeroPanicking(hero) {
  */
 export function applyFearGain(hero, rawFearAmount) {
   if (!hero || !rawFearAmount) return 0;
+  const lvl = composureSkillLevel(hero);
+  if (lvl >= 5) return 0; // immunity at higher composure levels
+  let amount = rawFearAmount;
+  if (lvl > 0) amount *= 0.5; // significantly reduce fear gain
   const mentality = hero.mentality ?? 50;
   const mods = getTraitModifiers(hero);
-  const effective = rawFearAmount * (1 - mentality / 100) * mods.fearGainMult;
+  const effective = amount * (1 - mentality / 100) * mods.fearGainMult;
   const prev = hero.fear ?? 0;
   hero.fear = clamp100(prev + effective);
   return hero.fear - prev;
@@ -78,7 +126,9 @@ export function applyDailyEmotionTick(hero, foodQuality = 'basic') {
   const mods = getTraitModifiers(hero);
   const result = { hungerGain: 0, motivationDelta: 0, angerGain: 0, injuryTicked: false };
 
-  result.hungerGain = addHeroHunger(hero, EMOTION_CONFIG.DAILY_HUNGER_GAIN);
+  // A `food_complainer` gets hungry faster (the manhua's potato grumble).
+  const hungerGainMult = getTraitTableMult(hero, EMOTION_CONFIG.TRAIT_HUNGER_GAIN_MULT);
+  result.hungerGain = addHeroHunger(hero, EMOTION_CONFIG.DAILY_HUNGER_GAIN * hungerGainMult);
 
   if ((hero.hunger ?? 0) >= EMOTION_CONFIG.HIGH_HUNGER_THRESHOLD) {
     const before = hero.motivationScore ?? 0;
@@ -106,8 +156,12 @@ export function applyDailyEmotionTick(hero, foodQuality = 'basic') {
  */
 export function applyEatOutcome(hero, foodQuality = 'basic') {
   if (!hero) return null;
-  const reduction =
+  const baseReduction =
     EMOTION_CONFIG.EAT_HUNGER_REDUCTION[foodQuality] ?? EMOTION_CONFIG.EAT_HUNGER_REDUCTION.basic;
+
+  // A `food_complainer` barely touches the meal, so it satisfies them less.
+  const eatMult = getTraitTableMult(hero, EMOTION_CONFIG.TRAIT_EAT_REDUCTION_MULT);
+  const reduction = baseReduction * eatMult;
 
   const hungerBefore = hero.hunger ?? 0;
   addHeroHunger(hero, -reduction);
@@ -121,7 +175,14 @@ export function applyEatOutcome(hero, foodQuality = 'basic') {
   hero.motivationScore = clamp100(motivationBefore + EMOTION_CONFIG.EAT_MOTIVATION_GAIN);
   const motivationGained = (hero.motivationScore ?? 0) - motivationBefore;
 
-  return { hungerReduced, fearReduced, motivationGained, foodQuality };
+  // The complaint itself: a `food_complainer` grumbles about the potatoes and
+  // gets a little angrier about it.
+  const complained = hasTrait(hero, EMOTION_CONFIG.FOOD_COMPLAINT_TRAITS);
+  if (complained) {
+    addHeroAnger(hero, EMOTION_CONFIG.FOOD_COMPLAINT_ANGER_GAIN);
+  }
+
+  return { hungerReduced, fearReduced, motivationGained, foodQuality, complained };
 }
 
 /**
@@ -182,7 +243,12 @@ export function evaluateSquadLeaderOrder(gameState, leader, idleHeroes, rng = Ma
     targetAnger * EMOTION_CONFIG.LEADER_ORDER_ANGER_PENALTY;
 
   // A hot-headed hero with high anger is likely to refuse.
-  if (mods.refuseOrderBonus > 0 && targetAnger >= 50) {
+  // A coward or an exit seeker refuses the order even when calm.
+  const refusesWhenCalm = hasTrait(target, EMOTION_CONFIG.LEADER_ORDER_REFUSING_TRAITS);
+  if (
+    mods.refuseOrderBonus > 0 &&
+    (targetAnger >= EMOTION_CONFIG.LEADER_ORDER_REFUSE_ANGER_THRESHOLD || refusesWhenCalm)
+  ) {
     success -= mods.refuseOrderBonus;
   }
   success = Math.max(0, Math.min(1, success));

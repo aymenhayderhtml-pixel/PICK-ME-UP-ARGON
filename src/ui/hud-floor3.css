@@ -1,0 +1,263 @@
+/* src/ui/hud-floor3.css */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800;900&family=Rajdhani:wght@600;700;800&display=swap');
+
+.pmu-manhwa-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+  user-select: none;
+}
+
+/* ==========================================================================
+   ORNATE PURPLE-CRYSTAL MANHWA SYSTEM FRAME
+   ========================================================================== */
+.pmu-crystal-box {
+  position: relative;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(154, 96, 255, 0.28) 0%, transparent 68%),
+    linear-gradient(180deg, rgba(36, 17, 62, 0.94) 0%, rgba(18, 8, 34, 0.96) 52%, rgba(30, 13, 52, 0.94) 100%);
+  border: 2px solid #c9abff;
+  box-shadow:
+    0 0 18px rgba(156, 89, 255, 0.65),
+    0 10px 36px rgba(5, 2, 12, 0.85),
+    inset 0 0 22px rgba(182, 132, 255, 0.28),
+    inset 0 0 0 3px rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  text-align: center;
+  padding: 26px 46px;
+  min-width: 540px;
+  max-width: 90vw;
+  backdrop-filter: blur(6px);
+  animation: pmuCrystalUnfold 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.pmu-crystal-box::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: 1px solid rgba(226, 204, 255, 0.42);
+  pointer-events: none;
+}
+
+/* Ornamental SVG Corner Filigree */
+.pmu-corner {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(215, 185, 255, 0.85));
+}
+.pmu-corner-tl { top: -5px; left: -5px; }
+.pmu-corner-tr { top: -5px; right: -5px; transform: scaleX(-1); }
+.pmu-corner-bl { bottom: -5px; left: -5px; transform: scaleY(-1); }
+.pmu-corner-br { bottom: -5px; right: -5px; transform: scale(-1, -1); }
+
+/* ==========================================================================
+   FLOOR 3 SUBJUGATION MISSION BANNER
+   ========================================================================== */
+.pmu-mission-header {
+  font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #fff6d6;
+  text-shadow:
+    0 0 10px rgba(255, 224, 130, 0.75),
+    0 2px 4px rgba(0, 0, 0, 0.9);
+  margin: 0 0 10px 0;
+  text-transform: uppercase;
+}
+
+.pmu-mission-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 auto 14px auto;
+  width: 82%;
+}
+
+.pmu-mission-divider-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #d8c2ff, transparent);
+}
+
+.pmu-mission-divider-gem {
+  width: 8px;
+  height: 8px;
+  background: #e9dbff;
+  transform: rotate(45deg);
+  box-shadow: 0 0 8px #b983ff;
+}
+
+.pmu-mission-category {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: #d8c7ff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  margin: 0 0 8px 0;
+  text-transform: uppercase;
+}
+
+.pmu-mission-goal {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+  color: #ffffff;
+  text-shadow:
+    0 0 12px rgba(255, 255, 255, 0.55),
+    0 2px 4px rgba(0, 0, 0, 0.95);
+  margin: 0;
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   STAGE CLEAR, MVP & REWARD MODAL STACK
+   ========================================================================== */
+.pmu-stage-clear-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  pointer-events: auto;
+}
+
+.pmu-stage-clear-title {
+  font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 3.5px;
+  color: #f5f0ff;
+  text-shadow:
+    0 0 14px rgba(206, 168, 255, 0.9),
+    0 2px 5px rgba(0, 0, 0, 0.95);
+  margin: 0 0 10px 0;
+}
+
+.pmu-stage-levelup {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #ffe999;
+  text-shadow: 0 0 8px rgba(255, 208, 82, 0.55);
+  margin: 4px 0;
+  text-transform: uppercase;
+}
+
+.pmu-stage-mvp {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #ffffff;
+  margin: 4px 0 0 0;
+  text-transform: uppercase;
+}
+
+/* Reward Box */
+.pmu-reward-box {
+  padding: 20px 36px 24px 36px;
+}
+
+.pmu-reward-title {
+  font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #e6d6ff;
+  margin: 0 0 14px 0;
+}
+
+.pmu-reward-cards {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 14px;
+}
+
+.pmu-reward-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 148px;
+  padding: 12px 14px;
+  background: rgba(15, 6, 28, 0.78);
+  border: 1px solid rgba(203, 170, 255, 0.55);
+  box-shadow: inset 0 0 12px rgba(155, 102, 255, 0.22);
+  gap: 8px;
+}
+
+.pmu-reward-icon {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pmu-reward-label {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1.1px;
+  color: #ffffff;
+  text-transform: uppercase;
+}
+
+/* Manhwa Character Speech Bubble */
+.pmu-speech-bubble {
+  position: relative;
+  margin-top: 8px;
+  background: #ffffff;
+  color: #120d1a;
+  border: 3px solid #160f24;
+  border-radius: 50% / 38%;
+  padding: 16px 34px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+}
+
+.pmu-speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 16px 12px 0 12px;
+  border-style: solid;
+  border-color: #160f24 transparent transparent transparent;
+}
+
+.pmu-speech-bubble::before {
+  content: '';
+  position: absolute;
+  bottom: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 13px 9px 0 9px;
+  border-style: solid;
+  border-color: #ffffff transparent transparent transparent;
+  z-index: 1;
+}
+
+@keyframes pmuCrystalUnfold {
+  0% {
+    opacity: 0;
+    transform: scale(0.88) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
