@@ -19,6 +19,13 @@ export function rollHeroPotentials(hero) {
   const roll = () => Math.round((min + Math.random() * (max - min)) * 100) / 100;
   return { str: roll(), agi: roll(), vit: roll(), int: roll(), wil: roll() };
 }
+
+export function rollHiddenTalents(hero) {
+  const pool = ['composure', 'berserk', 'pain_tolerance', 'quick_movements', 'leadership', 'natural_leader', 'keen_sight'];
+  const count = Math.random() < 0.6 ? 1 : 2;
+  const shuffled = pool.slice().sort(() => Math.random() - 0.5);
+  return { hiddenTalents: shuffled.slice(0, count), talentsRevealed: false };
+}
 import { RosterMixin } from './state/RosterMixin.js';
 import { SaveLoadMixin } from './state/SaveLoadMixin.js';
 import { SettingsMixin } from './state/SettingsMixin.js';

@@ -15,6 +15,26 @@ export const MISSION_TYPES = {
     type: 'DAILY DUNGEON',
     objective: 'COLLECT ALL SORTS OF RARE MATERIALS!',
   },
+  SURVIVAL: {
+    id: 'SURVIVAL',
+    name: 'Survival',
+    type: 'SURVIVAL',
+    objective: 'SURVIVE UNTIL THE TIMER ENDS!',
+  },
+};
+
+export const MISSIONS = {
+  5: {
+    floor: 5,
+    id: 'floor_5',
+    title: 'Floor 5: Ruined Town at Sunset',
+    type: 'SURVIVAL',
+    objective: 'SURVIVE UNTIL THE TIMER ENDS!',
+    durationSec: 1800,
+    environment: 'ruined_medieval_town_sunset',
+    enemies: ['goblin_grunt', 'goblin_leaper', 'goblin_climber'],
+    configKey: 'FLOOR5_CONFIG',
+  },
 };
 
 /**

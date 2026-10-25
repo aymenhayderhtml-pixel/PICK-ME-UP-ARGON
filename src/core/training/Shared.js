@@ -27,7 +27,7 @@ const normalizeId = (v) => String(v || '').toLowerCase().replace(/\s+/g, '_');
 
 /** Fills `{token}` placeholders in a report text template. */
 
-function formatTemplate(template, vars) {
+export function formatTemplate(template, vars) {
   return String(template || '').replace(
     /\{(\w+)\}/g,
     (_, key) => (vars[key] !== undefined ? String(vars[key]) : '')
@@ -36,7 +36,7 @@ function formatTemplate(template, vars) {
 
 /** Snapshots a hero's level and skill ids before a progression step. */
 
-function captureProgression(hero) {
+export function captureProgression(hero) {
   const skillIds = new Set();
   for (const s of (hero && hero.skills) || []) {
     skillIds.add(normalizeId(typeof s === 'string' ? s : (s.id || s.name)));
@@ -50,7 +50,7 @@ function captureProgression(hero) {
  * the hero learned in between (with a resolved display name).
  */
 
-function diffProgression(hero, snapshot) {
+export function diffProgression(hero, snapshot) {
   const newLevel = hero && hero.level ? hero.level : 1;
   const leveledUp = newLevel > snapshot.level;
   const newSkills = [];

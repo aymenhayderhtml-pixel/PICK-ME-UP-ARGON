@@ -13,6 +13,14 @@ export const MATERIALS = {
     color: 0x888899,
     description: 'Unrefined iron scrap scavenged from forest scavengers.',
   },
+  iron_ore: {
+    id: 'iron_ore',
+    name: 'Iron Ore',
+    grade: 'C',
+    category: 'mineral',
+    color: 0x888899,
+    description: 'Crude iron ore used for forging basic weapons and repairs.',
+  },
   goblin_tooth: {
     id: 'goblin_tooth',
     name: 'Goblin Tooth',
@@ -89,6 +97,14 @@ export const MATERIALS = {
     grade: 'B',
     color: 0x8b5a2b,
     description: 'Grade B crafting material refined from lumber.',
+  },
+  wooden_planks: {
+    id: 'wooden_planks',
+    name: 'Wooden Planks',
+    grade: 'B',
+    category: 'timber',
+    color: 0x8b5a2b,
+    description: 'Sturdy treated timber planks salvaged from fortifications, suitable for hub construction.',
   },
   branch: {
     id: 'branch',

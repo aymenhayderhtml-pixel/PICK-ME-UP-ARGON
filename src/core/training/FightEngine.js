@@ -22,6 +22,8 @@ import { Combatant } from '../../combat/Combatant.js';
 import { COMBAT_STATES } from '../../combat/StateMachine.js';
 import { DamageResolver } from '../../combat/DamageResolver.js';
 import { showSystemMessage } from '../../ui/Notices.js';
+import { captureProgression, diffProgression, checkAndUnlockPainTolerance, recordTrainingDamageAndHeal, formatTemplate } from './Shared.js';
+import { executeSingleFighterTurn, pickPrimarySkillForHero } from './Sessions.js';
 
 const normalizeId = (v) => String(v || '').toLowerCase().replace(/\s+/g, '_');
 

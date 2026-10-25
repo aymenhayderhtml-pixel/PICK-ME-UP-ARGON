@@ -19,6 +19,13 @@ export const SKILLS = {
     description: 'Fundamental sword technique increasing melee damage output.',
     effects: { damageMult: 0.04 },
   },
+  basic_sword_shield_technique: {
+    id: 'basic_sword_shield_technique',
+    name: 'Basic Sword-Shield Technique',
+    type: 'passive',
+    grade: 'E',
+    description: 'Seamlessly chains guard blocks into blunt shield bashes and counter-slashes.',
+  },
   basic_shield_technique: {
     id: 'basic_shield_technique',
     name: 'Basic Shield Technique',

@@ -22,6 +22,8 @@ import { Combatant } from '../../combat/Combatant.js';
 import { COMBAT_STATES } from '../../combat/StateMachine.js';
 import { DamageResolver } from '../../combat/DamageResolver.js';
 import { showSystemMessage } from '../../ui/Notices.js';
+import { rollSessionOutcome, recordCoTraining, recordTrainingDamageAndHeal, captureProgression, diffProgression, checkAndUnlockPainTolerance, findHeroSkill, rollHitZone } from './Shared.js';
+import { captureSkillLevels } from './Progression.js';
 
 const normalizeId = (v) => String(v || '').toLowerCase().replace(/\s+/g, '_');
 
@@ -416,7 +418,7 @@ export function createFightSession(heroA, heroB, options = {}) {
  * executed, and any damage goes through the real DamageResolver.
  */
 
-function executeSingleFighterTurn(session, side, rng) {
+export function executeSingleFighterTurn(session, side, rng) {
   const isA = side === 'A';
   const selfHero = isA ? session.heroA : session.heroB;
   const oppHero = isA ? session.heroB : session.heroA;

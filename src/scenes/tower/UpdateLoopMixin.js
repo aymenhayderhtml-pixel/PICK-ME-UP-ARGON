@@ -8,6 +8,7 @@ import { Telegraph } from '../../combat/Telegraph.js';
 import { ITEM_TEMPLATES } from '../../combat/Items.js';
 import { showSystemMessage, showNotices, isAnySystemWindowOpen } from '../../ui/Hud.js';
 import { gameState } from '../../core/GameState.js';
+import { FLOOR5_CONFIG } from '../../data/floor5.config.js';
 import { COMMANDS } from '../../combat/Commands.js';
 import { updateHumanoidCameraFade } from '../../core/CameraFade.js';
 
@@ -169,18 +170,23 @@ export const UpdateLoopMixin = (Base) => class extends Base {
 
     const windowOpen = isAnySystemWindowOpen() || (this.commandWheel && this.commandWheel.isOpen);
 
-    // Floor 5 survival countdown
+    // Floor 5 survival countdown (driven by FLOOR5_CONFIG)
     if (this.currentFloorNumber === 5 && this.survivalTimer > 0) {
-      this.survivalTimer -= delta * 15;
+      this.survivalTimer -= delta;
       if (this.survivalTimer < 0) this.survivalTimer = 0;
       if (this.survivalTimerEl) {
         const t = Math.ceil(this.survivalTimer);
         const mm = String(Math.floor(t / 60)).padStart(2, '0');
         const ss = String(t % 60).padStart(2, '0');
         this.survivalTimerEl.textContent = `[${mm}:${ss}]`;
-        if (this.survivalTimer <= 180) {
+        const warnSec = FLOOR5_CONFIG.timerUI.warningSec;
+        const critSec = FLOOR5_CONFIG.timerUI.criticalSec;
+        if (this.survivalTimer <= critSec) {
           this.survivalTimerEl.style.color = '#ff3333';
           this.survivalTimerEl.style.textShadow = '0 0 12px #ff3333';
+        } else if (this.survivalTimer <= warnSec) {
+          this.survivalTimerEl.style.color = '#ffaa00';
+          this.survivalTimerEl.style.textShadow = '0 0 12px #ffaa00';
         } else {
           this.survivalTimerEl.style.color = '#00e5ff';
           this.survivalTimerEl.style.textShadow = '0 0 12px #00e5ff';
@@ -188,13 +194,13 @@ export const UpdateLoopMixin = (Base) => class extends Base {
       }
       if (this.survivalTimer <= 0 && !this.floor5Dissolving) {
         this.floor5Dissolving = true;
-        this.dissolveTimer = 1.5;
+        this.dissolveTimer = FLOOR5_CONFIG.endDissolve.durationSec;
         if (this.survivalTimerEl) {
           this.survivalTimerEl.textContent = '[00:00]';
           this.survivalTimerEl.style.color = '#00e5ff';
           this.survivalTimerEl.style.textShadow = '0 0 12px #00e5ff';
         }
-        // Freeze & tint remaining enemies cyan/blue
+        // Freeze & tint remaining enemies cyan
         for (const en of (this.enemyManager.enemies || [])) {
           if (!en.dead && en.mesh) {
             en.state = 'idle';
@@ -202,18 +208,20 @@ export const UpdateLoopMixin = (Base) => class extends Base {
               if (o.isMesh && o.material) {
                 o.material.transparent = true;
                 o.material.opacity = 1.0;
-                if (o.material.emissive) o.material.emissive.setHex(0x00e5ff);
-                if (o.material.color) o.material.color.setHex(0x00e5ff);
+                if (o.material.emissive) o.material.emissive.setHex(0x00ffff);
+                if (o.material.color) o.material.color.setHex(0x00ffff);
               }
             });
           }
         }
       }
+    }
 
     // Animate dissolution
     if (this.floor5Dissolving) {
       this.dissolveTimer -= delta;
-      const progress = Math.max(0, Math.min(1, 1 - (this.dissolveTimer / 1.5)));
+      const dur = FLOOR5_CONFIG.endDissolve.durationSec;
+      const progress = Math.max(0, Math.min(1, 1 - (this.dissolveTimer / dur)));
       for (const en of (this.enemyManager.enemies || [])) {
         if (!en.dead && en.mesh) {
           en.mesh.position.y += delta * 1.2;
@@ -231,9 +239,8 @@ export const UpdateLoopMixin = (Base) => class extends Base {
         }
         gameState.dailyDungeonUnlocked = true;
         gameState.saveToLocalStorage();
-        showSystemMessage('CONGRATULATIONS, MASTER! YOU HAVE CLEARED THE 5TH FLOOR. THE DAILY DUNGEON WILL BE MADE AVAILABLE.\\nGATHER MATERIALS AND STRENGTHEN YOUR HEROES IN THE WAITING ROOM.');
+        showSystemMessage('CONGRATULATIONS, MASTER! YOU HAVE CLEARED THE 5TH FLOOR. THE DAILY DUNGEON WILL BE MADE AVAILABLE.');
       }
-    }
     }
 
     // Daily Dungeon material node collection
@@ -524,6 +531,13 @@ export const UpdateLoopMixin = (Base) => class extends Base {
       this.squadAI ? this.squadAI.allies : []
     );
 
+    // Floor 5 survival runtime tick (party-agnostic state)
+    if (this.floor5Runtime && this.currentFloorNumber === 5) {
+      const elapsed = FLOOR5_CONFIG.durationSec - (this.survivalTimer || 0);
+      this.floor5Runtime.tick(effectiveDelta, elapsed, {});
+      this.floor5Runtime.tickAll(effectiveDelta);
+    }
+
     // Update Boss Bar & Telegraph
     if (this.boss && this.bossBar) {
       this.bossBar.update(this.boss.hp, effectiveDelta);
@@ -616,11 +630,11 @@ export const UpdateLoopMixin = (Base) => class extends Base {
     } else {
       let isFloorCleared = false;
       if (this.currentFloorNumber === 5) {
-        // Survival: prevent completion until countdown reaches 0.
-        if (this.survivalTimer > 0) {
+        // Survival: complete once countdown and dissolve finish.
+        if (this.survivalTimer > 0 || this.floor5Dissolving) {
           isFloorCleared = false;
         } else {
-          isFloorCleared = this.initialEnemiesSpawned && !!(this.boss && this.boss.dead && this.enemyManager.bossDefeated);
+          isFloorCleared = true;
         }
       } else if (this.isTutorial) {
         isFloorCleared = this.initialEnemiesSpawned && this.tutorialAmbushTriggered && activeEnemies.length === 0;

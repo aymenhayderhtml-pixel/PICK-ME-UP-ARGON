@@ -295,6 +295,9 @@ export class TowerScene extends CombatMixin(FloorLoaderMixin(UpdateLoopMixin(Obj
 
     window.addEventListener('keydown', (e) => {
       if (!this.isActive) return;
+      if (this.currentFloorNumber === 5 && (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD')) {
+        console.log('[Floor5] WASD key received:', e.code, 'player pos:', this.player && this.player.mesh ? this.player.mesh.position.x.toFixed(2) + ',' + this.player.mesh.position.z.toFixed(2) : 'n/a');
+      }
       if (isAnySystemWindowOpen() && e.code !== 'Escape') return;
 
       // Debug keys (always available, like the hub's Backslash overlay)

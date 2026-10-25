@@ -22,6 +22,8 @@ import { Combatant } from '../../combat/Combatant.js';
 import { COMBAT_STATES } from '../../combat/StateMachine.js';
 import { DamageResolver } from '../../combat/DamageResolver.js';
 import { showSystemMessage } from '../../ui/Notices.js';
+import { createFightSession } from './Sessions.js';
+import { stepFightExchange, evaluateFightIntervention, applyFightConsequences } from './FightEngine.js';
 
 const normalizeId = (v) => String(v || '').toLowerCase().replace(/\s+/g, '_');
 
@@ -322,7 +324,7 @@ export function awardLiveTrainingTickXp(hero, zone, skillId, gameState, nowMs = 
 
 /** Captures a snapshot of the hero's skill levels. */
 
-function captureSkillLevels(hero) {
+export function captureSkillLevels(hero) {
   const snapshot = {};
   for (const s of (hero && hero.skills) || []) {
     const id = normalizeId(typeof s === 'string' ? s : (s.id || s.name));

@@ -280,7 +280,39 @@ export const ENEMY_TYPES = {
     size: 1.05,
     color: 0x5a8f3a,
   },
+  goblin_grunt: {
+    id: 'goblin_grunt',
+    name: 'Goblin Grunt',
+    race: 'goblin',
+    floor: 1,
+    level: 1,
+    stats: { hp: 80, atk: 12, def: 4, spd: 3.2, atkSpd: 1.0 },
+    behavior: 'melee_pressure',
+    description: 'Standard melee rusher; pressures the chokepoint.',
+  },
+  goblin_leaper: {
+    id: 'goblin_leaper',
+    name: 'Goblin Leaper',
+    race: 'goblin',
+    floor: 1,
+    level: 1,
+    stats: { hp: 80, atk: 12, def: 4, spd: 3.2, atkSpd: 1.0 },
+    behavior: 'leap_frontline',
+    description: 'An agile goblin that vaults over the frontline to harass ranged allies.',
+  },
+  goblin_climber: {
+    id: 'goblin_climber',
+    name: 'Goblin Climber',
+    race: 'goblin',
+    floor: 1,
+    level: 1,
+    stats: { hp: 80, atk: 12, def: 4, spd: 3.2, atkSpd: 1.0 },
+    behavior: 'stack_climb',
+    description: 'Climbs on the shoulders of other goblins to scale raised walkways and walls.',
+  },
 };
+
+export const ENEMIES = ENEMY_TYPES;
 
 export function getEnemyStats(typeKey, floorNumber = 1) {
   const normKey = (typeKey || '').toUpperCase();

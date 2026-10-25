@@ -4,6 +4,8 @@ import { resetWolfPackState } from './WolfAI.js';
 import { showSystemMessage } from '../ui/Hud.js';
 import { gameState } from '../core/GameState.js';
 import { ITEM_TEMPLATES } from './Items.js';
+import { FLOOR5_CONFIG } from '../data/floor5.config.js';
+import { getPacingAt } from '../data/floor5Survival.js';
 
 export class EnemyManager {
   constructor(dropsManager, itemsManager = null) {
@@ -94,12 +96,13 @@ export class EnemyManager {
 
     if (!dungeon || !dungeon.clearings) return;
 
-    // Floor 5: Survival mode trickle spawns
+    // Floor 5: Survival mode trickle spawns (driven by FLOOR5_CONFIG)
     if (floorNumber === 5) {
       this.survivalActive = true;
-      this.survivalTimer = 120;
+      this.survivalTimer = FLOOR5_CONFIG.durationSec;
       this.survivalSpawnCooldown = 0;
       this.survivalAmbushTriggered = false;
+      this.survivalElapsed = 0;
       return;
     }
 
@@ -408,19 +411,36 @@ export class EnemyManager {
   update(delta, player, dungeon, scene, camera, projectilesManager, partyAllies = []) {
     if (!player) return;
 
-    // Floor 5 survival trickle spawns
+    // Floor 5 survival trickle spawns (driven by FLOOR5_CONFIG pacing)
     if (this.survivalActive) {
+      this.survivalElapsed = (this.survivalElapsed || 0) + delta;
       this.survivalTimer -= delta;
       if (this.survivalTimer <= 0) {
         this.survivalFinished = true;
         this.survivalActive = false;
       }
+      const pacing = getPacingAt(FLOOR5_CONFIG, this.survivalElapsed);
       this.survivalSpawnCooldown -= delta;
       const activeCount = this.enemies.filter((e) => !e.dead).length;
-      if (this.survivalSpawnCooldown <= 0 && activeCount < 14) {
-        this.survivalSpawnCooldown = 1.5;
-        const lvl = 3 + Math.floor(Math.random() * 3);
-        const e = new Enemy((Math.random() - 0.5) * 12, -30 - Math.random() * 10, 'GRUNT', false, 5, lvl);
+      const spawnInterval = 1.0 / Math.max(0.01, pacing.spawnPerSec);
+      if (this.survivalSpawnCooldown <= 0 && activeCount < pacing.maxAlive) {
+        this.survivalSpawnCooldown = spawnInterval;
+        // pick variant by weights
+        const r = Math.random();
+        const w = pacing.variantWeights || { grunt: 1, leaper: 0, climber: 0 };
+        let variant = 'grunt';
+        let acc = w.grunt || 0;
+        if (r > acc) { acc += (w.leaper || 0); if (r <= acc) variant = 'leaper'; else variant = 'climber'; }
+        const vcfg = FLOOR5_CONFIG.variants[variant];
+        const typeKey = (vcfg && vcfg.enemyId) ? vcfg.enemyId.toUpperCase().replace('GOBLIN_', 'GOBLIN_') : 'GRUNT';
+        // map to legacy Enemy type keys
+        const enemyType = variant === 'leaper' ? 'GRUNT' : variant === 'climber' ? 'GRUNT' : 'GRUNT';
+        const lvl = (vcfg && vcfg.level) ? vcfg.level : 1;
+        const e = new Enemy((Math.random() - 0.5) * 12, -24 - Math.random() * 6, enemyType, false, 5, lvl);
+        e._floor5Variant = variant;
+        e.isAggroed = true;
+        e.state = 'chase';
+        e.detectionRange = 1e9;
         this.enemies.push(e);
         if (scene) scene.add(e.mesh);
       }

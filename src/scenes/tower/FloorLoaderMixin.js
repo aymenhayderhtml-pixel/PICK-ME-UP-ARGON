@@ -3,7 +3,10 @@
 import * as THREE from 'three';
 import { buildTowerFloor } from '../../world/TowerFloor.js';
 import { buildCaveFloor } from '../../world/CaveFloor.js';
+import { buildFloor5Town } from '../../world/Floor5TownBuilder.js';
 import { getMissionInfo } from '../../data/missions.js';
+import { FLOOR5_CONFIG } from '../../data/floor5.config.js';
+import { Floor5SurvivalRuntime } from './Floor5SurvivalRuntime.js';
 import { Enemy } from '../../combat/Enemy.js';
 import { HobgoblinChief } from '../../combat/HobgoblinChief.js';
 import { ITEM_TEMPLATES } from '../../combat/Items.js';
@@ -24,14 +27,15 @@ export const FloorLoaderMixin = (Base) => class extends Base {
     this.materialNodes = [];
     this.dailyDungeonType = gameState.activeDungeonType || null;
     if (mode === 'tower' && floorNumber === 5) {
-      this.survivalTimer = 30 * 60;
+      this.survivalTimer = FLOOR5_CONFIG.durationSec;
       if (!this.survivalTimerEl) {
         const el = document.createElement('div');
         el.style.position = 'fixed';
-        el.style.top = '12px';
+        el.style.top = '58px';
         el.style.left = '50%';
         el.style.transform = 'translateX(-50%)';
         el.style.zIndex = '10003';
+        el.style.pointerEvents = 'none';
         el.style.padding = '8px 16px';
         el.style.background = 'rgba(11,8,16,0.85)';
         el.style.border = '1px solid #00e5ff';
@@ -169,6 +173,11 @@ export const FloorLoaderMixin = (Base) => class extends Base {
         this.forestFloor = buildTowerFloor({ floorNumber: 1, seed, quality, scene: this.scene });
       }
       this.hud.setFloorLabel(null);
+    } else if (floorNumber === 5) {
+      this.hud.setFloorLabel(null);
+      const seed = floorNumber * 7919 + 13;
+      this.applyFloorLighting(floorNumber);
+      this.forestFloor = buildFloor5Town({ floorNumber, seed, quality, scene: this.scene });
     } else {
       this.hud.setFloorLabel(null);
       const seed = floorNumber * 7919 + 13;
@@ -283,9 +292,32 @@ export const FloorLoaderMixin = (Base) => class extends Base {
       }
     }
 
+    // Floor 5 Survival runtime (party-agnostic, no source mutation)
+    if (mode === 'tower' && floorNumber === 5) {
+      // DOM focus / input lock cleanup
+      if (typeof document !== 'undefined' && document.activeElement && typeof document.activeElement.blur === 'function') {
+        try { document.activeElement.blur(); } catch (e) {}
+      }
+      if (typeof window !== 'undefined' && typeof window.focus === 'function') {
+        try { window.focus(); } catch (e) {}
+      }
+      this.isDialogueOpen = false;
+      this.isModalOpen = false;
+      this.inputLocked = false;
+      this.controlsDisabled = false;
+
+      this.floor5Runtime = new Floor5SurvivalRuntime(this.scene);
+      this.floor5Runtime.activate(this.scene);
+      const allies = (this.squadAI && this.squadAI.allies) || [];
+      this.floor5Runtime.attachAll(this.player, allies);
+
+      // Clear any leftover forest/town colliders near spawn
+      console.log('[Floor5] Loaded. Colliders near (0,0,0):', (this.forestFloor && this.forestFloor.colliders ? this.forestFloor.colliders.filter(c => Math.hypot(c.x, c.z) < 6).length : 0));
+    }
+
     // 5. Floor 5 Boss Arena Encounter Setup (Tower mode only)
-    if (this.mode === 'tower' && floorNumber === 5) {
-      // Invisible arena barrier mesh across entrance (z = -23.5)
+    if (this.mode === 'tower' && floorNumber === 5 && false) {
+      // Disabled for Floor 5 survival mode (boss arena replaced by survival)
       const barrierGeo = new THREE.BoxGeometry(10, 4.5, 0.5);
       const barrierMat = new THREE.MeshStandardMaterial({
         color: 0xaa1122,
@@ -396,6 +428,30 @@ export const FloorLoaderMixin = (Base) => class extends Base {
   // Applies the hub-style lighting setup (background, fog, ACES tone mapping,
   // one ambient, one hemisphere, one non-shadow directional) for a floor.
   applyFloorLighting(floor) {
+    if (floor === 5) {
+      // Sunset preset from FLOOR5_CONFIG
+      const L5 = FLOOR5_CONFIG.lighting;
+      if (this.renderer) {
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.1;
+      }
+      this.scene.background = new THREE.Color(L5.fogColor);
+      this.scene.fog = new THREE.Fog(L5.fogColor, 25, 90);
+      if (this.ambLight) {
+        this.ambLight.color.setHex(parseInt(L5.ambientColor.replace('#', ''), 16));
+        this.ambLight.intensity = Math.max(L5.ambientIntensity, 1.2);
+      }
+      if (this.hemiLight) {
+        this.hemiLight.intensity = 0.9;
+        this.hemiLight.color.setHex(parseInt(L5.ambientColor.replace('#', ''), 16));
+      }
+      if (this.dirLight) {
+        this.dirLight.color.setHex(parseInt(L5.sunColor.replace('#', ''), 16));
+        this.dirLight.intensity = Math.max(L5.sunIntensity, 2.6);
+        this.dirLight.position.set(20, 30, 10);
+      }
+      return;
+    }
     let L = FOREST_FLOOR_LIGHTING;
     if (floor === 1 || floor === true) {
       L = FARM_FLOOR_LIGHTING;

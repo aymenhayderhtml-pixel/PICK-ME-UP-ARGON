@@ -72,6 +72,19 @@ export const STAGE_REWARDS = {
  *   REPEAT clear always pays the flat `REPEAT_CLEAR_GOLD` (1,000G) and
  *   nothing else: no materials, no gems, no summon tickets.
  */
+export const REWARDS = {
+  ...STAGE_REWARDS,
+  5: {
+    floor: 5,
+    gold: 5000,
+    materials: [
+      { id: 'iron_ore', name: 'Iron Ore', grade: 'C', count: 1 },
+      { id: 'leather', name: 'Leather', grade: 'C', count: 3 },
+      { id: 'wooden_planks', name: 'Wooden Planks', grade: 'B', count: 2 },
+    ],
+  },
+};
+
 export function getFloorClearReward(floorNumber = 1, isFirstClear = true) {
   const floor = Math.max(1, Math.floor(floorNumber));
 
